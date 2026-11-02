@@ -65,9 +65,12 @@ public class AuthController {
         refreshToken.setIpAddress(ip);
         refreshTokenRepository.save(refreshToken);
 
+        // Strict: browsers don't send the cookies with requests started by other sites (forms
+        // posted from elsewhere), so those can't act as the user. The app only calls its own API.
         ResponseCookie accessCookie = ResponseCookie.from("access_token", tokens.getToken())
                 .httpOnly(true)
                 .secure(true) // enable if HTTPS
+                .sameSite("Strict")
                 .path("/")
                 .maxAge(REFRESH_TOKEN_VALIDITY_S)
                 .build();
@@ -75,6 +78,7 @@ public class AuthController {
         ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", tokens.getRefreshToken().getToken())
                 .httpOnly(true)
                 .secure(true) // enable if HTTPS
+                .sameSite("Strict")
                 .path("/")
                 .maxAge(REFRESH_TOKEN_VALIDITY_S)
                 .build();
