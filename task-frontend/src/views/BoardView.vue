@@ -156,6 +156,9 @@ const {
 const filterBar = ref(null)
 const filterOpen = ref(false) // small screens: the search row is opened with the search button
 
+// Columns without any task shrink to a narrow strip on wide screens (not with a search that only
+// hides their tasks); a task moved or added in widens them again.
+const isEmpty = (columnId) => !store.tasksByColumn[columnId]?.length
 const visibleCount = (columnId) => (store.tasksByColumn[columnId] ?? []).filter((t) => matchOf(t).matches).length
 const matchingCount = computed(() => store.columns.reduce((sum, c) => sum + visibleCount(c.id), 0))
 // "3" without a filter, "1 / 3" with one.
@@ -633,9 +636,10 @@ function askDeleteColumn(column) {
                 v-for="(column, index) in store.columns"
                 :key="column.id"
                 :data-column-id="column.id"
-                class="flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col rounded-xl bg-slate-100 dark:bg-slate-900 md:w-72"
+                class="flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col rounded-xl bg-slate-100 dark:bg-slate-900"
+                :class="isEmpty(column.id) ? 'md:w-12' : 'md:w-72'"
               >
-                <header class="flex items-center gap-1 px-2 pt-2">
+                <header class="flex items-center gap-1 px-2 pt-2" :class="{ 'md:flex-col md:px-1': isEmpty(column.id) }">
                   <button
                     type="button"
                     class="column-handle hidden h-8 w-6 cursor-grab items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 active:cursor-grabbing md:flex"
@@ -644,7 +648,13 @@ function askDeleteColumn(column) {
                   >
                     <i class="pi pi-bars text-xs" />
                   </button>
-                  <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">{{ column.name }}</h2>
+                  <h2
+                    class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-300"
+                    :class="{ 'md:max-h-48 md:flex-none md:py-1 md:[writing-mode:vertical-rl]': isEmpty(column.id) }"
+                    :title="column.name"
+                  >
+                    {{ column.name }}
+                  </h2>
                   <span class="rounded-full bg-white dark:bg-slate-800 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                     {{ countLabel(column.id) }}
                   </span>
@@ -662,6 +672,7 @@ function askDeleteColumn(column) {
                 <p
                   v-if="filterActive && visibleCount(column.id) === 0"
                   class="px-4 pt-2 text-sm text-slate-400 dark:text-slate-500"
+                  :class="{ 'md:hidden': isEmpty(column.id) }"
                 >
                   No matches
                 </p>
@@ -673,6 +684,7 @@ function askDeleteColumn(column) {
                   :delayOnTouchOnly="true"
                   ghostClass="opacity-40"
                   class="flex min-h-16 flex-col gap-2 p-2"
+                  :class="{ 'md:p-1': isEmpty(column.id) }"
                   @end="onTaskDragEnd"
                 >
                   <TaskCard
@@ -695,11 +707,13 @@ function askDeleteColumn(column) {
 
                 <Button
                   label="Add task"
+                  aria-label="Add task"
                   icon="pi pi-plus"
                   text
                   severity="secondary"
                   size="small"
                   class="mx-2 mb-2 justify-start"
+                  :class="{ 'md:mx-1 md:justify-center md:[&_.p-button-label]:hidden': isEmpty(column.id) }"
                   @click="openCreateTask(column.id)"
                 />
               </div>
