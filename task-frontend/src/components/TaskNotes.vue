@@ -162,6 +162,7 @@ const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
                 rounded
                 size="small"
                 severity="secondary"
+                v-if="note.canEdit"
                 aria-label="Edit note"
                 @click="startEdit(note)"
               />
@@ -171,6 +172,7 @@ const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
                 rounded
                 size="small"
                 severity="danger"
+                v-if="note.canDelete"
                 aria-label="Delete note"
                 @click="askDelete(note)"
               />

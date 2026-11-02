@@ -35,6 +35,13 @@ const router = createRouter({
       component: () => import('../views/SharedBoardView.vue'),
       meta: { requiresAuth: false, fullWidth: true },
     },
+    {
+      // Invite link of a board (see BoardMembers); joining needs a login.
+      path: '/join/:token',
+      name: 'join',
+      component: () => import('../views/JoinView.vue'),
+      meta: { requiresAuth: true, title: 'Join board' },
+    },
     // Old URL of the task list.
     { path: '/tasks', redirect: '/boards' },
     {

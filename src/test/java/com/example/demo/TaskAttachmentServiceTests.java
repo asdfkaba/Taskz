@@ -162,6 +162,24 @@ class TaskAttachmentServiceTests {
         attachments.upload(bobsTask.getId(), BOB, text("c.txt", "x".repeat(100)));
     }
 
+    // Files a member adds count for the board's owner: they are on the owner's board.
+    @Test
+    void uploadsOfMembersCountForTheBoardsOwner() {
+        em.createNativeQuery("insert into board_member (board_id, user_id, joined) values (?, ?, current_timestamp)")
+                .setParameter(1, task.getBoardColumn().getBoard().getId())
+                .setParameter(2, bobsTask.getUser().getId())
+                .executeUpdate();
+        attachments.upload(task.getId(), BOB, text("a.txt", "x".repeat(1000)));
+        attachments.upload(task.getId(), BOB, text("b.txt", "x".repeat(1000)));
+
+        assertThatThrownBy(() -> attachments.upload(task.getId(), ALICE, text("c.txt", "x".repeat(100))))
+                .satisfies(e -> assertStatus(e, HttpStatus.PAYLOAD_TOO_LARGE))
+                .hasMessageContaining("Your attachments");
+        assertThatThrownBy(() -> attachments.upload(task.getId(), BOB, text("c.txt", "x".repeat(100))))
+                .hasMessageContaining("this board's owner");
+        attachments.upload(bobsTask.getId(), BOB, text("c.txt", "x".repeat(100)));
+    }
+
     @Test
     void emptyOrNamelessFilesAreRefused() {
         assertThatThrownBy(() -> attachments.upload(task.getId(), ALICE, text("empty.txt", "")))

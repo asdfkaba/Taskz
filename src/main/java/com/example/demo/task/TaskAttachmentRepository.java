@@ -1,5 +1,6 @@
 package com.example.demo.task;
 
+import com.example.demo.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -12,11 +13,10 @@ public interface TaskAttachmentRepository extends JpaRepository<TaskAttachment, 
     // Newest first; id breaks ties.
     List<TaskAttachment> findByTaskOrderByCreatedDescIdDesc(Task task);
 
-    Optional<TaskAttachment> findByIdAndTaskUserEmail(Integer id, String email);
 
-    // Bytes used by the attachments of all tasks of a user, for the storage limit.
-    @Query("select coalesce(sum(a.size), 0) from TaskAttachment a where a.task.user.email = :email")
-    long totalSizeOfUser(String email);
+    // Bytes used by the attachments on all boards of a user, for the storage limit.
+    @Query("select coalesce(sum(a.size), 0) from TaskAttachment a where a.task.boardColumn.board.user = :owner")
+    long totalSizeOfBoardsOf(User owner);
 
     @Query("select a.storageKey from TaskAttachment a")
     List<String> findAllStorageKeys();

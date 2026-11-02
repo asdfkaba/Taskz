@@ -45,7 +45,7 @@ class TokenRenewalTests {
         when(tokenService.parseToken("expired")).thenThrow(new JwtException("expired"));
         when(tokenService.generateAccessTokenFromRefresh("refresh")).thenReturn("fresh");
         when(tokenService.parseToken("fresh")).thenReturn(new UsernamePasswordAuthenticationToken("alice@example.com", null, List.of()));
-        when(boardService.boardsOf("alice@example.com")).thenReturn(List.of());
+        when(boardService.summariesOf("alice@example.com")).thenReturn(List.of());
 
         mockMvc.perform(get("/boards").cookie(new Cookie("access_token", "expired"), new Cookie("refresh_token", "refresh")))
                 .andExpect(status().isOk())
@@ -53,7 +53,7 @@ class TokenRenewalTests {
                         containsString("access_token=fresh"), containsString("SameSite=Strict"),
                         // 7 days, not 7 days in milliseconds.
                         containsString("Max-Age=604800;"))));
-        verify(boardService).boardsOf("alice@example.com");
+        verify(boardService).summariesOf("alice@example.com");
     }
 
     @Test

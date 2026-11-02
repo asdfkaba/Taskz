@@ -30,6 +30,16 @@ test('Login callback', async ({ browser }) => {
     await page.waitForURL(/\/boards/)
   })
 
+  await test.step('after the login it goes back to the page that needed it, only within the app', async () => {
+    await page.evaluate(() => sessionStorage.setItem('returnTo', '/join/team-invite'))
+    await page.goto(`${BASE}/oauth2/callback?code=good&provider=discord`)
+    await page.waitForURL(/\/join\/team-invite$/)
+    await page.evaluate(() => sessionStorage.setItem('returnTo', '//evil.example/x'))
+    await page.goto(`${BASE}/oauth2/callback?code=good&provider=discord`)
+    await page.waitForURL(/\/boards/)
+    ensure(new URL(page.url()).host === new URL(BASE).host, page.url())
+  })
+
   if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`)
   await page.close()
 })

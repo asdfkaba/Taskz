@@ -1,5 +1,7 @@
 package com.example.demo.task;
 
+import com.example.demo.board.Board;
+import com.example.demo.board.BoardService;
 import com.example.demo.task.FileTypes.FileType;
 import com.example.demo.user.UserRepository;
 import org.slf4j.Logger;
@@ -21,7 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Files attached to tasks. Like notes, only the owner of a task sees and changes them, and shared
+ * Files attached to tasks. Like notes, everyone who can open the board sees and changes them, and shared
  * boards don't include them. Only the types in {@link FileTypes} are accepted, checked by content.
  */
 @Service
@@ -31,17 +33,17 @@ public class TaskAttachmentService {
     static final int MAX_NAME_LENGTH = 200;
 
     private final TaskAttachmentRepository attachmentRepository;
-    private final TaskRepository taskRepository;
+    private final BoardService boardService;
     private final UserRepository userRepository;
     private final TaskHistoryService historyService;
     private final AttachmentStorage storage;
     private final AttachmentProperties properties;
 
-    public TaskAttachmentService(TaskAttachmentRepository attachmentRepository, TaskRepository taskRepository,
+    public TaskAttachmentService(TaskAttachmentRepository attachmentRepository, BoardService boardService,
                                  UserRepository userRepository, TaskHistoryService historyService,
                                  AttachmentStorage storage, AttachmentProperties properties) {
         this.attachmentRepository = attachmentRepository;
-        this.taskRepository = taskRepository;
+        this.boardService = boardService;
         this.userRepository = userRepository;
         this.historyService = historyService;
         this.storage = storage;
@@ -76,14 +78,14 @@ public class TaskAttachmentService {
 
     @Transactional(readOnly = true)
     public List<AttachmentDto> attachmentsOf(int taskId, String email) {
-        return attachmentRepository.findByTaskOrderByCreatedDescIdDesc(findOwnTask(taskId, email)).stream()
+        return attachmentRepository.findByTaskOrderByCreatedDescIdDesc(findTask(taskId, email)).stream()
                 .map(AttachmentDto::from)
                 .toList();
     }
 
     @Transactional
     public AttachmentDto upload(int taskId, String email, MultipartFile file) {
-        Task task = findOwnTask(taskId, email);
+        Task task = findTask(taskId, email);
         String name = validName(file.getOriginalFilename());
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The file is empty");
@@ -92,10 +94,13 @@ public class TaskAttachmentService {
         if (file.getSize() > maxFile) {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, tooLargeMessage(properties));
         }
+        // Counted for the board's owner: the files are on their board and go when they delete it.
+        Board board = task.getBoardColumn().getBoard();
         long maxTotal = properties.maxTotalPerUser().toBytes();
-        if (attachmentRepository.totalSizeOfUser(email) + file.getSize() > maxTotal) {
+        if (attachmentRepository.totalSizeOfBoardsOf(board.getUser()) + file.getSize() > maxTotal) {
+            String whose = boardService.isOwner(board, email) ? "Your attachments" : "The attachments of this board's owner";
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "Your attachments would take more than " + readable(maxTotal) + "; delete some first");
+                    whose + " would take more than " + readable(maxTotal) + "; delete some first");
         }
 
         Path upload = null;
@@ -121,7 +126,7 @@ public class TaskAttachmentService {
 
     @Transactional(readOnly = true)
     public Download download(int attachmentId, String email) {
-        TaskAttachment attachment = findOwnAttachment(attachmentId, email);
+        TaskAttachment attachment = findAttachment(attachmentId, email);
         Path file = storage.file(attachment.getStorageKey());
         if (!Files.isRegularFile(file)) {
             log.warn("Attachment {} has no file {}", attachment.getId(), attachment.getStorageKey());
@@ -132,7 +137,7 @@ public class TaskAttachmentService {
 
     @Transactional
     public void delete(int attachmentId, String email) {
-        TaskAttachment attachment = findOwnAttachment(attachmentId, email);
+        TaskAttachment attachment = findAttachment(attachmentId, email);
         attachmentRepository.delete(attachment);
         historyService.recordAttachment(attachment.getTask(), attachment.getFileName(), false, email);
         storage.deleteAfterCommit(attachment.getStorageKey());
@@ -186,13 +191,13 @@ public class TaskAttachmentService {
         }
     }
 
-    private Task findOwnTask(int taskId, String email) {
-        return taskRepository.findByIdAndUserEmail(taskId, email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+    private Task findTask(int taskId, String email) {
+        return boardService.findTask(taskId, email);
     }
 
-    private TaskAttachment findOwnAttachment(int attachmentId, String email) {
-        return attachmentRepository.findByIdAndTaskUserEmail(attachmentId, email)
+    private TaskAttachment findAttachment(int attachmentId, String email) {
+        return attachmentRepository.findById(attachmentId)
+                .filter(a -> boardService.canAccess(a.getTask().getBoardColumn().getBoard(), email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
     }
 }
