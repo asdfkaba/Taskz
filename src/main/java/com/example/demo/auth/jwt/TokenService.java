@@ -8,8 +8,12 @@ import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,8 +58,10 @@ public class TokenService {
         Instant now = Instant.now();
         refreshTokenRepository.deleteExpired(now);
 
+        String plain = UUID.randomUUID().toString(); // 122 random bits from a secure generator
         RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setToken(UUID.randomUUID().toString()); // 122 random bits from a secure generator
+        refreshToken.setToken(hash(plain));
+        refreshToken.setPlainToken(plain);
         refreshToken.setUser(user);
         refreshToken.setIssuedAt(now);
         refreshToken.setExpiresAt(now.plus(REFRESH_TOKEN_VALIDITY));
@@ -72,9 +78,22 @@ public class TokenService {
     /** A new access token for a known, unexpired refresh token. */
     @Transactional(readOnly = true)
     public String generateAccessTokenFromRefresh(String refreshToken) {
-        RefreshToken stored = refreshTokenRepository.findByToken(refreshToken)
+        RefreshToken stored = refreshTokenRepository.findByToken(hash(refreshToken))
                 .filter(t -> !t.isExpired())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token"));
         return generateToken(stored.getUser());
+    }
+
+    /**
+     * How a refresh token is stored, so a database dump can't log anyone in. A plain hash is enough:
+     * the tokens are random, not guessable passwords. V8 hashes the same way in SQL.
+     */
+    public static String hash(String refreshToken) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(refreshToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e); // every JVM has SHA-256
+        }
     }
 }
