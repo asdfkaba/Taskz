@@ -167,7 +167,7 @@ class LiveStreamServerTests {
         try (Stream aliceView = new Stream(board.getId(), aliceToken)) {
             assertThat(aliceView.status).contains("200");
             Stream bobView = new Stream(board.getId(), bobToken);
-            aliceView.awaitLine("[\"Bob\"]", Duration.ofSeconds(5));
+            aliceView.awaitLine("\"name\":\"Bob\"", Duration.ofSeconds(5));
             bobView.cutOff();
 
             // Changes and new tabs write to Bob's dead stream until Tomcat notices; none may fail.

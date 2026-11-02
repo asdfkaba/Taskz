@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
@@ -11,7 +12,7 @@ const router = useRouter()
 const store = useBoardStore()
 
 const status = ref('loading') // 'loading' | 'ok' | 'invalid' | 'error'
-const invite = ref(null) // { boardName, ownerName, member }
+const invite = ref(null) // { boardName, ownerName, ownerId, member }
 const joining = ref(false)
 
 onMounted(async () => {
@@ -42,7 +43,8 @@ async function join() {
   <div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center" data-testid="join">
     <i v-if="status === 'loading'" class="pi pi-spin pi-spinner text-2xl text-slate-400" />
     <template v-else-if="status === 'ok'">
-      <i class="pi pi-users text-3xl text-slate-400 dark:text-slate-500" aria-hidden="true" />
+      <!-- The owner's icon, the same one the joined board will show for them. -->
+      <UserIcon :seed="invite.ownerId" :name="invite.ownerName" size="xl" data-testid="invite-owner" />
       <template v-if="invite.member">
         <p class="text-slate-700 dark:text-slate-300">You can open <strong>{{ invite.boardName }}</strong> already.</p>
         <Button label="Open board" icon="pi pi-arrow-right" :loading="joining" @click="join" />

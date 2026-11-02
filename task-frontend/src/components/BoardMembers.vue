@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
@@ -104,7 +105,7 @@ function askLeave() {
     <p v-if="loading" class="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
     <ul v-else class="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
       <li v-for="member in members" :key="member.userId" class="flex items-center gap-3 py-2" data-testid="member">
-        <i class="pi pi-user text-slate-400 dark:text-slate-500" aria-hidden="true" />
+        <UserIcon :seed="member.userId" />
         <span class="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-300">{{ member.name ?? 'Unknown' }}</span>
         <span v-if="member.owner" class="text-xs text-slate-500 dark:text-slate-400">Owner</span>
         <span v-else class="text-xs text-slate-400 dark:text-slate-500">joined {{ formatShort(fromApi(member.joined)) }}</span>

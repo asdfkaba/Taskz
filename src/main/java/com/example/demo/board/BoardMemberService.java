@@ -47,8 +47,8 @@ public class BoardMemberService {
     public record NewInvite(String path, Instant expires) {
     }
 
-    /** What an invite link leads to. member: the user can open the board already. */
-    public record InviteInfo(String boardName, String ownerName, boolean member) {
+    /** What an invite link leads to. ownerId: for the owner's icon. member: the user can open the board already. */
+    public record InviteInfo(String boardName, String ownerName, Integer ownerId, boolean member) {
     }
 
     // The owner comes first; joined is null for them.
@@ -71,7 +71,8 @@ public class BoardMemberService {
     @Transactional(readOnly = true)
     public InviteInfo invite(String token, String email) {
         Board board = findInvite(token).getBoard();
-        return new InviteInfo(board.getName(), board.getUser().getName(), boardService.canAccess(board, email));
+        return new InviteInfo(board.getName(), board.getUser().getName(), board.getUser().getId(),
+                boardService.canAccess(board, email));
     }
 
     /**

@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { ref, watch } from 'vue'
 import { format, formatDistanceToNow } from 'date-fns'
 import Button from 'primevue/button'
@@ -151,7 +152,7 @@ const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
           <p class="text-sm break-words whitespace-pre-wrap text-slate-700 dark:text-slate-300">{{ note.text }}</p>
           <div class="mt-1 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
             <span>
-              <span v-if="note.user">{{ note.user }} · </span>
+              <span v-if="note.user" data-testid="note-user"><UserIcon :seed="note.userId" size="xs" class="-mt-0.5 mr-1" />{{ note.user }} · </span>
               <time :datetime="absolute(note.created)" :title="absolute(note.created)">{{ relative(note.created) }}</time>
               <span v-if="note.edited" :title="`Edited ${absolute(note.edited)}`"> · edited</span>
             </span>

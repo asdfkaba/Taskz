@@ -29,7 +29,7 @@ class JsonDatesTests {
 
     @Test
     void pointsInTimeAreIsoStringsInUtc() throws Exception {
-        EventDto event = new EventDto(1, "moved", Instant.parse("2026-10-29T09:15:30Z"), "Alice", Map.of());
+        EventDto event = new EventDto(1, "moved", Instant.parse("2026-10-29T09:15:30Z"), "Alice", 1, Map.of());
         assertThat(mapper.writeValueAsString(event)).contains("\"at\":\"2026-10-29T09:15:30Z\"");
     }
 

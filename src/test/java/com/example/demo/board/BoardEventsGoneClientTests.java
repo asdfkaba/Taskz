@@ -69,8 +69,8 @@ class BoardEventsGoneClientTests {
 
         // Alice saw Bob come, and go once his connection failed.
         List<String> presence = alice.sent.stream().filter(sent -> sent.startsWith("event:presence")).toList();
-        assertThat(presence).anyMatch(sent -> sent.contains("[Bob]"));
-        assertThat(presence.get(presence.size() - 1)).contains("[Carol]");
+        assertThat(presence).anyMatch(sent -> sent.contains("name=Bob"));
+        assertThat(presence.get(presence.size() - 1)).contains("name=Carol").doesNotContain("name=Bob");
         assertThat(alice.sent).anyMatch(sent -> sent.startsWith("event:changed"));
     }
 }

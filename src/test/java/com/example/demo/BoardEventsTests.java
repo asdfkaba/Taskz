@@ -74,8 +74,8 @@ class BoardEventsTests {
         MvcResult bob = open(BOB);
         open(BOB); // a second tab counts once
 
-        assertThat(received(alice)).contains("event:presence\ndata:[]").endsWith("event:presence\ndata:[\"Bob\"]\n\n");
-        assertThat(received(bob)).contains("event:presence\ndata:[\"Alice\"]");
+        assertThat(received(alice)).contains("event:presence\ndata:[]").endsWith("event:presence\ndata:[{\"id\":2,\"name\":\"Bob\"}]\n\n");
+        assertThat(received(bob)).contains("event:presence\ndata:[{\"id\":1,\"name\":\"Alice\"}]");
         // Share links are anonymous: no names, and the link ending keeps members connected.
         assertThat(received(guest)).doesNotContain("presence");
         events.publishEvent(new BoardShareEnded(7));

@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { computed, ref, watch } from 'vue'
 import { format, formatDistanceToNow } from 'date-fns'
 import { useBoardStore } from '@/stores/board'
@@ -134,7 +135,7 @@ const ICONS = {
           <div class="min-w-0 flex-1">
             <p v-for="line in lines(event)" :key="line" class="break-words text-slate-700 dark:text-slate-300">{{ line }}</p>
             <p class="text-xs text-slate-400 dark:text-slate-500">
-              <span v-if="event.user">{{ event.user }} · </span>
+              <span v-if="event.user" data-testid="event-user"><UserIcon :seed="event.userId" size="xs" class="-mt-0.5 mr-1" />{{ event.user }} · </span>
               <time :datetime="absolute(event.at)" :title="absolute(event.at)">{{ relative(event.at) }}</time>
             </p>
             <template v-if="event.changes?.description">

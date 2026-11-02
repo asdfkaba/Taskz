@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { computed, onMounted, watch } from 'vue'
 import Toast from 'primevue/toast'
@@ -77,9 +78,15 @@ onMounted(async () => {
         </RouterLink>
 
         <div class="flex min-w-0 items-center gap-2">
-          <span v-if="authStore.isAuthenticated" class="hidden truncate text-sm text-slate-500 dark:text-slate-400 sm:inline">
-            <i class="pi pi-user mr-1.5 text-xs" />{{ authStore.user?.email }}
-          </span>
+          <!-- Your icon, the same one others see on a board; name and email on hover. -->
+          <UserIcon
+            v-if="authStore.isAuthenticated"
+            :seed="authStore.user?.id"
+            :name="[authStore.user?.name, authStore.user?.email].filter(Boolean).join(' · ')"
+            size="lg"
+            class="ring-2 ring-emerald-500 dark:ring-emerald-400"
+            data-testid="header-user"
+          />
           <Button
             :icon="themeButton.icon"
             :aria-label="themeButton.label"

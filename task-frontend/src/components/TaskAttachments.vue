@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { format, formatDistanceToNow } from 'date-fns'
 import Button from 'primevue/button'
@@ -208,6 +209,7 @@ function size(bytes) {
             :title="attachment.name"
           >{{ attachment.name }}</a>
           <span class="text-xs text-slate-400 dark:text-slate-500">
+            <span v-if="attachment.user" data-testid="attachment-user"><UserIcon :seed="attachment.userId" size="xs" class="-mt-0.5 mr-1" />{{ attachment.user }} · </span>
             {{ size(attachment.size) }} ·
             <time :datetime="absolute(attachment.created)" :title="absolute(attachment.created)">{{ relative(attachment.created) }}</time>
           </span>

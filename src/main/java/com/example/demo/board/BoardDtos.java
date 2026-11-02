@@ -10,9 +10,9 @@ public final class BoardDtos {
     private BoardDtos() {
     }
 
-    // own: the user's own board; else they joined it, and ownerName says whose it is.
-    // The slug is the board's address for this user (see BoardService.summariesOf).
-    public record BoardSummary(Integer id, String name, String slug, boolean own, String ownerName) {
+    // own: the user's own board; else they joined it, and ownerName and ownerId (for the icon) say
+    // whose it is. The slug is the board's address for this user (see BoardService.summariesOf).
+    public record BoardSummary(Integer id, String name, String slug, boolean own, String ownerName, Integer ownerId) {
     }
 
     // Columns are sorted by position, tasks by column position and then by their own position.

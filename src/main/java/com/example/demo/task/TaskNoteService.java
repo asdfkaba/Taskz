@@ -32,13 +32,14 @@ public class TaskNoteService {
     }
 
     // canEdit and canDelete are for the user asking, so the page shows only what works.
-    public record NoteDto(Integer id, String text, String user, Instant created, Instant edited,
+    // userId: for the author's icon on the page.
+    public record NoteDto(Integer id, String text, String user, Integer userId, Instant created, Instant edited,
                           boolean canEdit, boolean canDelete) {
     }
 
     private NoteDto toDto(TaskNote note, String email) {
         return new NoteDto(note.getId(), note.getText(), note.getUser() == null ? null : note.getUser().getName(),
-                note.getCreated(), note.getEdited(), canEdit(note, email), canDelete(note, email));
+                note.getUser() == null ? null : note.getUser().getId(), note.getCreated(), note.getEdited(), canEdit(note, email), canDelete(note, email));
     }
 
     // Notes from before boards had members, or of deleted users, have no author: the owner's then.
