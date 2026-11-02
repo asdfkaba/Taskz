@@ -110,7 +110,7 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/login**", "/auth/**", "/error", "/health", "/").permitAll()
                         // Read-only share links work without login.
-                        .requestMatchers(HttpMethod.GET, "/share/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/share/*", "/share/*/events").permitAll()
                         .anyRequest().authenticated()
                 ).addFilterBefore(new JwtCookieAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
         return http.build();

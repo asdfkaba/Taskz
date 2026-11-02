@@ -66,6 +66,7 @@ public class TaskController {
         task.setPosition(repository.countByBoardColumn(column));
         repository.save(task);
         historyService.recordCreated(task, email);
+        boardService.changed(column.getBoard());
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
@@ -82,6 +83,7 @@ public class TaskController {
         applyLabels(input, task);
         Task saved = repository.save(task);
         historyService.recordUpdate(before, saved, currentUserEmail());
+        boardService.changed(saved.getBoardColumn().getBoard());
         return TaskDto.from(saved);
     }
 
@@ -111,6 +113,7 @@ public class TaskController {
         task.setDescription(input.description());
         Task saved = repository.save(task);
         historyService.recordCheckbox(saved, clicked.item(), clicked.checked(), parents, subItems, currentUserEmail());
+        boardService.changed(saved.getBoardColumn().getBoard());
         return TaskDto.from(saved);
     }
 
@@ -130,6 +133,7 @@ public class TaskController {
         Task task = findOwnTask(id);
         historyService.recordDeleted(task, currentUserEmail());
         repository.delete(task);
+        boardService.changed(task.getBoardColumn().getBoard());
     }
 
     // Newest first. Only for the owner; shared boards don't show history.

@@ -2,7 +2,10 @@ package com.example.demo;
 
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
+import com.example.demo.board.BoardChanged;
 import com.example.demo.board.BoardDtos.SharedBoard;
+import com.example.demo.board.BoardEvents;
+import com.example.demo.board.BoardShareEnded;
 import com.example.demo.board.BoardShare;
 import com.example.demo.board.ShareLinks;
 import com.example.demo.board.BoardShareController;
@@ -13,22 +16,29 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(BoardShareController.class)
-@Import({WebSecurityConfig.class, TestRsaKeys.class})
+@Import({WebSecurityConfig.class, TestRsaKeys.class, BoardEvents.class})
 class BoardShareControllerTests {
 
     static final String ALICE = "alice@example.com";
@@ -44,6 +54,34 @@ class BoardShareControllerTests {
 
     @MockBean
     TokenService tokenService;
+
+    @Autowired
+    ApplicationEventPublisher events;
+
+    // Public like the board: "changed" for this board only, until its link stops working.
+    @Test
+    void sharedBoardStreamsItsChangesUntilTheLinkEnds() throws Exception {
+        when(shareService.sharedBoardId("abc")).thenReturn(7);
+
+        MvcResult stream = mockMvc.perform(get("/share/abc/events"))
+                .andExpect(request().asyncStarted())
+                .andExpect(header().string("X-Accel-Buffering", "no"))
+                .andReturn();
+        events.publishEvent(new BoardChanged(8));
+        events.publishEvent(new BoardChanged(7));
+        events.publishEvent(new BoardShareEnded(7));
+        events.publishEvent(new BoardChanged(7));
+
+        assertThat(stream.getResponse().getContentType()).startsWith("text/event-stream");
+        assertThat(stream.getResponse().getContentAsString()).startsWith(":open").containsOnlyOnce("event:changed\ndata:changed\n");
+    }
+
+    @Test
+    void unknownLinkHasNoStream() throws Exception {
+        when(shareService.sharedBoardId("nope")).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        mockMvc.perform(get("/share/nope/events")).andExpect(status().isNotFound());
+    }
 
     @Test
     void sharedBoardIsReadableWithoutLogin() throws Exception {

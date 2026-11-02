@@ -11,6 +11,7 @@ import com.example.demo.task.TaskHistoryService;
 import com.example.demo.task.TaskRepository;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,11 +49,12 @@ public class BoardService {
     private final BoardShareRepository shareRepository;
     private final BoardLabelRepository labelRepository;
     private final TaskHistoryService historyService;
+    private final ApplicationEventPublisher events;
 
     public BoardService(BoardRepository boardRepository, BoardColumnRepository columnRepository,
                         TaskRepository taskRepository, UserRepository userRepository,
                         BoardShareRepository shareRepository, BoardLabelRepository labelRepository,
-                        TaskHistoryService historyService) {
+                        TaskHistoryService historyService, ApplicationEventPublisher events) {
         this.boardRepository = boardRepository;
         this.columnRepository = columnRepository;
         this.taskRepository = taskRepository;
@@ -60,6 +62,7 @@ public class BoardService {
         this.shareRepository = shareRepository;
         this.labelRepository = labelRepository;
         this.historyService = historyService;
+        this.events = events;
     }
 
     // The board every new user starts with.
@@ -80,6 +83,7 @@ public class BoardService {
     public void deleteBoard(int boardId, String email) {
         Board board = findOwnBoard(boardId, email);
         shareRepository.deleteByBoard(board);
+        events.publishEvent(new BoardShareEnded(boardId));
         historyService.forgetBoard(board);
         // Deleting the tasks also clears their rows in task_label.
         taskRepository.deleteAll(taskRepository.findByBoardInOrder(board));
@@ -100,6 +104,7 @@ public class BoardService {
             board.setSlug(uniqueSlug(board.getUser(), newName));
         }
         board.setName(newName);
+        changed(board);
         return board;
     }
 
@@ -190,6 +195,7 @@ public class BoardService {
     public BoardColumn addColumn(int boardId, String email, String name, String color) {
         Board board = findOwnBoard(boardId, email);
         int position = columnRepository.findByBoardOrderByPosition(board).size();
+        changed(board);
         return columnRepository.save(new BoardColumn(validName(name, "Column"), validColor(color), position, board));
     }
 
@@ -214,6 +220,7 @@ public class BoardService {
                 columns.get(i).setPosition(i);
             }
         }
+        changed(column.getBoard());
         return column;
     }
 
@@ -265,6 +272,7 @@ public class BoardService {
         for (int i = 0; i < columns.size(); i++) {
             columns.get(i).setPosition(i);
         }
+        changed(column.getBoard());
     }
 
     /**
@@ -296,7 +304,13 @@ public class BoardService {
         if (!sameColumn) {
             renumber(targetTasks);
         }
+        changed(target.getBoard());
         return task;
+    }
+
+    /** Tells open views of the board (see {@link BoardEvents}); sent once the transaction committed. */
+    public void changed(Board board) {
+        events.publishEvent(new BoardChanged(board.getId()));
     }
 
     public BoardColumn findOwnColumn(int columnId, String email) {

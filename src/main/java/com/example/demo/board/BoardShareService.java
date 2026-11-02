@@ -2,6 +2,7 @@ package com.example.demo.board;
 
 import com.example.demo.board.BoardDtos.SharedBoard;
 import com.example.demo.task.TaskDto;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +19,13 @@ public class BoardShareService {
 
     private final BoardService boardService;
     private final BoardShareRepository shareRepository;
+    private final ApplicationEventPublisher events;
 
-    public BoardShareService(BoardService boardService, BoardShareRepository shareRepository) {
+    public BoardShareService(BoardService boardService, BoardShareRepository shareRepository,
+                             ApplicationEventPublisher events) {
         this.boardService = boardService;
         this.shareRepository = shareRepository;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -34,12 +38,14 @@ public class BoardShareService {
     public BoardShare createShare(int boardId, String email) {
         Board board = boardService.findOwnBoard(boardId, email);
         shareRepository.deleteByBoard(board);
+        events.publishEvent(new BoardShareEnded(boardId));
         return shareRepository.save(new BoardShare(board));
     }
 
     @Transactional
     public void revokeShare(int boardId, String email) {
         shareRepository.deleteByBoard(boardService.findOwnBoard(boardId, email));
+        events.publishEvent(new BoardShareEnded(boardId));
     }
 
     /**
@@ -48,12 +54,22 @@ public class BoardShareService {
      */
     @Transactional(readOnly = true)
     public SharedBoard sharedBoard(String path) {
-        BoardShare share = ShareLinks.token(path)
-                .flatMap(shareRepository::findByToken)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Share link not found"));
+        BoardShare share = findShare(path);
         Board board = share.getBoard();
         return new SharedBoard(board.getName(), ShareLinks.path(board.getSlug(), share.getToken()),
                 boardService.columnsOf(board), boardService.labelsOf(board),
                 boardService.tasksOf(board).stream().map(TaskDto::withoutAttachments).toList());
+    }
+
+    /** The id of the board behind a link path; 404 like {@link #sharedBoard}. */
+    @Transactional(readOnly = true)
+    public int sharedBoardId(String path) {
+        return findShare(path).getBoard().getId();
+    }
+
+    private BoardShare findShare(String path) {
+        return ShareLinks.token(path)
+                .flatMap(shareRepository::findByToken)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Share link not found"));
     }
 }
