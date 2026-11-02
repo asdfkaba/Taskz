@@ -47,7 +47,9 @@ async function loginWithGithub() {
 
   const clientId = 'Ov23liqqiVqq1lqxD5AV';
   const redirectUri = `${window.location.origin}/oauth2/callback?provider=github`;
-  const scope = 'user';
+  // Only the email addresses (read-only); the login needs nothing else. "user" would allow
+  // changing the profile. access_type/prompt are Google parameters that GitHub doesn't know.
+  const scope = 'user:email';
   const responseType = 'code';
 
   const authUrl =
@@ -56,8 +58,6 @@ async function loginWithGithub() {
     `redirect_uri=${encodeURIComponent(redirectUri)}&` +
     `response_type=${responseType}&` +
     `scope=${encodeURIComponent(scope)}&` +
-    `access_type=offline&` +
-    `prompt=consent&` +
     `code_challenge=${code_challenge}&` +
     `code_challenge_method=S256`;
 
@@ -72,6 +72,8 @@ async function loginWithDiscord() {
 
   const clientId = '1390322077785133067';
   const redirectUri = `${window.location.origin}/oauth2/callback?provider=discord`;
+  // identify for /users/@me, email for the address and its "verified" flag; nothing else.
+  // No prompt=consent, which made Discord ask again at every login.
   const scope = 'identify email';
   const responseType = 'code';
 
@@ -81,7 +83,6 @@ async function loginWithDiscord() {
     `redirect_uri=${encodeURIComponent(redirectUri)}&` +
     `response_type=${responseType}&` +
     `scope=${encodeURIComponent(scope)}&` +
-    `prompt=consent&` +
     `code_challenge=${code_challenge}&` +
     `code_challenge_method=S256`;
 
@@ -96,7 +97,9 @@ async function loginWithGoogle() {
 
   const clientId = '462857227500-spe4l3v5mgjb63u0kbb9tpr87n09tkbq.apps.googleusercontent.com';
   const redirectUri = `${window.location.origin}/oauth2/callback?provider=google`;
-  const scope = 'openid email profile';
+  // The ID token's email and email_verified are all the login needs; no profile, no offline
+  // access (Google's refresh tokens aren't used), and no prompt=consent asking again every time.
+  const scope = 'openid email';
   const responseType = 'code';
 
   const authUrl =
@@ -105,8 +108,6 @@ async function loginWithGoogle() {
     `redirect_uri=${encodeURIComponent(redirectUri)}&` +
     `response_type=${responseType}&` +
     `scope=${encodeURIComponent(scope)}&` +
-    `access_type=offline&` +
-    `prompt=consent&` +
     `code_challenge=${code_challenge}&` +
     `code_challenge_method=S256`;
 

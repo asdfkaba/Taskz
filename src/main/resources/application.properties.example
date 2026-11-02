@@ -42,7 +42,7 @@ rsa.public-key=classpath:certs/public.pem
 # Google
 spring.security.oauth2.client.registration.google.client-id=YOUR_GOOGLE_CLIENT_ID
 spring.security.oauth2.client.registration.google.client-secret=YOUR_GOOGLE_CLIENT_SECRET
-spring.security.oauth2.client.registration.google.scope=openid,email,profile
+spring.security.oauth2.client.registration.google.scope=openid,email
 spring.security.oauth2.client.registration.google.redirect-uri=https://taskz.morfic.de/oauth2/callback?provider=google
 spring.security.oauth2.client.provider.google.authorization-uri=https://accounts.google.com/o/oauth2/v2/auth
 spring.security.oauth2.client.provider.google.token-endpoint=https://oauth2.googleapis.com/token
@@ -53,7 +53,7 @@ spring.security.oauth2.client.registration.google.authorization-grant-type=autho
 # GitHub
 spring.security.oauth2.client.registration.github.client-id=YOUR_GITHUB_CLIENT_ID
 spring.security.oauth2.client.registration.github.client-secret=YOUR_GITHUB_CLIENT_SECRET
-spring.security.oauth2.client.registration.github.scope=user
+spring.security.oauth2.client.registration.github.scope=user:email
 spring.security.oauth2.client.registration.github.redirect-uri=https://taskz.morfic.de/oauth2/callback?provider=github
 spring.security.oauth2.client.provider.github.token-endpoint=https://github.com/login/oauth/access_token
 spring.security.oauth2.client.registration.github.authorization-grant-type=authorization_code
