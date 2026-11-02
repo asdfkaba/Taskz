@@ -8,7 +8,6 @@ import com.example.demo.board.ShareLinks;
 import com.example.demo.board.BoardShareController;
 import com.example.demo.board.BoardShareService;
 import com.example.demo.config.WebSecurityConfig;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,9 +41,6 @@ class BoardShareControllerTests {
 
     @MockBean
     UserRepository userRepository;
-
-    @MockBean
-    CustomUserDetailsService userDetailsService;
 
     @MockBean
     TokenService tokenService;

@@ -6,7 +6,6 @@ import com.example.demo.board.BoardLabel;
 import com.example.demo.board.LabelController;
 import com.example.demo.board.LabelService;
 import com.example.demo.config.WebSecurityConfig;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,9 +37,6 @@ class LabelControllerTests {
 
     @MockBean
     UserRepository userRepository;
-
-    @MockBean
-    CustomUserDetailsService userDetailsService;
 
     @MockBean
     TokenService tokenService;

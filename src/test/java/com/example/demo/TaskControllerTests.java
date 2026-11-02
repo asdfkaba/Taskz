@@ -11,7 +11,6 @@ import com.example.demo.task.Task;
 import com.example.demo.task.TaskController;
 import com.example.demo.task.TaskHistoryService;
 import com.example.demo.task.TaskRepository;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -55,9 +54,6 @@ class TaskControllerTests {
     UserRepository userRepository;
 
     @MockBean
-    CustomUserDetailsService userDetailsService;
-
-    @MockBean
     TokenService tokenService;
 
     @MockBean
@@ -70,13 +66,13 @@ class TaskControllerTests {
     TaskHistoryService historyService;
 
     private BoardColumn aliceColumn() {
-        BoardColumn column = new BoardColumn("To do", null, 0, new Board("My board", new User("Alice", ALICE, null)));
+        BoardColumn column = new BoardColumn("To do", null, 0, new Board("My board", new User("Alice", ALICE)));
         column.setId(10);
         return column;
     }
 
     private Task aliceTask() {
-        User alice = new User("Alice", ALICE, null);
+        User alice = new User("Alice", ALICE);
         Task task = new Task("Old title", LocalDateTime.of(2026, 10, 27, 12, 0), null, "Old description");
         task.setId(1);
         task.setCreated(Instant.parse("2026-10-01T09:00:00Z"));
@@ -259,6 +255,23 @@ class TaskControllerTests {
         verify(taskRepository, never()).save(any());
     }
 
+    @Test
+    void titlesAreTrimmedAndMustFitTheColumn() throws Exception {
+        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        for (String bad : new String[]{"\"   \"", "null", jsonString("x".repeat(256))}) {
+            mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON).content("{\"title\":" + bad + "}"))
+                    .andExpect(status().isBadRequest());
+        }
+        verify(taskRepository, never()).save(any());
+
+        mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":" + jsonString("  " + "x".repeat(255) + "  ") + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("x".repeat(255)));
+    }
+
     private static String jsonString(String s) {
         return "\"" + s.replace("\n", "\\n") + "\"";
     }
@@ -308,7 +321,7 @@ class TaskControllerTests {
     @Test
     void createIgnoresIdFromBodySoPostCannotOverwrite() throws Exception {
         BoardColumn column = aliceColumn();
-        when(userRepository.findByEmail(ALICE)).thenReturn(Optional.of(new User("Alice", ALICE, null)));
+        when(userRepository.findByEmail(ALICE)).thenReturn(Optional.of(new User("Alice", ALICE)));
         when(boardService.findOwnColumn(10, ALICE)).thenReturn(column);
         when(taskRepository.countByBoardColumn(column)).thenReturn(2);
 

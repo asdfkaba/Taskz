@@ -50,7 +50,7 @@ class BoardServiceTests {
 
     @BeforeEach
     void setUp() {
-        User alice = userRepository.save(new User("Alice", ALICE, null));
+        User alice = userRepository.save(new User("Alice", ALICE));
         board = boardService.createDefaultBoard(alice);
         List<BoardColumn> columns = columnRepository.findByBoardOrderByPosition(board);
         todo = columns.get(0);
@@ -129,7 +129,7 @@ class BoardServiceTests {
 
     @Test
     void cannotMoveIntoColumnOfOtherUser() {
-        User bob = userRepository.save(new User("Bob", BOB, null));
+        User bob = userRepository.save(new User("Bob", BOB));
         BoardColumn bobsColumn = columnRepository.findByBoardOrderByPosition(boardService.createDefaultBoard(bob)).get(0);
         Task a = addTask("A", todo);
 
@@ -212,7 +212,7 @@ class BoardServiceTests {
 
     @Test
     void cannotMoveTasksIntoColumnOfOtherUser() {
-        User bob = userRepository.save(new User("Bob", BOB, null));
+        User bob = userRepository.save(new User("Bob", BOB));
         BoardColumn bobsColumn = columnRepository.findByBoardOrderByPosition(boardService.createDefaultBoard(bob)).get(0);
         addTask("A", todo);
 
@@ -409,7 +409,7 @@ class BoardServiceTests {
 
     @Test
     void cannotDeleteBoardOfOtherUser() {
-        userRepository.save(new User("Bob", BOB, null));
+        userRepository.save(new User("Bob", BOB));
 
         assertThatThrownBy(() -> boardService.deleteBoard(board.getId(), BOB))
                 .satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
@@ -420,7 +420,7 @@ class BoardServiceTests {
     void boardsGetSlugsUniquePerUser() {
         Board second = boardService.createBoard(ALICE, "My Board!");
         Board third = boardService.createBoard(ALICE, "my board");
-        userRepository.save(new User("Bob", BOB, null));
+        userRepository.save(new User("Bob", BOB));
         Board bobs = boardService.createBoard(BOB, "My board");
 
         assertThat(board.getSlug()).isEqualTo("my-board");
@@ -476,7 +476,7 @@ class BoardServiceTests {
 
     @Test
     void cannotSetTaskTemplateOfOtherUser() {
-        userRepository.save(new User("Bob", BOB, null));
+        userRepository.save(new User("Bob", BOB));
         assertThatThrownBy(() -> boardService.setTaskTemplate(board.getId(), BOB, "x"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Board not found");
@@ -516,7 +516,7 @@ class BoardServiceTests {
 
     @Test
     void cannotRenameBoardOfOtherUser() {
-        userRepository.save(new User("Bob", BOB, null));
+        userRepository.save(new User("Bob", BOB));
 
         assertThatThrownBy(() -> boardService.renameBoard(board.getId(), BOB, "Mine now"))
                 .satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -18,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * An empty database (local, CI): Flyway runs all migrations, and Hibernate's validation
@@ -52,7 +54,7 @@ class FreshDatabaseMigrationTests {
 
     @Test
     void entitiesCanBeStored() {
-        Board board = boardService.createDefaultBoard(userRepository.save(new User("Alice", "alice@example.com", null)));
+        Board board = boardService.createDefaultBoard(userRepository.save(new User("Alice", "alice@example.com")));
         assertThat(board.getId()).isNotNull();
         assertThat(boardService.getBoard(board.getId(), "alice@example.com").columns()).hasSize(3);
     }
@@ -61,7 +63,7 @@ class FreshDatabaseMigrationTests {
     // PostgreSQL itself.
     @Test
     void deletingATaskDeletesItsNotesAndAttachmentsInTheDatabase() {
-        Board board = boardService.createDefaultBoard(userRepository.save(new User("Bob", "bob@example.com", null)));
+        Board board = boardService.createDefaultBoard(userRepository.save(new User("Bob", "bob@example.com")));
         Integer column = jdbc.queryForObject("select min(id) from board_column where board_id = ?", Integer.class, board.getId());
         Integer task = jdbc.queryForObject(
                 "insert into task (title, position, board_column_id) values ('T', 0, ?) returning id", Integer.class, column);
@@ -73,5 +75,16 @@ class FreshDatabaseMigrationTests {
 
         assertThat(jdbc.queryForObject("select count(*) from task_note", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from task_attachment", Integer.class)).isZero();
+    }
+
+    // V7: one account per email, as logins find accounts by it. Several without an email stay possible.
+    @Test
+    void emailsAreUnique() {
+        jdbc.update("insert into \"user\" (name, email) values ('C', null)");
+        jdbc.update("insert into \"user\" (name, email) values ('D', null)");
+        jdbc.update("insert into \"user\" (name, email) values ('A', 'same@example.com')");
+        // Last: the failed insert aborts the test's transaction.
+        assertThatThrownBy(() -> jdbc.update("insert into \"user\" (name, email) values ('B', 'same@example.com')"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

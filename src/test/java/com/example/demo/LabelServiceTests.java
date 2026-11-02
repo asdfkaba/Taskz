@@ -51,9 +51,9 @@ class LabelServiceTests {
 
     @BeforeEach
     void setUp() {
-        board = boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE, null)));
+        board = boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE)));
         todo = columnRepository.findByBoardOrderByPosition(board).get(0);
-        bobsBoard = boardService.createDefaultBoard(userRepository.save(new User("Bob", BOB, null)));
+        bobsBoard = boardService.createDefaultBoard(userRepository.save(new User("Bob", BOB)));
     }
 
     private Task addTask(String title, Set<BoardLabel> labels) {

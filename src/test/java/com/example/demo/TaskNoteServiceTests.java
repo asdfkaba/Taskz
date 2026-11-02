@@ -47,8 +47,8 @@ class TaskNoteServiceTests {
 
     @BeforeEach
     void setUp() {
-        board = boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE, null)));
-        boardService.createDefaultBoard(userRepository.save(new User("Bob", BOB, null)));
+        board = boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE)));
+        boardService.createDefaultBoard(userRepository.save(new User("Bob", BOB)));
         todo = columnRepository.findByBoardOrderByPosition(board).get(0);
         task = new Task();
         task.setTitle("Bewerbung");

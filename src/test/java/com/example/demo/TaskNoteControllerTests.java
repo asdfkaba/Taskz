@@ -5,7 +5,6 @@ import com.example.demo.config.WebSecurityConfig;
 import com.example.demo.task.TaskNoteController;
 import com.example.demo.task.TaskNoteService;
 import com.example.demo.task.TaskNoteService.NoteDto;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,8 +38,6 @@ class TaskNoteControllerTests {
     TaskNoteService noteService;
     @MockBean
     UserRepository userRepository;
-    @MockBean
-    CustomUserDetailsService userDetailsService;
     @MockBean
     TokenService tokenService;
 

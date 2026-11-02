@@ -67,6 +67,11 @@ function api(method, url, body) {
   const p = u.pathname.replace(/^\/api/, '')
   let m
   if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice' }]
+  // Like the backend: the code "unverified" stands for an account without a confirmed email.
+  if (method === 'POST' && p === '/auth/login') {
+    if (body?.code === 'unverified') return [401, { message: 'Your account there has no confirmed email address. Confirm one and try again.' }]
+    return [200, 'Login successful']
+  }
   if (method === 'GET' && p === '/boards') return [200, boardDeleted ? [] : [{ id: 1, name: board.name, slug: board.slug }]]
   if (method === 'DELETE' && p === '/boards/1') { boardDeleted = true; return [204, null] }
   if (method === 'GET' && p === '/boards/1') {

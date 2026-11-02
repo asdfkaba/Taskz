@@ -17,14 +17,13 @@ public class User {
     @GeneratedValue(strategy= GenerationType.IDENTITY)
     private Integer id;
     private String name;
+    // Accounts are matched by email at login, so one account per address (see V7).
+    @Column(unique = true)
     private String email;
-    @JsonIgnore
-    private String password;
 
-    public User(String name, String email, String password) {
+    public User(String name, String email) {
         this.name = name;
         this.email = email;
-        this.password = password;
     }
 
     @OneToMany(mappedBy = "user")

@@ -15,7 +15,6 @@ export const useAuthStore = defineStore('auth', {
     },
     async checkLoginStatus() {
       const result = await getCurrentUser();
-      console.log(result)
       if (result.status === 'ok') {
 	this.user = result.user;
 	this.isAuthenticated = true;

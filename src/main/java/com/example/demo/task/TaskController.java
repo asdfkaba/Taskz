@@ -24,6 +24,7 @@ public class TaskController {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskController.class);
     public static final int MAX_DESCRIPTION_LENGTH = 10_000;
+    static final int MAX_TITLE_LENGTH = 255; // the column's size
 
     private final TaskRepository repository;
     private final UserRepository userRepository;
@@ -38,13 +39,6 @@ public class TaskController {
         this.boardService = boardService;
         this.labelService = labelService;
         this.historyService = historyService;
-    }
-
-    @GetMapping("")
-    public List<TaskDto> getTasksForUser() {
-        return repository.findByUserEmail(currentUserEmail()).stream()
-                .map(TaskDto::from)
-                .toList();
     }
 
     @GetMapping("/{id}")
@@ -152,11 +146,19 @@ public class TaskController {
 
     // Only the editable fields are copied, so a client can't set id, owner, column or timestamps.
     private static void copyEditableFields(TaskRequest from, Task to) {
+        String title = from.title() == null ? "" : from.title().strip();
+        if (title.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be empty");
+        }
+        if (title.length() > MAX_TITLE_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "title must be at most " + MAX_TITLE_LENGTH + " characters");
+        }
         if (from.description() != null && from.description().length() > MAX_DESCRIPTION_LENGTH) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "description must be at most " + MAX_DESCRIPTION_LENGTH + " characters");
         }
-        to.setTitle(from.title());
+        to.setTitle(title);
         to.setDescription(from.description());
         to.setDue_date(from.due_date());
     }

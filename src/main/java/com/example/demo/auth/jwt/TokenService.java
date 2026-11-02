@@ -1,38 +1,38 @@
 package com.example.demo.auth.jwt;
 
 import com.example.demo.user.User;
-import com.example.demo.user.UserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-
+/**
+ * Login tokens: a short-lived signed JWT (access token) and a random refresh token stored in the
+ * database. Both travel in cookies; when the access token has expired, the cookie filter in
+ * WebSecurityConfig makes a new one from the refresh token.
+ */
 @Service
 public class TokenService {
 
+    /** How long a login lasts, and so how long both cookies live. */
+    public static final Duration REFRESH_TOKEN_VALIDITY = Duration.ofDays(7);
+    private static final Duration ACCESS_TOKEN_VALIDITY = Duration.ofMinutes(1);
+
     private final JwtEncoder encoder;
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final UserRepository userRepository;
     private final JwtDecoder jwtDecoder;
-    private final long REFRESH_TOKEN_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+    private final RefreshTokenRepository refreshTokenRepository;
 
-
-    public TokenService(JwtEncoder encoder, RefreshTokenRepository refreshTokenRepository, UserRepository userRepository, JwtDecoder jwtDecoder) {
+    public TokenService(JwtEncoder encoder, JwtDecoder jwtDecoder, RefreshTokenRepository refreshTokenRepository) {
         this.encoder = encoder;
-        this.refreshTokenRepository = refreshTokenRepository;
         this.jwtDecoder = jwtDecoder;
-        this.userRepository = userRepository;
-
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     public String generateToken(User user) {
@@ -40,89 +40,41 @@ public class TokenService {
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("self")
                 .issuedAt(now)
-                .expiresAt(now.plus(1, ChronoUnit.MINUTES))
-                .subject(user.getEmail()) // or user.getId().toString() if preferred
+                .expiresAt(now.plus(ACCESS_TOKEN_VALIDITY))
+                .subject(user.getEmail())
                 .claim("name", user.getName())
                 .claim("email", user.getEmail())
                 .build();
         return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
     }
 
+    /** A new refresh token for a login. Expired ones of all users are dropped on the way. */
     @Transactional
     public RefreshToken generateRefreshToken(User user) {
-        // Generate secure random token
-        String token = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        refreshTokenRepository.deleteExpired(now);
 
-        RefreshToken refreshToken  = new RefreshToken();
-        refreshToken.setToken(token);
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken(UUID.randomUUID().toString()); // 122 random bits from a secure generator
         refreshToken.setUser(user);
-        refreshToken.setIssuedAt(Instant.now());
-        refreshToken.setExpiresAt(Instant.now().plusMillis(REFRESH_TOKEN_VALIDITY_MS));
-        refreshTokenRepository.save(refreshToken);
-
-        return refreshToken;
+        refreshToken.setIssuedAt(now);
+        refreshToken.setExpiresAt(now.plus(REFRESH_TOKEN_VALIDITY));
+        return refreshTokenRepository.save(refreshToken);
     }
 
-    public boolean validateRefreshToken(String token) {
-        return refreshTokenRepository.findByToken(token)
-                .filter(rt -> rt.getExpiresAt().isAfter(Instant.now()))
-                .isPresent();
-    }
-
+    /** Fails (JwtException) for a token that is invalid or expired. */
     public Authentication parseToken(String token) {
         Jwt jwt = jwtDecoder.decode(token);
-
-        String username = jwt.getSubject();
-        // Example: read roles or authorities from claims if you store them
-        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
-
-        return new UsernamePasswordAuthenticationToken(username, null, authorities);
+        return new UsernamePasswordAuthenticationToken(jwt.getSubject(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
     }
 
-    @Transactional
-    public void deleteRefreshToken(String token) {
-        refreshTokenRepository.findByToken(token).ifPresent(rt -> refreshTokenRepository.delete(rt));
-    }
-
-    public long getAccessTokenExpirySeconds() {
-        return REFRESH_TOKEN_VALIDITY_MS;
-    }
-
+    /** A new access token for a known, unexpired refresh token. */
+    @Transactional(readOnly = true)
     public String generateAccessTokenFromRefresh(String refreshToken) {
-        Optional<RefreshToken> tokenEntityOpt = refreshTokenRepository.findByToken(refreshToken);
-        if (tokenEntityOpt.isEmpty() || tokenEntityOpt.get().isExpired()) {
-            throw new RuntimeException("Invalid or expired refresh token");
-        }
-
-        User user = tokenEntityOpt.get().getUser();
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer("self")
-                .issuedAt(now)
-                .expiresAt(now.plus(1, ChronoUnit.MINUTES))
-                .subject(user.getEmail()) // or user.getId().toString() if preferred
-                .claim("name", user.getName())
-                .claim("email", user.getEmail())
-                .build();
-        return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+        RefreshToken stored = refreshTokenRepository.findByToken(refreshToken)
+                .filter(t -> !t.isExpired())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token"));
+        return generateToken(stored.getUser());
     }
-
-        public boolean isRefreshTokenValid(String refreshToken) {
-            Optional<RefreshToken> tokenEntityOpt = refreshTokenRepository.findByToken(refreshToken);
-            if (tokenEntityOpt.isEmpty()) {
-                System.out.println("refresh lookup failed");
-                return false;
-            }
-
-            RefreshToken tokenEntity = tokenEntityOpt.get();
-            if (tokenEntity.isExpired()) {
-                System.out.println("refresh expired");
-                return false;
-            }
-
-            return true;
-        }
-
 }
-
-

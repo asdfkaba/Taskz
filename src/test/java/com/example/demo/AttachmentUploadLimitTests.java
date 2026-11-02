@@ -74,7 +74,7 @@ class AttachmentUploadLimitTests {
 
     @Test
     void filesUpToTheLimitPassLargerOnesGet413() throws Exception {
-        User user = userRepository.save(new User("Lena", "lena@example.com", null));
+        User user = userRepository.save(new User("Lena", "lena@example.com"));
         Board board = boardService.createDefaultBoard(user);
         Task task = new Task();
         task.setTitle("Upload");
