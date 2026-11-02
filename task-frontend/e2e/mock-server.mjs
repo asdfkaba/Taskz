@@ -20,7 +20,7 @@ const labelNames = (ids) => labels.filter((l) => (ids ?? []).includes(l.id)).map
 // Like the backend: points in time as UTC with a zone (Instant), due dates without one.
 const now = () => new Date().toISOString()
 function record(task, type, changes) {
-  events.unshift({ id: eventId++, taskId: task.id, type, at: now(), user: 'Alice', changes })
+  events.unshift({ id: eventId++, taskId: task.id, type, at: now(), user: 'Alice', userId: 1, changes })
 }
 // Share link like the backend: a key (22 chars) plus the board slug in front; OLD_UUID imitates a pre-slug link.
 const OLD_UUID = '13d72268-5904-431b-b410-f348df9ec414'
@@ -33,7 +33,7 @@ let boardDeleted
 let members
 let invites
 let teamJoined
-const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob' }
+const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
 const streams = new Set()
 const endStreams = () => { for (const res of streams) res.end(); streams.clear() }
@@ -88,7 +88,7 @@ function api(method, url, body) {
   const u = new URL(url, 'http://x')
   const p = u.pathname.replace(/^\/api/, '')
   let m
-  if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice' }]
+  if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice', id: 1 }]
   // Like the backend: the code "unverified" stands for an account without a confirmed email.
   if (method === 'POST' && p === '/auth/login') {
     if (body?.code === 'unverified') return [401, { message: 'Your account there has no confirmed email address. Confirm one and try again.' }]
@@ -114,10 +114,10 @@ function api(method, url, body) {
     const key = decodeURIComponent(m[1])
     if (key === 'team-invite') {
       if (method === 'POST') teamJoined = true
-      return [200, method === 'POST' ? TEAM_BOARD : { boardName: 'Team board', ownerName: 'Bob', member: teamJoined }]
+      return [200, method === 'POST' ? TEAM_BOARD : { boardName: 'Team board', ownerName: 'Bob', ownerId: 2, member: teamJoined }]
     }
     // Alice owns board 1, so her own links only open it.
-    if (invites.includes(key)) return [200, method === 'POST' ? { id: 1, name: board.name, slug: board.slug, own: true, ownerName: null } : { boardName: board.name, ownerName: 'Alice', member: true }]
+    if (invites.includes(key)) return [200, method === 'POST' ? { id: 1, name: board.name, slug: board.slug, own: true, ownerName: null } : { boardName: board.name, ownerName: 'Alice', ownerId: 1, member: true }]
     return [404, { message: "This invite link doesn't work anymore" }]
   }
   if (teamJoined && method === 'GET' && p === '/boards/2') {
@@ -224,7 +224,7 @@ function api(method, url, body) {
     if (method === 'POST') {
       const text = (body.text ?? '').trim()
       if (!text || text.length > 5000) return [400, {}]
-      const note = { id: nextId++, taskId, text, user: 'Alice', created: now(), edited: null, canEdit: true, canDelete: true }
+      const note = { id: nextId++, taskId, text, user: 'Alice', userId: 1, created: now(), edited: null, canEdit: true, canDelete: true }
       notes.push(note)
       const { taskId: _, ...out } = note
       return [201, out]
@@ -357,7 +357,7 @@ async function attachmentApi(method, url, raw, headers) {
       if (!contentType || (magic && !data.toString('latin1').startsWith(magic)) || (!magic && data.includes(0))) {
         return [415, { message: 'Only PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV files can be attached, with an extension that fits the content' }]
       }
-      const a = { id: nextId++, taskId: task.id, name: file.name, contentType, size: data.length, image: contentType.startsWith('image/'), user: 'Alice', created: now(), data }
+      const a = { id: nextId++, taskId: task.id, name: file.name, contentType, size: data.length, image: contentType.startsWith('image/'), user: 'Alice', userId: 1, created: now(), data }
       attachments.push(a)
       task.attachments = (task.attachments ?? 0) + 1
       record(task, 'attached', { file: a.name })

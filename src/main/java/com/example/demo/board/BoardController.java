@@ -42,7 +42,7 @@ public class BoardController {
     @ResponseStatus(HttpStatus.CREATED)
     public BoardSummary createBoard(@RequestBody NewBoardRequest request) {
         Board board = boardService.createBoard(currentUserEmail(), request.name());
-        return new BoardSummary(board.getId(), board.getName(), board.getSlug(), true, null);
+        return new BoardSummary(board.getId(), board.getName(), board.getSlug(), true, null, null);
     }
 
     @PatchMapping("/boards/{id}")

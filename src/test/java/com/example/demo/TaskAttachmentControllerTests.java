@@ -54,7 +54,7 @@ class TaskAttachmentControllerTests {
     Path dir;
 
     private static AttachmentDto dto(String name, String type) {
-        return new AttachmentDto(7, name, type, 3, type.startsWith("image/"), "Alice", Instant.parse("2026-11-02T10:00:00Z"));
+        return new AttachmentDto(7, name, type, 3, type.startsWith("image/"), "Alice", 1, Instant.parse("2026-11-02T10:00:00Z"));
     }
 
     private Download download(String name, String type) throws Exception {

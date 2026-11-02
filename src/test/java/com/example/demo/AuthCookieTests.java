@@ -8,6 +8,7 @@ import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.auth.service.AuthService;
 import com.example.demo.config.WebSecurityConfig;
 import com.example.demo.user.UserRepository;
+import com.example.demo.user.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -16,13 +17,16 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -72,5 +76,20 @@ class AuthCookieTests {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("No confirmed email"))
                 .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty());
+    }
+
+    // The page shows the name, e.g. as the own icon among who is on a board.
+    @Test
+    @WithMockUser(username = "alice@example.com")
+    void statusTellsEmailNameAndId() throws Exception {
+        User alice = new User("Alice", "alice@example.com");
+        alice.setId(4);
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(alice));
+
+        mockMvc.perform(get("/auth/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("alice@example.com"))
+                .andExpect(jsonPath("$.name").value("Alice"))
+                .andExpect(jsonPath("$.id").value(4));
     }
 }

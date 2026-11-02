@@ -7,6 +7,7 @@ import com.example.demo.auth.jwt.RefreshTokenRepository;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.auth.service.AuthService;
 import com.example.demo.user.User;
+import com.example.demo.user.UserRepository;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
@@ -28,11 +30,13 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final UserRepository userRepository;
 
-
-    public AuthController(AuthService authService, RefreshTokenRepository refreshTokenRepository) {
+    public AuthController(AuthService authService, RefreshTokenRepository refreshTokenRepository,
+                          UserRepository userRepository) {
         this.authService = authService;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.userRepository = userRepository;
     }
 
     @GetMapping("/status")
@@ -41,13 +45,14 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        // If the principal is the email, you can fetch the user:
         String email = authentication.getName();
-
-        return ResponseEntity.ok(new UserInfoDto(email));
+        Optional<User> user = userRepository.findByEmail(email);
+        return ResponseEntity.ok(new UserInfoDto(email, user.map(User::getName).orElse(null),
+                user.map(User::getId).orElse(null)));
     }
 
-    public static record UserInfoDto(String email) {}
+    // name and id: the page shows them, e.g. the own icon among who is on a board.
+    public static record UserInfoDto(String email, String name, Integer id) {}
 
 
     @PostMapping("/login")

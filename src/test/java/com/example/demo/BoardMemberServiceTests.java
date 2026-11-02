@@ -71,11 +71,11 @@ class BoardMemberServiceTests {
     @Test
     void aMemberOpensAndChangesTheBoard() {
         String token = inviteToken();
-        assertThat(members.invite(token, BOB)).isEqualTo(new BoardMemberService.InviteInfo("My board", "Alice", false));
+        assertThat(members.invite(token, BOB)).isEqualTo(new BoardMemberService.InviteInfo("My board", "Alice", board.getUser().getId(), false));
 
         members.join(token, BOB);
 
-        assertThat(boardService.summariesOf(BOB)).contains(new BoardSummary(board.getId(), "My board", "my-board", false, "Alice"));
+        assertThat(boardService.summariesOf(BOB)).contains(new BoardSummary(board.getId(), "My board", "my-board", false, "Alice", board.getUser().getId()));
         assertThat(boardService.getBoard(board.getId(), BOB).tasks()).hasSize(1);
         assertThat(boardService.findTask(task.getId(), BOB)).isEqualTo(task);
         boardService.addColumn(board.getId(), BOB, "Later", null);

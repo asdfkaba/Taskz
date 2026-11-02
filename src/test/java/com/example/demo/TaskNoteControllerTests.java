@@ -42,7 +42,7 @@ class TaskNoteControllerTests {
     TokenService tokenService;
 
     private static NoteDto note(String text) {
-        return new NoteDto(5, text, "Alice", Instant.parse("2026-10-28T10:00:00Z"), null, true, true);
+        return new NoteDto(5, text, "Alice", 1, Instant.parse("2026-10-28T10:00:00Z"), null, true, true);
     }
 
     @Test

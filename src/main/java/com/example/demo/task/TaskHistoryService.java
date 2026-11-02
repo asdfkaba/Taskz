@@ -42,7 +42,8 @@ public class TaskHistoryService {
         }
     }
 
-    public record EventDto(Integer id, String type, Instant at, String user, Map<String, Object> changes) {
+    // userId: for the user's icon on the page; null like user if they are gone.
+    public record EventDto(Integer id, String type, Instant at, String user, Integer userId, Map<String, Object> changes) {
     }
 
     @Transactional
@@ -120,7 +121,8 @@ public class TaskHistoryService {
     public List<EventDto> historyOf(Task task) {
         return eventRepository.findByTaskIdOrderByAtDescIdDesc(task.getId()).stream()
                 .map(e -> new EventDto(e.getId(), e.getType().toLowerCase(), e.getAt(),
-                        e.getUser() == null ? null : e.getUser().getName(), parse(e.getChanges())))
+                        e.getUser() == null ? null : e.getUser().getName(),
+                        e.getUser() == null ? null : e.getUser().getId(), parse(e.getChanges())))
                 .toList();
     }
 

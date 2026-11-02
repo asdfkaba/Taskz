@@ -50,12 +50,14 @@ public class TaskAttachmentService {
         this.properties = properties;
     }
 
+    // user, userId: who uploaded it, for their name and icon; null if they are gone.
     public record AttachmentDto(Integer id, String name, String contentType, long size, boolean image,
-                                String user, Instant created) {
+                                String user, Integer userId, Instant created) {
         static AttachmentDto from(TaskAttachment attachment) {
             return new AttachmentDto(attachment.getId(), attachment.getFileName(), attachment.getContentType(),
                     attachment.getSize(), attachment.getContentType().startsWith("image/"),
-                    attachment.getUser() == null ? null : attachment.getUser().getName(), attachment.getCreated());
+                    attachment.getUser() == null ? null : attachment.getUser().getName(),
+                    attachment.getUser() == null ? null : attachment.getUser().getId(), attachment.getCreated());
         }
     }
 

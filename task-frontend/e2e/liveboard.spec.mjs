@@ -19,11 +19,27 @@ test('Board updates live', async ({ browser }) => {
   await card(1).waitFor()
   await page.evaluate(() => { window.stillHere = true })
 
-  await test.step('who else has the board open shows next to its name', async () => {
-    await api('/__presence', 'POST', ['Bob Builder', 'Carla'])
+  await test.step('who else has the board open shows next to its name, you first', async () => {
+    const icons = () => page.getByTestId('presence').locator('[data-testid^="presence-"]')
+    const fills = async () => icons().evaluateAll((spans) => spans.map((s) => s.querySelector('rect')?.getAttribute('fill')))
+    const shapes = async () => icons().evaluateAll((spans) => spans.map((s) => s.querySelector('svg').innerHTML))
+    await api('/__presence', 'POST', [{ id: 2, name: 'Bob Builder' }, { id: 3, name: 'Carla' }])
     const presence = page.getByTestId('presence')
-    await presence.getByText('BB').waitFor()
-    ensure((await presence.getAttribute('aria-label')) === 'Bob Builder, Carla have this board open too', await presence.getAttribute('aria-label'))
+    await presence.waitFor()
+    ensure((await presence.getAttribute('aria-label')) === 'You and Bob Builder, Carla have this board open', await presence.getAttribute('aria-label'))
+    ensure((await icons().first().getAttribute('data-testid')) === 'presence-me', 'you not first')
+    ensure((await icons().first().getAttribute('title')) === 'You (Alice)', await icons().first().getAttribute('title'))
+    ensure((await icons().nth(1).getAttribute('title')) === 'Bob Builder', 'no name on hover')
+    // One icon per person, each in its own pattern and color.
+    const colors = await fills()
+    ensure(new Set(colors).size === 3 && colors.every(Boolean), `colors ${colors}`)
+    ensure(new Set(await shapes()).size === 3, 'two icons look the same')
+    // The same person gets the same icon again.
+    const before = await shapes()
+    await api('/__presence', 'POST', [{ id: 3, name: 'Carla' }, { id: 2, name: 'Bob Builder' }])
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="presence-other"]')[0]?.title === 'Carla')
+    const after = await shapes()
+    ensure(after[0] === before[0] && after[1] === before[2] && after[2] === before[1], 'icon changed for the same person')
     await page.screenshot({ path: out('lb-1-presence.png') })
     await api('/__presence', 'POST', [])
     await presence.waitFor({ state: 'detached' })

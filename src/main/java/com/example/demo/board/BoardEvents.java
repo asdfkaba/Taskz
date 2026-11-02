@@ -19,7 +19,7 @@ import java.util.function.Predicate;
 /**
  * Open live views of boards (server-sent events), by board. A change only says "changed"; the
  * view loads the board again, so it can't miss or misapply a detail. Logged-in viewers (owner,
- * members) also get "presence": the names of the others who have the board open. Viewers of a
+ * members) also get "presence": id and name of the others who have the board open. Viewers of a
  * share link are anonymous and never see names.
  */
 @Component
@@ -30,6 +30,10 @@ public class BoardEvents {
     }
 
     private record Listener(SseEmitter emitter, Viewer viewer) {
+    }
+
+    /** One of the others in a "presence" event; the page draws their icon from the id. */
+    record Person(int id, String name) {
     }
 
     private final Map<Integer, Set<Listener>> listeners = new ConcurrentHashMap<>();
@@ -122,9 +126,9 @@ public class BoardEvents {
         Map<Integer, String> people = new LinkedHashMap<>();
         loggedIn.forEach(l -> people.putIfAbsent(l.viewer().userId(), l.viewer().name()));
         sendToAll(boardId, loggedIn, listener -> {
-            List<String> others = people.entrySet().stream()
+            List<Person> others = people.entrySet().stream()
                     .filter(person -> person.getKey() != listener.viewer().userId())
-                    .map(person -> person.getValue() == null ? "Someone" : person.getValue())
+                    .map(person -> new Person(person.getKey(), person.getValue() == null ? "Someone" : person.getValue()))
                     .toList();
             return SseEmitter.event().name("presence").data(others, MediaType.APPLICATION_JSON);
         });

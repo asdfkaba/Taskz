@@ -122,7 +122,7 @@ class BoardControllerTests {
         renamed.setId(5);
         renamed.setSlug("job-hunt");
         when(boardService.renameBoard(5, ALICE, "Job hunt")).thenReturn(renamed);
-        when(boardService.summaryOf(5, ALICE)).thenReturn(new BoardDtos.BoardSummary(5, "Job hunt", "job-hunt", true, null));
+        when(boardService.summaryOf(5, ALICE)).thenReturn(new BoardDtos.BoardSummary(5, "Job hunt", "job-hunt", true, null, null));
 
         mockMvc.perform(patch("/boards/5").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Job hunt\"}"))
                 .andExpect(status().isOk())

@@ -179,7 +179,7 @@ public class BoardService {
         Set<String> slugs = new HashSet<>();
         for (Board board : boardsOf(email)) {
             slugs.add(board.getSlug());
-            summaries.add(new BoardSummary(board.getId(), board.getName(), board.getSlug(), true, null));
+            summaries.add(new BoardSummary(board.getId(), board.getName(), board.getSlug(), true, null, null));
         }
         for (Board board : memberRepository.boardsOf(email)) {
             String slug = board.getSlug();
@@ -187,7 +187,8 @@ public class BoardService {
                 slug = board.getSlug() + "-" + n;
             }
             slugs.add(slug);
-            summaries.add(new BoardSummary(board.getId(), board.getName(), slug, false, board.getUser().getName()));
+            summaries.add(new BoardSummary(board.getId(), board.getName(), slug, false,
+                    board.getUser().getName(), board.getUser().getId()));
         }
         return summaries;
     }

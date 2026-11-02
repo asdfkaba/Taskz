@@ -1,4 +1,5 @@
 <script setup>
+import UserIcon from '@/components/UserIcon.vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import { useBoardStore } from '@/stores/board'
@@ -27,8 +28,8 @@ const isOpen = (board) => route.params.slug === board.slug
           <i class="pi pi-th-large text-xs text-slate-400 dark:text-slate-500" aria-hidden="true" />
           <span class="min-w-0">
             <span class="block truncate">{{ board.name }}</span>
-            <span v-if="!board.own" class="block truncate text-xs font-normal text-slate-400 dark:text-slate-500">
-              by {{ board.ownerName ?? 'someone' }}
+            <span v-if="!board.own" class="block truncate text-xs font-normal text-slate-400 dark:text-slate-500" data-testid="board-owner">
+              <UserIcon :seed="board.ownerId" size="xs" class="-mt-0.5 mr-1" />by {{ board.ownerName ?? 'someone' }}
             </span>
           </span>
         </RouterLink>
