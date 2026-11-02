@@ -7,6 +7,7 @@ import com.example.demo.task.TaskAttachmentController;
 import com.example.demo.task.TaskAttachmentService;
 import com.example.demo.task.TaskAttachmentService.AttachmentDto;
 import com.example.demo.task.TaskAttachmentService.Download;
+import com.example.demo.task.TaskAttachmentService.UploadSettings;
 import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -81,6 +82,17 @@ class TaskAttachmentControllerTests {
         mockMvc.perform(multipart("/tasks/1/attachments").file(file))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(7));
+    }
+
+    @Test
+    void settingsTellTheLimitAndTypes() throws Exception {
+        when(attachmentService.uploadSettings()).thenReturn(
+                new UploadSettings(10L * 1024 * 1024, "PNG, PDF", List.of("png", "pdf")));
+        mockMvc.perform(get("/attachments/settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxFileSize").value(10485760))
+                .andExpect(jsonPath("$.types").value("PNG, PDF"))
+                .andExpect(jsonPath("$.extensions[1]").value("pdf"));
     }
 
     @Test

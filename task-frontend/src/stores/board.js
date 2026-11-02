@@ -32,6 +32,7 @@ export const useBoardStore = defineStore('board', {
     columns: [], // [{ id, name, color, position }]
     labels: [], // [{ id, name, color }] of the open board, in creation order
     taskTemplate: null, // Markdown new tasks of the open board start with, or null
+    attachmentSettings: null, // { maxFileSize, types, extensions } from the backend, loaded once
     tasksByColumn: {}, // { [columnId]: [task, ...] }
     loading: false,
     loaded: false,
@@ -247,6 +248,15 @@ export const useBoardStore = defineStore('board', {
 
     // ---- Attachments ----
 
+    // The same for every task, so loaded once.
+    async fetchAttachmentSettings() {
+      if (!this.attachmentSettings) {
+        const response = await expectOk(await authFetch('/api/attachments/settings'), 'Loading attachment settings')
+        this.attachmentSettings = await response.json()
+      }
+      return this.attachmentSettings
+    },
+
     async fetchAttachments(taskId) {
       return (await expectOk(await authFetch(`/api/tasks/${taskId}/attachments`), 'Loading attachments')).json()
     },
@@ -258,7 +268,10 @@ export const useBoardStore = defineStore('board', {
       const response = await authFetch(`/api/tasks/${taskId}/attachments`, { method: 'POST', body })
       if (!response.ok) {
         const reason = await response.json().then((b) => b.message, () => null)
-        const error = new Error(reason ?? (response.status === 413 ? 'The file is too large' : `Upload failed (HTTP ${response.status})`))
+        // A 413 without a reason comes from nginx (client_max_body_size), not from the app.
+        const error = new Error(reason ?? (response.status === 413
+          ? 'The server refused the file as too large (HTTP 413)'
+          : `Upload failed (HTTP ${response.status})`))
         error.status = response.status
         throw error
       }

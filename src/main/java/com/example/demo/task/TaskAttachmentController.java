@@ -2,6 +2,7 @@ package com.example.demo.task;
 
 import com.example.demo.task.TaskAttachmentService.AttachmentDto;
 import com.example.demo.task.TaskAttachmentService.Download;
+import com.example.demo.task.TaskAttachmentService.UploadSettings;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -26,6 +27,12 @@ public class TaskAttachmentController {
 
     public TaskAttachmentController(TaskAttachmentService attachmentService) {
         this.attachmentService = attachmentService;
+    }
+
+    // Size limit and accepted types, so the page can show them and check files before uploading.
+    @GetMapping("/attachments/settings")
+    public UploadSettings settings() {
+        return attachmentService.uploadSettings();
     }
 
     // Newest first.

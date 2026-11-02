@@ -271,6 +271,9 @@ const attachmentOut = ({ taskId, data, ...a }) => a
 
 async function attachmentApi(method, url, raw, headers) {
   let m
+  if (url === '/api/attachments/settings' && method === 'GET') {
+    return [200, { maxFileSize: 10 * 1024 * 1024, types: 'PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV', extensions: Object.keys(ATTACHMENT_TYPES) }]
+  }
   if ((m = url.match(/^\/api\/tasks\/(\d+)\/attachments$/))) {
     const task = tasks.find((t) => t.id === +m[1])
     if (!task) return [404, { message: 'Task not found' }]
@@ -278,6 +281,7 @@ async function attachmentApi(method, url, raw, headers) {
       return [200, attachments.filter((a) => a.taskId === task.id).sort((a, b) => b.id - a.id).map(attachmentOut)]
     }
     if (method === 'POST') {
+      log.push({ method, url })
       const form = await new Request('http://mock', { method, headers, body: raw }).formData()
       const file = form.get('file')
       const data = Buffer.from(await file.arrayBuffer())

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { format, formatDistanceToNow } from 'date-fns'
 import Button from 'primevue/button'
 import { useConfirm } from 'primevue/useconfirm'
@@ -8,9 +8,9 @@ import { useBoardStore } from '@/stores/board'
 import { fromApi } from '@/utils/date'
 
 // Files attached to a task, newest first. Only for the owner; shared boards don't show them.
-// The backend checks type and size (TaskAttachmentService) and says why it refuses a file; the
-// size limit is configurable there, so it is not repeated here.
-const ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv'
+// The backend checks type and size (TaskAttachmentService) and says why it refuses a file. Its
+// size limit and accepted types come from /attachments/settings, so a too large file is refused
+// here before it is sent.
 
 const props = defineProps({ taskId: { type: Number, required: true } })
 
@@ -24,6 +24,18 @@ const uploading = ref([]) // { id, name } of files being uploaded
 let nextUploadId = 0
 const dragging = ref(false)
 const fileInput = ref(null)
+const settings = ref(null) // { maxFileSize, types, extensions }; null until loaded
+const accept = computed(() => settings.value?.extensions.map((e) => `.${e}`).join(',') ?? '')
+const tooLarge = () => `Files can be at most ${size(settings.value.maxFileSize)}`
+
+// Without the settings the backend still checks everything; only the hint and the early check are missing.
+onMounted(async () => {
+  try {
+    settings.value = await store.fetchAttachmentSettings()
+  } catch {
+    settings.value = null
+  }
+})
 
 // Answers for a task that is no longer shown (the dialog switched tasks) are dropped.
 async function load() {
@@ -49,6 +61,10 @@ async function upload(files) {
   const taskId = props.taskId
   for (const file of files) {
     if (taskId !== props.taskId) return
+    if (settings.value && file.size > settings.value.maxFileSize) {
+      showError(`Could not attach ${file.name}`, new Error(tooLarge()))
+      continue
+    }
     const pending = { id: nextUploadId++, name: file.name }
     uploading.value.push(pending)
     try {
@@ -111,7 +127,7 @@ const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
 function size(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${+(bytes / (1024 * 1024)).toFixed(1)} MB` // "10 MB", not "10.0 MB"
 }
 </script>
 
@@ -130,9 +146,8 @@ function size(bytes) {
           Attachments
           <span v-if="attachments.length" class="font-normal text-slate-400 dark:text-slate-500">({{ attachments.length }})</span>
         </h3>
-        <!-- Same list as FileTypes.ALLOWED in the backend. -->
-        <p class="text-[0.6875rem] text-slate-400 dark:text-slate-500" data-testid="allowed-types">
-          PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV
+        <p v-if="settings" class="text-[0.6875rem] text-slate-400 dark:text-slate-500" data-testid="allowed-types">
+          {{ settings.types }} · up to {{ size(settings.maxFileSize) }}
         </p>
       </div>
       <Button
@@ -144,7 +159,7 @@ function size(bytes) {
         class="ml-auto"
         @click="fileInput.click()"
       />
-      <input ref="fileInput" type="file" multiple :accept="ACCEPT" class="hidden" aria-label="Attach files" @change="onPick" />
+      <input ref="fileInput" type="file" multiple :accept="accept" class="hidden" aria-label="Attach files" @change="onPick" />
     </div>
 
     <p v-if="status === 'loading' && !attachments.length" class="text-sm text-slate-400">Loading…</p>

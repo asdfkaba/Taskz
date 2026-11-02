@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Uploads through the real server (Tomcat), which MockMvc skips: the multipart limit comes from
- * attachments.max-file-size, and a too large file gets a 413 answer.
+ * attachments.max-file-size, and a too large file gets a 413 answer that names the limit.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestRsaKeys.class)
@@ -92,6 +92,9 @@ class AttachmentUploadLimitTests {
 
         byte[] tooLarge = new byte[11 * 1024 * 1024];
         Arrays.fill(tooLarge, (byte) 'x');
-        assertThat(upload(token, task.getId(), "huge.txt", tooLarge).statusCode()).isEqualTo(413);
+        HttpResponse<String> refused = upload(token, task.getId(), "huge.txt", tooLarge);
+        assertThat(refused.statusCode()).isEqualTo(413);
+        // The page shows this to say why.
+        assertThat(refused.body()).contains("\"message\":\"Files can be at most 10 MB\"");
     }
 }

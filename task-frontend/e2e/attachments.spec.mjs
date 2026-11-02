@@ -39,7 +39,9 @@ test('Task attachments', async ({ browser }) => {
     await openTask()
     await section().getByText('Drop files here').waitFor()
     const types = (await section().getByTestId('allowed-types').innerText()).trim()
-    ensure(types === 'PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV', types)
+    ensure(types === 'PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV · up to 10 MB', types)
+    const accept = await picker().getAttribute('accept')
+    ensure(accept === '.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv', accept)
   })
 
   await test.step('files from the picker are listed newest first, images with a preview', async () => {
@@ -86,6 +88,15 @@ test('Task attachments', async ({ browser }) => {
     await page.waitForFunction(() => !document.querySelector('[data-testid="uploading"]'))
     ensure((await names()).length === 3, 'refused file listed')
     await page.screenshot({ path: out('att-3-refused.png') })
+  })
+
+  await test.step('a file above the limit is refused before it is sent, naming the limit', async () => {
+    const posts = async () => (await (await fetch(`${BASE}/api/__state`)).json()).log.length
+    const before = await posts()
+    await picker().setInputFiles({ name: 'huge.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 'x') })
+    await page.locator('.p-toast-message').filter({ hasText: 'Could not attach huge.pdf' }).getByText('Files can be at most 10 MB').waitFor()
+    ensure((await names()).length === 3, 'huge file listed')
+    ensure((await posts()) === before, 'huge file was sent')
   })
 
   await test.step('the link serves the file', async () => {
