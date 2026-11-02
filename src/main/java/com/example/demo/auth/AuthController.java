@@ -78,7 +78,7 @@ public class AuthController {
                 .maxAge(TokenService.REFRESH_TOKEN_VALIDITY)
                 .build();
 
-        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", tokens.getRefreshToken().getToken())
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", tokens.getRefreshToken().getPlainToken())
                 .httpOnly(true)
                 .secure(true) // enable if HTTPS
                 .sameSite("Strict")
@@ -110,7 +110,7 @@ public class AuthController {
             // Delete refresh tokens from DB
             String refreshTokenValue = getCookieValue(request, "refresh_token");
             if (refreshTokenValue != null) {
-                refreshTokenRepository.deleteByToken(refreshTokenValue); // or use find + delete if needed
+                refreshTokenRepository.deleteByToken(TokenService.hash(refreshTokenValue));
             }
 
         }
