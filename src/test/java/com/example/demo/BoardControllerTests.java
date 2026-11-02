@@ -6,6 +6,7 @@ import com.example.demo.board.BoardColumn;
 import com.example.demo.board.BoardController;
 import com.example.demo.board.BoardDtos;
 import com.example.demo.board.BoardDtos.ColumnPatch;
+import com.example.demo.board.BoardEvents;
 import com.example.demo.board.BoardService;
 import com.example.demo.config.WebSecurityConfig;
 import com.example.demo.user.UserRepository;
@@ -31,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(BoardController.class)
-@Import({WebSecurityConfig.class, TestRsaKeys.class})
+@Import({WebSecurityConfig.class, TestRsaKeys.class, BoardEvents.class})
 @WithMockUser(username = BoardControllerTests.ALICE)
 class BoardControllerTests {
 

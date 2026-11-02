@@ -3,6 +3,7 @@ package com.example.demo.auth;
 import com.example.demo.TestRsaKeys;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.BoardController;
+import com.example.demo.board.BoardEvents;
 import com.example.demo.board.BoardService;
 import com.example.demo.config.WebSecurityConfig;
 import com.example.demo.user.UserRepository;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** The access token lives a minute; the cookie filter renews it from the refresh token. */
 @WebMvcTest(BoardController.class)
-@Import({WebSecurityConfig.class, TestRsaKeys.class})
+@Import({WebSecurityConfig.class, TestRsaKeys.class, BoardEvents.class})
 class TokenRenewalTests {
 
     @Autowired

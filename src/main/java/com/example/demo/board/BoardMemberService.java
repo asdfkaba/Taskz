@@ -3,6 +3,7 @@ package com.example.demo.board;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,13 +31,16 @@ public class BoardMemberService {
     private final BoardMemberRepository memberRepository;
     private final BoardInviteRepository inviteRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher events;
 
     public BoardMemberService(BoardService boardService, BoardMemberRepository memberRepository,
-                              BoardInviteRepository inviteRepository, UserRepository userRepository) {
+                              BoardInviteRepository inviteRepository, UserRepository userRepository,
+                              ApplicationEventPublisher events) {
         this.boardService = boardService;
         this.memberRepository = memberRepository;
         this.inviteRepository = inviteRepository;
         this.userRepository = userRepository;
+        this.events = events;
     }
 
     /** path: the link after the host, e.g. "/join/AbC..."; shown once, only its hash is stored. */
@@ -108,6 +112,7 @@ public class BoardMemberService {
         if (memberRepository.deleteMember(board, userId) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found");
         }
+        events.publishEvent(new BoardAccessEnded(boardId, userId));
     }
 
     @Transactional
@@ -117,6 +122,7 @@ public class BoardMemberService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The owner can't leave their board; delete it instead");
         }
         memberRepository.deleteMember(board, email);
+        userRepository.findByEmail(email).ifPresent(user -> events.publishEvent(new BoardAccessEnded(boardId, user.getId())));
     }
 
     private BoardInvite findInvite(String token) {

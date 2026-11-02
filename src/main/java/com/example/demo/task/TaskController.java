@@ -78,6 +78,10 @@ public class TaskController {
     @PutMapping("/{id}")
     public TaskDto updateTask(@PathVariable("id") int id, @RequestBody TaskRequest input) {
         Task task = findTask(id);
+        // Someone else saved the task since this edit started: refuse rather than overwrite.
+        if (input.revision() != null && !input.revision().equals(TaskDto.revisionOf(task))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Someone else changed this task in the meantime");
+        }
         TaskHistoryService.Snapshot before = TaskHistoryService.Snapshot.of(task);
         copyEditableFields(input, task);
         applyLabels(input, task);

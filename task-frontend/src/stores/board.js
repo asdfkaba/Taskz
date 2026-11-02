@@ -76,20 +76,37 @@ export const useBoardStore = defineStore('board', {
       try {
         const detail = await (await expectOk(await authFetch(`/api/boards/${id}`), 'Loading board')).json()
         if (this.requestedBoardId !== id) return
-
-        const tasksByColumn = Object.fromEntries(detail.columns.map((c) => [c.id, []]))
-        for (const task of detail.tasks) {
-          tasksByColumn[task.columnId]?.push(task)
-        }
-        this.board = { id: detail.id, name: detail.name }
-        this.columns = detail.columns
-        this.labels = detail.labels ?? []
-        this.taskTemplate = detail.taskTemplate ?? null
-        this.tasksByColumn = tasksByColumn
+        this.applyBoard(detail)
         this.loaded = true
       } finally {
         if (this.requestedBoardId === id) this.loading = false
       }
+    },
+
+    // Loads the open board again without the loading state, after someone changed it (see
+    // useBoardEvents). Returns 'gone' if the user can't open it anymore.
+    async refreshBoard() {
+      const id = this.board?.id
+      if (!id) return
+      const response = await authFetch(`/api/boards/${id}`)
+      if (response.status === 404) {
+        this.boardsLoaded = false
+        return 'gone'
+      }
+      if (!response.ok || this.board?.id !== id) return
+      this.applyBoard(await response.json())
+    },
+
+    applyBoard(detail) {
+      const tasksByColumn = Object.fromEntries(detail.columns.map((c) => [c.id, []]))
+      for (const task of detail.tasks) {
+        tasksByColumn[task.columnId]?.push(task)
+      }
+      this.board = { id: detail.id, name: detail.name }
+      this.columns = detail.columns
+      this.labels = detail.labels ?? []
+      this.taskTemplate = detail.taskTemplate ?? null
+      this.tasksByColumn = tasksByColumn
     },
 
     async createBoard(name) {

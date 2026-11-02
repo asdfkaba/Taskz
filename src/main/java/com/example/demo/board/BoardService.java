@@ -96,6 +96,7 @@ public class BoardService {
         Board board = findOwnBoard(boardId, email);
         shareRepository.deleteByBoard(board);
         events.publishEvent(new BoardShareEnded(boardId));
+        events.publishEvent(new BoardAccessEnded(boardId, null));
         historyService.forgetBoard(board);
         // Deleting the tasks also clears their rows in task_label.
         taskRepository.deleteAll(taskRepository.findByBoardInOrder(board));

@@ -116,6 +116,7 @@ public class TaskAttachmentService {
             TaskAttachment attachment = attachmentRepository.save(new TaskAttachment(task,
                     userRepository.findByEmail(email).orElse(null), name, type.contentType, file.getSize(), key));
             historyService.recordAttachment(task, name, true, email);
+            boardService.changed(board); // the card shows the number of files
             return AttachmentDto.from(attachment);
         } catch (IOException e) {
             throw new IllegalStateException("Could not store the upload", e);
@@ -140,6 +141,7 @@ public class TaskAttachmentService {
         TaskAttachment attachment = findAttachment(attachmentId, email);
         attachmentRepository.delete(attachment);
         historyService.recordAttachment(attachment.getTask(), attachment.getFileName(), false, email);
+        boardService.changed(attachment.getTask().getBoardColumn().getBoard());
         storage.deleteAfterCommit(attachment.getStorageKey());
     }
 

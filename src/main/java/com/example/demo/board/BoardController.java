@@ -9,9 +9,13 @@ import com.example.demo.board.BoardDtos.NewColumnRequest;
 import com.example.demo.board.BoardDtos.RenameBoardRequest;
 import com.example.demo.board.BoardDtos.TaskTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.example.demo.user.User;
+import com.example.demo.user.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -20,9 +24,13 @@ import java.util.List;
 public class BoardController {
 
     private final BoardService boardService;
+    private final BoardEvents boardEvents;
+    private final UserRepository userRepository;
 
-    public BoardController(BoardService boardService) {
+    public BoardController(BoardService boardService, BoardEvents boardEvents, UserRepository userRepository) {
         this.boardService = boardService;
+        this.boardEvents = boardEvents;
+        this.userRepository = userRepository;
     }
 
     @GetMapping("/boards")
@@ -52,6 +60,18 @@ public class BoardController {
     @GetMapping("/boards/{id}")
     public BoardDetail getBoard(@PathVariable("id") int id) {
         return boardService.getBoard(id, currentUserEmail());
+    }
+
+    // Live view for the owner and members: "changed" after every change, "presence" with who else
+    // has the board open. Closed when the user loses access.
+    @GetMapping("/boards/{id}/events")
+    public SseEmitter boardEvents(@PathVariable("id") int id, HttpServletResponse response) {
+        String email = currentUserEmail();
+        Board board = boardService.findBoard(id, email);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        response.setHeader("X-Accel-Buffering", "no"); // nginx would hold the events back
+        return boardEvents.subscribe(board.getId(), new BoardEvents.Viewer(user.getId(), user.getName()));
     }
 
     @PutMapping("/boards/{id}/task-template")
