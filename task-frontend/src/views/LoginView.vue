@@ -124,6 +124,17 @@ async function loginWithGoogle() {
         <p class="text-sm text-slate-500 dark:text-slate-400">Sign in to see and manage your tasks.</p>
       </div>
 
+      <p
+        class="mb-6 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+        role="note"
+      >
+        <i class="pi pi-exclamation-triangle mt-0.5 shrink-0" aria-hidden="true" />
+        <span>
+          Taskz is an experimental hobby project. There is no guarantee for your data: it may be lost,
+          and the service may change or go away. Don't keep anything here you can't afford to lose.
+        </span>
+      </p>
+
       <div class="flex flex-col gap-3">
         <Button
           label="Continue with Google"
