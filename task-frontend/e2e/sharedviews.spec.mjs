@@ -28,6 +28,15 @@ test('Views on a shared board', async ({ browser }) => {
   await page.goto(`${BASE}/share/${path}`)
   await card().waitFor()
 
+  await test.step('empty columns are a narrow strip, with the name cut to fit', async () => {
+    const width = async (id) => (await page.locator(`[data-column-id="${id}"]`).boundingBox()).width
+    // Mock: Done (12) is empty, In progress (11) has Task C.
+    ensure((await width(12)) < 60, `Done is ${await width(12)}px`)
+    ensure((await width(11)) > 250, `In progress is ${await width(11)}px`)
+    ensure((await page.locator('[data-column-id="12"] h2').getAttribute('title')) === 'Done', 'no full name on hover')
+    await page.screenshot({ path: out('sv-0-narrow.png') })
+  })
+
   await test.step('compact cards', async () => {
     await card().getByText('Some text').waitFor()
     await page.getByRole('button', { name: 'Compact cards' }).click()

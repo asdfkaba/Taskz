@@ -60,6 +60,8 @@ const {
   match: matchOf,
   clear: clearFilter,
 } = useBoardFilter(labelsOf)
+// Like the board: columns without any task are a narrow strip on wide screens.
+const isEmpty = (columnId) => !tasksByColumn.value[columnId]?.length
 const visibleCount = (columnId) => tasksByColumn.value[columnId].filter((t) => matchOf(t).matches).length
 const countLabel = (columnId) => {
   const total = tasksByColumn.value[columnId].length
@@ -158,14 +160,21 @@ watch(
             :key="column.id"
             :data-column-id="column.id"
             class="flex w-72 shrink-0 flex-col rounded-xl bg-slate-100 dark:bg-slate-900"
+            :class="{ 'md:w-12 md:pb-3': isEmpty(column.id) }"
           >
-            <header class="flex items-center gap-2 px-4 pt-3">
-              <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">{{ column.name }}</h2>
+            <header class="flex items-center gap-2 px-4 pt-3" :class="{ 'md:flex-col md:px-1': isEmpty(column.id) }">
+              <h2
+                class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-300"
+                :class="{ 'md:w-full md:flex-none md:text-center md:text-[0.6875rem]': isEmpty(column.id) }"
+                :title="column.name"
+              >
+                {{ column.name }}
+              </h2>
               <span class="rounded-full bg-white dark:bg-slate-800 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                 {{ countLabel(column.id) }}
               </span>
             </header>
-            <div class="flex min-h-12 flex-col gap-2 p-2">
+            <div class="flex min-h-12 flex-col gap-2 p-2" :class="{ 'md:hidden': isEmpty(column.id) }">
               <p v-if="filterActive && visibleCount(column.id) === 0" class="px-2 text-sm text-slate-400 dark:text-slate-500">
                 No matches
               </p>
