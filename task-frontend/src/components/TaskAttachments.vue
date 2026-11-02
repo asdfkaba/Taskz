@@ -125,10 +125,16 @@ function size(bytes) {
     @drop.prevent="onDrop"
   >
     <div class="flex items-center gap-2">
-      <h3 class="text-sm font-medium text-slate-600 dark:text-slate-400">
-        Attachments
-        <span v-if="attachments.length" class="font-normal text-slate-400 dark:text-slate-500">({{ attachments.length }})</span>
-      </h3>
+      <div class="flex flex-col">
+        <h3 class="text-sm font-medium text-slate-600 dark:text-slate-400">
+          Attachments
+          <span v-if="attachments.length" class="font-normal text-slate-400 dark:text-slate-500">({{ attachments.length }})</span>
+        </h3>
+        <!-- Same list as FileTypes.ALLOWED in the backend. -->
+        <p class="text-[0.6875rem] text-slate-400 dark:text-slate-500" data-testid="allowed-types">
+          PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV
+        </p>
+      </div>
       <Button
         label="Add file"
         icon="pi pi-paperclip"
@@ -147,7 +153,7 @@ function size(bytes) {
       v-else-if="!attachments.length && !uploading.length"
       class="text-xs text-slate-400 dark:text-slate-500"
     >
-      Drop files here: images, PDF or text.
+      Drop files here.
     </p>
 
     <ul v-if="attachments.length || uploading.length" class="flex flex-col gap-1">
