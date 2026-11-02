@@ -369,6 +369,7 @@ public class BoardService {
     }
 
     /** A board the user owns or is a member of; else 404, so boards of others stay invisible. */
+    @Transactional(readOnly = true)
     public Board findBoard(int boardId, String email) {
         return boardRepository.findById(boardId)
                 .filter(board -> canAccess(board, email))
@@ -376,18 +377,21 @@ public class BoardService {
     }
 
     /** A board the user owns; members get 404 too. For deleting, sharing and managing members. */
+    @Transactional(readOnly = true)
     public Board findOwnBoard(int boardId, String email) {
         return boardRepository.findById(boardId)
                 .filter(board -> isOwner(board, email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
     }
 
+    @Transactional(readOnly = true)
     public BoardColumn findColumn(int columnId, String email) {
         return columnRepository.findById(columnId)
                 .filter(column -> canAccess(column.getBoard(), email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Column not found"));
     }
 
+    @Transactional(readOnly = true)
     public Task findTask(int taskId, String email) {
         return taskRepository.findById(taskId)
                 .filter(task -> canAccess(task.getBoardColumn().getBoard(), email))
