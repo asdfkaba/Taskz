@@ -23,4 +23,11 @@ class AttachmentNamesTests {
         assertThatThrownBy(() -> TaskAttachmentService.validName("x".repeat(197) + ".txt"))
                 .isInstanceOf(ResponseStatusException.class);
     }
+
+    @Test
+    void limitsInMessagesAreNeverRoundedDown() {
+        assertThat(TaskAttachmentService.readable(10L * 1024 * 1024)).isEqualTo("10 MB");
+        assertThat(TaskAttachmentService.readable(1536L * 1024)).isEqualTo("1536 KB");
+        assertThat(TaskAttachmentService.readable(1000)).isEqualTo("1 KB");
+    }
 }

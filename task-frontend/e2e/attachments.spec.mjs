@@ -62,6 +62,12 @@ test('Task attachments', async ({ browser }) => {
       dt.items.add(new File(['# Interview\n- [ ] Questions'], 'prep.md', { type: 'text/markdown' }))
       return dt
     })
+    const isDragging = () => section().evaluate((el) => el.className.includes('outline-dashed'))
+    await section().dispatchEvent('dragover', { dataTransfer })
+    ensure(await isDragging(), 'no drop highlight')
+    // Leaving the window over a child (relatedTarget null) ends the highlight.
+    await section().locator('h3').dispatchEvent('dragleave', { dataTransfer })
+    ensure(!(await isDragging()), 'highlight stays after leaving')
     await section().dispatchEvent('dragover', { dataTransfer })
     await page.screenshot({ path: out('att-2-dragging.png') })
     await section().dispatchEvent('drop', { dataTransfer })

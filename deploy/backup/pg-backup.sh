@@ -36,8 +36,10 @@ pg_restore --list "$partial" > /dev/null
 mv "$partial" "$target"
 echo "Backup written: $target ($(du -h "$target" | cut -f1))"
 
-# Files after the database: every attachment in the dump already has its file then (the app stores
-# the file before the row). Uploads still in progress (.upload-*) are left out.
+# Files after the database, so attachments uploaded meanwhile can't be in the dump without their
+# file (the app stores the file before the row). Attachments deleted between dump and archive are
+# the exception: their row is in the dump, their file is gone (download answers 404 after a
+# restore). Uploads still in progress (.upload-*) are left out.
 if [ -d "$ATTACHMENTS_DIR" ]; then
   # Exit status 1 means a file was deleted or changed while reading it (the app runs on); the
   # archive is fine apart from that file. 2 and up are real errors.

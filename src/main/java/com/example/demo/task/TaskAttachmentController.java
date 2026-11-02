@@ -70,7 +70,8 @@ public class TaskAttachmentController {
     // The reason goes into the body, so the page can say why an upload was refused.
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> refused(ResponseStatusException e) {
-        return ResponseEntity.status(e.getStatusCode()).body(Map.of("message", String.valueOf(e.getReason())));
+        String reason = e.getReason() != null ? e.getReason() : "Request failed";
+        return ResponseEntity.status(e.getStatusCode()).body(Map.of("message", reason));
     }
 
     private static String currentUserEmail() {

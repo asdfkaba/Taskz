@@ -154,9 +154,13 @@ public class TaskAttachmentService {
         return name;
     }
 
-    private static String readable(long bytes) {
+    // Whole megabytes where they fit, otherwise kilobytes, so the message never names a smaller limit.
+    static String readable(long bytes) {
         long mb = 1024 * 1024;
-        return bytes >= mb ? (bytes / mb) + " MB" : (bytes / 1024) + " KB";
+        if (bytes % mb == 0) {
+            return (bytes / mb) + " MB";
+        }
+        return (bytes + 1023) / 1024 + " KB";
     }
 
     private static void deleteTemporary(Path upload) {

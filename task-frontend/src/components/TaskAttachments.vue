@@ -8,9 +8,8 @@ import { useBoardStore } from '@/stores/board'
 import { fromApi } from '@/utils/date'
 
 // Files attached to a task, newest first. Only for the owner; shared boards don't show them.
-// The backend checks type and size by content (TaskAttachmentService); the checks here only save
-// a pointless upload.
-const MAX_SIZE = 10 * 1024 * 1024 // attachments.max-file-size
+// The backend checks type and size (TaskAttachmentService) and says why it refuses a file; the
+// size limit is configurable there, so it is not repeated here.
 const ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv'
 
 const props = defineProps({ taskId: { type: Number, required: true } })
@@ -26,13 +25,17 @@ let nextUploadId = 0
 const dragging = ref(false)
 const fileInput = ref(null)
 
+// Answers for a task that is no longer shown (the dialog switched tasks) are dropped.
 async function load() {
+  const taskId = props.taskId
   status.value = 'loading'
   try {
-    attachments.value = await store.fetchAttachments(props.taskId)
+    const list = await store.fetchAttachments(taskId)
+    if (taskId !== props.taskId) return
+    attachments.value = list
     status.value = 'ok'
   } catch {
-    status.value = 'error'
+    if (taskId === props.taskId) status.value = 'error'
   }
 }
 watch(() => props.taskId, load, { immediate: true })
@@ -43,15 +46,14 @@ function showError(summary, err) {
 
 // One after the other, so the storage limit is checked against the files before.
 async function upload(files) {
+  const taskId = props.taskId
   for (const file of files) {
-    if (file.size > MAX_SIZE) {
-      showError(`Could not attach ${file.name}`, new Error('Files can be at most 10 MB'))
-      continue
-    }
+    if (taskId !== props.taskId) return
     const pending = { id: nextUploadId++, name: file.name }
     uploading.value.push(pending)
     try {
-      attachments.value.unshift(await store.uploadAttachment(props.taskId, file))
+      const attachment = await store.uploadAttachment(taskId, file)
+      if (taskId === props.taskId) attachments.value.unshift(attachment)
     } catch (err) {
       showError(`Could not attach ${file.name}`, err)
     } finally {
@@ -68,6 +70,12 @@ function onPick(event) {
 function onDrop(event) {
   dragging.value = false
   upload([...event.dataTransfer.files])
+}
+
+// Leaving for a child element is no leaving; relatedTarget is null when the drag leaves the
+// window or is cancelled.
+function onDragLeave(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) dragging.value = false
 }
 
 // Only react to dragged files, not to dragged text or cards.
@@ -113,7 +121,7 @@ function size(bytes) {
     :class="{ 'rounded-sm bg-emerald-50 outline-2 outline-offset-4 outline-emerald-400 outline-dashed dark:bg-emerald-950/30': dragging }"
     data-testid="task-attachments"
     @dragover="onDragOver"
-    @dragleave.self="dragging = false"
+    @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
     <div class="flex items-center gap-2">
@@ -139,7 +147,7 @@ function size(bytes) {
       v-else-if="!attachments.length && !uploading.length"
       class="text-xs text-slate-400 dark:text-slate-500"
     >
-      Drop files here: images, PDF or text, up to 10 MB.
+      Drop files here: images, PDF or text.
     </p>
 
     <ul v-if="attachments.length || uploading.length" class="flex flex-col gap-1">
