@@ -261,6 +261,9 @@ watch(
 // Shown first and set apart, but only with others: alone, an icon of yourself says nothing.
 const auth = useAuthStore()
 const othersLabel = computed(() => `You and ${others.value.map((o) => o.name).join(', ')} have this board open`)
+// At most five circles: you and up to four others, or you, three others and "+N" for the rest.
+const shownOthers = computed(() => (others.value.length > 4 ? others.value.slice(0, 3) : others.value))
+const hiddenOthers = computed(() => others.value.slice(shownOthers.value.length))
 
 function dragStarted() {
   dragging = true
@@ -545,7 +548,7 @@ function askDeleteColumn(column) {
           <!-- Who has the board open right now: you first, then the others. -->
           <div
             v-if="others.length && !settingsOpen"
-            class="ml-2 flex shrink-0 -space-x-1 self-center"
+            class="ml-2 flex shrink-0 items-center gap-1.5 self-center"
             data-testid="presence"
             role="img"
             :aria-label="othersLabel"
@@ -553,21 +556,22 @@ function askDeleteColumn(column) {
             <UserIcon
               :seed="auth.user?.id ?? 'me'"
               :name="`You (${auth.user?.name || auth.user?.email || 'you'})`"
-              class="relative z-10 ring-2 ring-emerald-500 dark:ring-emerald-400"
+              class="ring-2 ring-emerald-500 dark:ring-emerald-400"
               data-testid="presence-me"
             />
             <UserIcon
-              v-for="person in others.slice(0, 4)"
+              v-for="person in shownOthers"
               :key="person.id"
               :seed="person.id"
               :name="person.name"
-              class="ring-2 ring-white dark:ring-slate-900"
               data-testid="presence-other"
             />
             <span
-              v-if="others.length > 4"
-              class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[0.6875rem] font-semibold text-slate-600 ring-2 ring-white dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-900"
-            >+{{ others.length - 4 }}</span>
+              v-if="hiddenOthers.length"
+              class="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-200 px-1 text-[0.6875rem] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+              :title="hiddenOthers.map((o) => o.name).join(', ')"
+              data-testid="presence-more"
+            >+{{ hiddenOthers.length }}</span>
           </div>
         </div>
         <div v-if="store.board && settingsOpen" class="flex shrink-0 gap-2">
