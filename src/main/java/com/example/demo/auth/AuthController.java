@@ -4,6 +4,7 @@ import com.example.demo.auth.dto.AuthRequest;
 import com.example.demo.auth.dto.AuthResponse;
 import com.example.demo.auth.jwt.RefreshToken;
 import com.example.demo.auth.jwt.RefreshTokenRepository;
+import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.auth.service.AuthService;
 import com.example.demo.user.User;
 import jakarta.servlet.http.Cookie;
@@ -17,6 +18,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -24,7 +28,6 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final long REFRESH_TOKEN_VALIDITY_S = 7 * 24 * 60 * 60; // 7 days
 
 
     public AuthController(AuthService authService, RefreshTokenRepository refreshTokenRepository) {
@@ -52,7 +55,7 @@ public class AuthController {
                                           HttpServletRequest request) {
         AuthResponse tokens;
 
-        tokens = authService.authenticateWithGoogle(authRequest);
+        tokens = authService.login(authRequest);
         RefreshToken refreshToken = tokens.getRefreshToken();
         refreshToken.setUserAgent(request.getHeader("User-Agent"));
         String ip = request.getHeader("X-Forwarded-For");
@@ -72,7 +75,7 @@ public class AuthController {
                 .secure(true) // enable if HTTPS
                 .sameSite("Strict")
                 .path("/")
-                .maxAge(REFRESH_TOKEN_VALIDITY_S)
+                .maxAge(TokenService.REFRESH_TOKEN_VALIDITY)
                 .build();
 
         ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", tokens.getRefreshToken().getToken())
@@ -80,7 +83,7 @@ public class AuthController {
                 .secure(true) // enable if HTTPS
                 .sameSite("Strict")
                 .path("/")
-                .maxAge(REFRESH_TOKEN_VALIDITY_S)
+                .maxAge(TokenService.REFRESH_TOKEN_VALIDITY)
                 .build();
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
@@ -126,4 +129,10 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    // The reason goes into the body, so the login page can say why a login failed.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> refused(ResponseStatusException e) {
+        String reason = e.getReason() != null ? e.getReason() : "Login failed";
+        return ResponseEntity.status(e.getStatusCode()).body(Map.of("message", reason));
+    }
 }

@@ -7,7 +7,6 @@ import com.example.demo.config.WebSecurityConfig;
 import com.example.demo.task.TaskController;
 import com.example.demo.task.TaskHistoryService;
 import com.example.demo.task.TaskRepository;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,9 +32,6 @@ class SecurityTests {
     UserRepository userRepository;
 
     @MockBean
-    CustomUserDetailsService userDetailsService;
-
-    @MockBean
     TokenService tokenService;
 
     @MockBean
@@ -49,7 +45,7 @@ class SecurityTests {
 
     @Test
     void ohneLoginKeinZugriff() throws Exception {
-        mockMvc.perform(get("/tasks"))
-                .andExpect(status().is4xxClientError());
+        mockMvc.perform(get("/tasks/1"))
+                .andExpect(status().isForbidden());
     }
 }

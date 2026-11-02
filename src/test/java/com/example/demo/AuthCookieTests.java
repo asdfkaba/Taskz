@@ -7,15 +7,16 @@ import com.example.demo.auth.jwt.RefreshTokenRepository;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.auth.service.AuthService;
 import com.example.demo.config.WebSecurityConfig;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** The login cookies are SameSite=Strict, so forms posted from other sites don't carry them. */
@@ -40,15 +42,13 @@ class AuthCookieTests {
     @MockBean
     UserRepository userRepository;
     @MockBean
-    CustomUserDetailsService userDetailsService;
-    @MockBean
     TokenService tokenService;
 
     @Test
     void loginCookiesAreStrict() throws Exception {
         RefreshToken refresh = new RefreshToken();
         refresh.setToken("refresh-value");
-        when(authService.authenticateWithGoogle(any())).thenReturn(new AuthResponse("access-value", refresh));
+        when(authService.login(any())).thenReturn(new AuthResponse("access-value", refresh));
 
         List<String> cookies = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -60,5 +60,17 @@ class AuthCookieTests {
         assertThat(cookies).anySatisfy(c -> assertThat(c).startsWith("access_token=access-value"));
         assertThat(cookies).anySatisfy(c -> assertThat(c).startsWith("refresh_token=refresh-value"));
         assertThat(cookies).allSatisfy(c -> assertThat(c).contains("SameSite=Strict", "HttpOnly", "Secure"));
+    }
+
+    @Test
+    void aRefusedLoginSaysWhyAndSetsNoCookies() throws Exception {
+        when(authService.login(any())).thenThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No confirmed email"));
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"c\",\"code_verifier\":\"v\",\"provider\":\"discord\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("No confirmed email"))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty());
     }
 }

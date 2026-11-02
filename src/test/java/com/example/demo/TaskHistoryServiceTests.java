@@ -49,7 +49,7 @@ class TaskHistoryServiceTests {
 
     @BeforeEach
     void setUp() {
-        board = boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE, null)));
+        board = boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE)));
         List<BoardColumn> columns = columnRepository.findByBoardOrderByPosition(board);
         todo = columns.get(0);
         doing = columns.get(1);

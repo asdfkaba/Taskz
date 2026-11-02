@@ -7,7 +7,6 @@ import com.example.demo.board.BoardController;
 import com.example.demo.board.BoardDtos.ColumnPatch;
 import com.example.demo.board.BoardService;
 import com.example.demo.config.WebSecurityConfig;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,9 +44,6 @@ class BoardControllerTests {
 
     @MockBean
     UserRepository userRepository;
-
-    @MockBean
-    CustomUserDetailsService userDetailsService;
 
     @MockBean
     TokenService tokenService;

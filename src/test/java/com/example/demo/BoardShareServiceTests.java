@@ -38,8 +38,8 @@ class BoardShareServiceTests {
 
     @BeforeEach
     void setUp() {
-        User alice = userRepository.save(new User("Alice", ALICE, null));
-        userRepository.save(new User("Bob", BOB, null));
+        User alice = userRepository.save(new User("Alice", ALICE));
+        userRepository.save(new User("Bob", BOB));
         board = boardService.createDefaultBoard(alice);
 
         BoardColumn todo = columnRepository.findByBoardOrderByPosition(board).get(0);

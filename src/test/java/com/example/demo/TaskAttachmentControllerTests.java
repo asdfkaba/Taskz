@@ -8,7 +8,6 @@ import com.example.demo.task.TaskAttachmentService;
 import com.example.demo.task.TaskAttachmentService.AttachmentDto;
 import com.example.demo.task.TaskAttachmentService.Download;
 import com.example.demo.task.TaskAttachmentService.UploadSettings;
-import com.example.demo.user.CustomUserDetailsService;
 import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,8 +47,6 @@ class TaskAttachmentControllerTests {
     TaskAttachmentService attachmentService;
     @MockBean
     UserRepository userRepository;
-    @MockBean
-    CustomUserDetailsService userDetailsService;
     @MockBean
     TokenService tokenService;
 

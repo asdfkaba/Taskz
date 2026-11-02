@@ -252,6 +252,7 @@ async function save() {
           ref="titleInput"
           v-model="form.title"
           :invalid="titleMissing"
+          maxlength="255"
           placeholder="What needs to be done?"
           autofocus
           fluid

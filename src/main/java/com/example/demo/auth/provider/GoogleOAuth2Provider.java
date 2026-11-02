@@ -1,25 +1,20 @@
 package com.example.demo.auth.provider;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Component("google")
 public class GoogleOAuth2Provider extends AbstractOAuthProvider {
+
+    private final ObjectMapper objectMapper;
 
     public GoogleOAuth2Provider(
             @Value("${spring.security.oauth2.client.provider.google.token-endpoint}") String tokenEndpoint,
@@ -28,35 +23,31 @@ public class GoogleOAuth2Provider extends AbstractOAuthProvider {
             @Value("${spring.security.oauth2.client.registration.google.redirect-uri}") String redirectUri,
             RestTemplate restTemplate,
             ObjectMapper objectMapper) {
-
-        super(tokenEndpoint, clientId, clientSecret, redirectUri, restTemplate, objectMapper);
+        super(tokenEndpoint, clientId, clientSecret, redirectUri, restTemplate);
+        this.objectMapper = objectMapper;
     }
+
+    // The ID token came straight from Google's token endpoint over HTTPS, so its signature needn't
+    // be checked (OpenID Connect Core 3.1.3.7); its claims say whether Google verified the email.
     @Override
-    protected OAuth2User createUserFromTokenResponse(Map<String, Object> tokenResponse) {
+    protected Optional<String> verifiedEmail(Map<String, Object> tokenResponse) {
+        if (!(tokenResponse.get("id_token") instanceof String idToken)) {
+            return Optional.empty();
+        }
+        String[] parts = idToken.split("\\.");
+        if (parts.length != 3) {
+            return Optional.empty();
+        }
         try {
-            String idToken = (String) tokenResponse.get("id_token");
-            String[] parts = idToken.split("\\.");
-            if (parts.length != 3) {
-                throw new IllegalArgumentException("Invalid ID token format");
-            }
             String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
-
-            // Deserialize into Map
-            Map<String, Object> claims = objectMapper.readValue(payload, new TypeReference<Map<String,Object>>() {});
-
-            // Extract username/email for authorities
-            String email = (String) claims.get("email");
-
-            // Authorities: you can create ROLE_USER or extract from claims if present
-            List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
-
-            // Build DefaultOAuth2User
-            return new DefaultOAuth2User(authorities, claims, "email");
+            Map<String, Object> claims = objectMapper.readValue(payload, new TypeReference<>() {
+            });
+            // A boolean, though older tokens had the string "true".
+            Object verified = claims.get("email_verified");
+            boolean isVerified = Boolean.TRUE.equals(verified) || "true".equals(verified);
+            return isVerified ? nonBlank(claims.get("email")) : Optional.empty();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse ID token", e);
+            return Optional.empty();
         }
     }
 }
-
-
-

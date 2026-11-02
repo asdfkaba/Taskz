@@ -69,8 +69,8 @@ class TaskAttachmentServiceTests {
 
     @BeforeEach
     void setUp() {
-        task = newTask(boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE, null))));
-        bobsTask = newTask(boardService.createDefaultBoard(userRepository.save(new User("Bob", BOB, null))));
+        task = newTask(boardService.createDefaultBoard(userRepository.save(new User("Alice", ALICE))));
+        bobsTask = newTask(boardService.createDefaultBoard(userRepository.save(new User("Bob", BOB))));
     }
 
     private Task newTask(Board board) {
