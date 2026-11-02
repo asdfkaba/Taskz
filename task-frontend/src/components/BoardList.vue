@@ -25,9 +25,16 @@ const isOpen = (board) => route.params.slug === board.slug
           @click="emit('navigate')"
         >
           <i class="pi pi-th-large text-xs text-slate-400 dark:text-slate-500" aria-hidden="true" />
-          <span class="truncate">{{ board.name }}</span>
+          <span class="min-w-0">
+            <span class="block truncate">{{ board.name }}</span>
+            <span v-if="!board.own" class="block truncate text-xs font-normal text-slate-400 dark:text-slate-500">
+              by {{ board.ownerName ?? 'someone' }}
+            </span>
+          </span>
         </RouterLink>
+        <!-- Only the owner deletes a board; members leave it in its settings. -->
         <Button
+          v-if="board.own"
           icon="pi pi-trash"
           text
           rounded

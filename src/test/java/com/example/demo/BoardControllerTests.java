@@ -4,6 +4,7 @@ import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardColumn;
 import com.example.demo.board.BoardController;
+import com.example.demo.board.BoardDtos;
 import com.example.demo.board.BoardDtos.ColumnPatch;
 import com.example.demo.board.BoardService;
 import com.example.demo.config.WebSecurityConfig;
@@ -120,6 +121,7 @@ class BoardControllerTests {
         renamed.setId(5);
         renamed.setSlug("job-hunt");
         when(boardService.renameBoard(5, ALICE, "Job hunt")).thenReturn(renamed);
+        when(boardService.summaryOf(5, ALICE)).thenReturn(new BoardDtos.BoardSummary(5, "Job hunt", "job-hunt", true, null));
 
         mockMvc.perform(patch("/boards/5").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Job hunt\"}"))
                 .andExpect(status().isOk())

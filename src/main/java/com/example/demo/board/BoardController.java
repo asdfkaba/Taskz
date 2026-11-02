@@ -27,20 +27,20 @@ public class BoardController {
 
     @GetMapping("/boards")
     public List<BoardSummary> getBoards() {
-        return boardService.boardsOf(currentUserEmail()).stream()
-                .map(BoardSummary::from)
-                .toList();
+        return boardService.summariesOf(currentUserEmail());
     }
 
     @PostMapping("/boards")
     @ResponseStatus(HttpStatus.CREATED)
     public BoardSummary createBoard(@RequestBody NewBoardRequest request) {
-        return BoardSummary.from(boardService.createBoard(currentUserEmail(), request.name()));
+        Board board = boardService.createBoard(currentUserEmail(), request.name());
+        return new BoardSummary(board.getId(), board.getName(), board.getSlug(), true, null);
     }
 
     @PatchMapping("/boards/{id}")
     public BoardSummary renameBoard(@PathVariable("id") int id, @RequestBody RenameBoardRequest request) {
-        return BoardSummary.from(boardService.renameBoard(id, currentUserEmail(), request.name()));
+        boardService.renameBoard(id, currentUserEmail(), request.name());
+        return boardService.summaryOf(id, currentUserEmail());
     }
 
     @DeleteMapping("/boards/{id}")

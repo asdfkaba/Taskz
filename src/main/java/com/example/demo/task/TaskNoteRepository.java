@@ -11,5 +11,4 @@ public interface TaskNoteRepository extends JpaRepository<TaskNote, Integer> {
     // Newest first; id breaks ties between notes written in the same instant.
     List<TaskNote> findByTaskOrderByCreatedDescIdDesc(Task task);
 
-    Optional<TaskNote> findByIdAndTaskUserEmail(Integer id, String email);
 }

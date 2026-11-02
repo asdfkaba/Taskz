@@ -85,7 +85,7 @@ class TaskControllerTests {
     void tickingACheckboxSavesAndRecordsIt() throws Exception {
         Task task = aliceTask();
         task.setDescription("- [ ] Cover letter\n- [ ] CV");
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(patch("/tasks/1/checkbox")
@@ -104,7 +104,7 @@ class TaskControllerTests {
     void checkboxWithoutLineMustBeTheOnlyChange() throws Exception {
         Task task = aliceTask();
         task.setDescription("- [ ] Cover letter\n- [ ] CV");
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
@@ -122,7 +122,7 @@ class TaskControllerTests {
     void tickingTheLastSubItemCompletesTheParent() throws Exception {
         Task task = aliceTask();
         task.setDescription("- [ ] Application\n  - [x] Cover letter\n  - [ ] CV");
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
@@ -136,7 +136,7 @@ class TaskControllerTests {
     void tickingAParentTicksItsSubItems() throws Exception {
         Task task = aliceTask();
         task.setDescription("- [ ] Application\n  - [x] Cover letter\n  - [ ] CV\n  - [ ] Portfolio");
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
@@ -150,7 +150,7 @@ class TaskControllerTests {
     void changesInDifferentDirectionsOrWithoutTheClickedLineAreRejected() throws Exception {
         Task task = aliceTask();
         task.setDescription("- [ ] Cover letter\n- [x] CV");
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
 
         mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\":\"- [x] Cover letter\\n- [ ] CV\",\"line\":0}"))
@@ -167,7 +167,7 @@ class TaskControllerTests {
     void checkboxRequestWithOtherChangesIsRejected() throws Exception {
         Task task = aliceTask();
         task.setDescription("- [ ] Cover letter\n- [ ] CV");
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
 
         // E.g. the description was edited in another tab in the meantime.
         mockMvc.perform(patch("/tasks/1/checkbox")
@@ -182,7 +182,7 @@ class TaskControllerTests {
 
     @Test
     void checkboxOfOtherUsersTaskIsNotFound() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.empty());
+        when(boardService.findTask(1, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
         mockMvc.perform(patch("/tasks/1/checkbox")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\":\"- [x] CV\"}"))
@@ -192,7 +192,7 @@ class TaskControllerTests {
 
     @Test
     void updateChangesOwnTaskAndKeepsCreated() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(put("/tasks/1")
@@ -218,7 +218,7 @@ class TaskControllerTests {
     // The frontend sends due_date back in the array format it received from GET.
     @Test
     void updateAcceptsDateInArrayFormat() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(put("/tasks/1")
@@ -233,7 +233,7 @@ class TaskControllerTests {
 
     @Test
     void updateAcceptsLongMarkdownDescription() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
         String description = "- [ ] item\n".repeat(900); // 9900 chars, far over the old 255
 
@@ -246,7 +246,7 @@ class TaskControllerTests {
 
     @Test
     void updateRejectsTooLongDescription() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         String description = "x".repeat(10_001);
 
         mockMvc.perform(put("/tasks/1")
@@ -258,7 +258,7 @@ class TaskControllerTests {
 
     @Test
     void titlesAreTrimmedAndMustFitTheColumn() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         for (String bad : new String[]{"\"   \"", "null", jsonString("x".repeat(256))}) {
@@ -279,7 +279,7 @@ class TaskControllerTests {
 
     @Test
     void cannotUpdateTaskOfOtherUser() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(2, ALICE)).thenReturn(Optional.empty());
+        when(boardService.findTask(2, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
         mockMvc.perform(put("/tasks/2")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -291,7 +291,7 @@ class TaskControllerTests {
 
     @Test
     void cannotDeleteTaskOfOtherUser() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(2, ALICE)).thenReturn(Optional.empty());
+        when(boardService.findTask(2, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
         mockMvc.perform(delete("/tasks/2/delete"))
                 .andExpect(status().isNotFound());
@@ -303,7 +303,7 @@ class TaskControllerTests {
     @Test
     void deletesOwnTask() throws Exception {
         Task task = aliceTask();
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
 
         mockMvc.perform(delete("/tasks/1/delete"))
                 .andExpect(status().isOk());
@@ -314,7 +314,7 @@ class TaskControllerTests {
 
     @Test
     void cannotReadTaskOfOtherUser() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(2, ALICE)).thenReturn(Optional.empty());
+        when(boardService.findTask(2, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
         mockMvc.perform(get("/tasks/2"))
                 .andExpect(status().isNotFound());
@@ -324,7 +324,7 @@ class TaskControllerTests {
     void createIgnoresIdFromBodySoPostCannotOverwrite() throws Exception {
         BoardColumn column = aliceColumn();
         when(userRepository.findByEmail(ALICE)).thenReturn(Optional.of(new User("Alice", ALICE)));
-        when(boardService.findOwnColumn(10, ALICE)).thenReturn(column);
+        when(boardService.findColumn(10, ALICE)).thenReturn(column);
         when(taskRepository.countByBoardColumn(column)).thenReturn(2);
 
         mockMvc.perform(post("/tasks")
@@ -354,7 +354,7 @@ class TaskControllerTests {
 
     @Test
     void cannotCreateTaskInColumnOfOtherUser() throws Exception {
-        when(boardService.findOwnColumn(20, ALICE))
+        when(boardService.findColumn(20, ALICE))
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Column not found"));
 
         mockMvc.perform(post("/tasks")
@@ -391,7 +391,7 @@ class TaskControllerTests {
     @Test
     void updateWithLabelIdsSetsLabelsOfTheBoard() throws Exception {
         Task task = aliceTask();
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
         BoardLabel urgent = new BoardLabel("Urgent", "#ef4444", task.getBoardColumn().getBoard());
         urgent.setId(7);
@@ -411,7 +411,7 @@ class TaskControllerTests {
         BoardLabel urgent = new BoardLabel("Urgent", "#ef4444", task.getBoardColumn().getBoard());
         urgent.setId(7);
         task.getLabels().add(urgent);
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(task));
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(put("/tasks/1")
@@ -424,7 +424,7 @@ class TaskControllerTests {
 
     @Test
     void foreignLabelIsRejected() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         when(labelService.labelsForTask(any(), any()))
                 .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Label 99 is not a label of this board"));
 
@@ -437,7 +437,7 @@ class TaskControllerTests {
 
     @Test
     void updateRecordsHistory() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(1, ALICE)).thenReturn(Optional.of(aliceTask()));
+        when(boardService.findTask(1, ALICE)).thenReturn(aliceTask());
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         mockMvc.perform(put("/tasks/1")
@@ -453,7 +453,7 @@ class TaskControllerTests {
 
     @Test
     void historyOfOtherUsersTaskIsNotFound() throws Exception {
-        when(taskRepository.findByIdAndUserEmail(5, ALICE)).thenReturn(Optional.empty());
+        when(boardService.findTask(5, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
         mockMvc.perform(get("/tasks/5/history")).andExpect(status().isNotFound());
         verifyNoInteractions(historyService);
     }

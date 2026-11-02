@@ -12,7 +12,6 @@ import java.util.Optional;
 
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Integer> {
-    Optional<Task> findByIdAndUserEmail(Integer id, String email);
 
     List<Task> findByBoardColumnOrderByPosition(BoardColumn column);
     int countByBoardColumn(BoardColumn column);

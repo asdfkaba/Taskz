@@ -1,6 +1,7 @@
 package com.example.demo.board;
 
 import com.example.demo.board.BoardDtos.BoardDetail;
+import com.example.demo.board.BoardDtos.BoardSummary;
 import com.example.demo.board.BoardDtos.ColumnDto;
 import com.example.demo.board.BoardDtos.ColumnPatch;
 import com.example.demo.board.BoardDtos.LabelDto;
@@ -18,13 +19,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * Boards, their columns and the order of tasks within them.
- * Everything is looked up by the owner's email, so objects of other users are reported as "not found".
+ * Who may see and change a board is decided here, in {@link #canAccess}: its owner and its members
+ * (see {@link BoardMemberService}). Everything is looked up through that, so boards of others are
+ * reported as "not found". Deleting, sharing and managing members is for the owner only
+ * ({@link #findOwnBoard}).
  */
 @Service
 public class BoardService {
@@ -49,12 +55,14 @@ public class BoardService {
     private final BoardShareRepository shareRepository;
     private final BoardLabelRepository labelRepository;
     private final TaskHistoryService historyService;
+    private final BoardMemberRepository memberRepository;
     private final ApplicationEventPublisher events;
 
     public BoardService(BoardRepository boardRepository, BoardColumnRepository columnRepository,
                         TaskRepository taskRepository, UserRepository userRepository,
                         BoardShareRepository shareRepository, BoardLabelRepository labelRepository,
-                        TaskHistoryService historyService, ApplicationEventPublisher events) {
+                        TaskHistoryService historyService, BoardMemberRepository memberRepository,
+                        ApplicationEventPublisher events) {
         this.boardRepository = boardRepository;
         this.columnRepository = columnRepository;
         this.taskRepository = taskRepository;
@@ -62,6 +70,7 @@ public class BoardService {
         this.shareRepository = shareRepository;
         this.labelRepository = labelRepository;
         this.historyService = historyService;
+        this.memberRepository = memberRepository;
         this.events = events;
     }
 
@@ -78,7 +87,10 @@ public class BoardService {
         return createBoardWithDefaultColumns(user, validName(name, "Board"));
     }
 
-    /** Deletes the board with all its columns, tasks and labels. A user may delete their last board. */
+    /**
+     * Deletes the board with all its columns, tasks and labels (members and invites go with it in the
+     * database). Only its owner can; a user may delete their last board.
+     */
     @Transactional
     public void deleteBoard(int boardId, String email) {
         Board board = findOwnBoard(boardId, email);
@@ -98,7 +110,7 @@ public class BoardService {
      */
     @Transactional
     public Board renameBoard(int boardId, String email, String name) {
-        Board board = findOwnBoard(boardId, email);
+        Board board = findBoard(boardId, email);
         String newName = validName(name, "Board");
         if (!slugFits(board.getSlug(), newName)) {
             board.setSlug(uniqueSlug(board.getUser(), newName));
@@ -149,14 +161,48 @@ public class BoardService {
         return board;
     }
 
+    /** The user's own boards. */
     @Transactional(readOnly = true)
     public List<Board> boardsOf(String email) {
         return boardRepository.findByUserEmailOrderById(email);
     }
 
+    /**
+     * The boards the user can open: their own, then those they joined. A joined board whose slug
+     * one of the user's boards already has gets "-2", "-3", ... for this user, so each board has its
+     * own address. Not stored; it can change when the user later creates a board with that name.
+     */
+    @Transactional(readOnly = true)
+    public List<BoardSummary> summariesOf(String email) {
+        List<BoardSummary> summaries = new ArrayList<>();
+        Set<String> slugs = new HashSet<>();
+        for (Board board : boardsOf(email)) {
+            slugs.add(board.getSlug());
+            summaries.add(new BoardSummary(board.getId(), board.getName(), board.getSlug(), true, null));
+        }
+        for (Board board : memberRepository.boardsOf(email)) {
+            String slug = board.getSlug();
+            for (int n = 2; slugs.contains(slug); n++) {
+                slug = board.getSlug() + "-" + n;
+            }
+            slugs.add(slug);
+            summaries.add(new BoardSummary(board.getId(), board.getName(), slug, false, board.getUser().getName()));
+        }
+        return summaries;
+    }
+
+    /** One board as {@link #summariesOf} lists it for the user. */
+    @Transactional(readOnly = true)
+    public BoardSummary summaryOf(int boardId, String email) {
+        return summariesOf(email).stream()
+                .filter(summary -> summary.id() == boardId)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
     @Transactional(readOnly = true)
     public BoardDetail getBoard(int boardId, String email) {
-        Board board = findOwnBoard(boardId, email);
+        Board board = findBoard(boardId, email);
         return new BoardDetail(board.getId(), board.getName(), board.getSlug(), columnsOf(board), labelsOf(board),
                 tasksOf(board), board.getTaskTemplate());
     }
@@ -164,7 +210,7 @@ public class BoardService {
     /** Sets the description new tasks of the board start with. Blank removes it. Returns what is stored. */
     @Transactional
     public String setTaskTemplate(int boardId, String email, String template) {
-        Board board = findOwnBoard(boardId, email);
+        Board board = findBoard(boardId, email);
         String value = template == null || template.isBlank() ? null : template.strip();
         if (value != null && value.length() > MAX_TASK_TEMPLATE_LENGTH) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -193,7 +239,7 @@ public class BoardService {
 
     @Transactional
     public BoardColumn addColumn(int boardId, String email, String name, String color) {
-        Board board = findOwnBoard(boardId, email);
+        Board board = findBoard(boardId, email);
         int position = columnRepository.findByBoardOrderByPosition(board).size();
         changed(board);
         return columnRepository.save(new BoardColumn(validName(name, "Column"), validColor(color), position, board));
@@ -205,7 +251,7 @@ public class BoardService {
      */
     @Transactional
     public BoardColumn updateColumn(int columnId, String email, ColumnPatch patch) {
-        BoardColumn column = findOwnColumn(columnId, email);
+        BoardColumn column = findColumn(columnId, email);
         if (patch.name() != null) {
             column.setName(validName(patch.name(), "Column"));
         }
@@ -230,7 +276,7 @@ public class BoardService {
      */
     @Transactional
     public void deleteColumn(int columnId, String email, Integer moveTo, boolean deleteTasks) {
-        BoardColumn column = findOwnColumn(columnId, email);
+        BoardColumn column = findColumn(columnId, email);
         if (moveTo != null && deleteTasks) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use either moveTo or deleteTasks, not both");
         }
@@ -240,7 +286,7 @@ public class BoardService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The last column of a board cannot be deleted");
         }
 
-        BoardColumn target = moveTo == null ? null : findOwnColumn(moveTo, email);
+        BoardColumn target = moveTo == null ? null : findColumn(moveTo, email);
         if (target != null) {
             requireSameBoard(column, target);
             if (target.getId().equals(column.getId())) {
@@ -281,10 +327,9 @@ public class BoardService {
      */
     @Transactional
     public Task moveTask(int taskId, int columnId, int position, String email) {
-        Task task = taskRepository.findByIdAndUserEmail(taskId, email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+        Task task = findTask(taskId, email);
         BoardColumn source = task.getBoardColumn();
-        BoardColumn target = findOwnColumn(columnId, email);
+        BoardColumn target = findColumn(columnId, email);
         requireSameBoard(source, target);
 
         List<Task> sourceTasks = new ArrayList<>(taskRepository.findByBoardColumnOrderByPosition(source));
@@ -313,14 +358,39 @@ public class BoardService {
         events.publishEvent(new BoardChanged(board.getId()));
     }
 
-    public BoardColumn findOwnColumn(int columnId, String email) {
-        return columnRepository.findByIdAndBoardUserEmail(columnId, email)
+    /** True if the user owns the board or is one of its members. The one place that decides this. */
+    public boolean canAccess(Board board, String email) {
+        return isOwner(board, email) || memberRepository.existsByBoardAndUserEmail(board, email);
+    }
+
+    public boolean isOwner(Board board, String email) {
+        return email != null && email.equals(board.getUser().getEmail());
+    }
+
+    /** A board the user owns or is a member of; else 404, so boards of others stay invisible. */
+    public Board findBoard(int boardId, String email) {
+        return boardRepository.findById(boardId)
+                .filter(board -> canAccess(board, email))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
+    /** A board the user owns; members get 404 too. For deleting, sharing and managing members. */
+    public Board findOwnBoard(int boardId, String email) {
+        return boardRepository.findById(boardId)
+                .filter(board -> isOwner(board, email))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    }
+
+    public BoardColumn findColumn(int columnId, String email) {
+        return columnRepository.findById(columnId)
+                .filter(column -> canAccess(column.getBoard(), email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Column not found"));
     }
 
-    Board findOwnBoard(int boardId, String email) {
-        return boardRepository.findByIdAndUserEmail(boardId, email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
+    public Task findTask(int taskId, String email) {
+        return taskRepository.findById(taskId)
+                .filter(task -> canAccess(task.getBoardColumn().getBoard(), email))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
     }
 
     private static void requireSameBoard(BoardColumn a, BoardColumn b) {

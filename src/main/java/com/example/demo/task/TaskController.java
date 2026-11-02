@@ -43,7 +43,7 @@ public class TaskController {
 
     @GetMapping("/{id}")
     public TaskDto getTaskById(@PathVariable("id") int id) {
-        return TaskDto.from(findOwnTask(id));
+        return TaskDto.from(findTask(id));
     }
 
     @PostMapping("")
@@ -54,7 +54,7 @@ public class TaskController {
         if (input.columnId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "columnId is required");
         }
-        BoardColumn column = boardService.findOwnColumn(input.columnId(), email);
+        BoardColumn column = boardService.findColumn(input.columnId(), email);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
@@ -77,7 +77,7 @@ public class TaskController {
 
     @PutMapping("/{id}")
     public TaskDto updateTask(@PathVariable("id") int id, @RequestBody TaskRequest input) {
-        Task task = findOwnTask(id);
+        Task task = findTask(id);
         TaskHistoryService.Snapshot before = TaskHistoryService.Snapshot.of(task);
         copyEditableFields(input, task);
         applyLabels(input, task);
@@ -96,7 +96,7 @@ public class TaskController {
      */
     @PatchMapping("/{id}/checkbox")
     public TaskDto toggleCheckbox(@PathVariable("id") int id, @RequestBody CheckboxRequest input) {
-        Task task = findOwnTask(id);
+        Task task = findTask(id);
         List<Checklists.Toggle> toggles = Checklists.toggles(task.getDescription(), input.description());
         // Without a line (older clients) exactly one checkbox may change.
         Checklists.Toggle clicked = toggles.stream()
@@ -130,7 +130,7 @@ public class TaskController {
 
     @DeleteMapping("/{id}/delete")
     public void deleteTask(@PathVariable("id") int id) {
-        Task task = findOwnTask(id);
+        Task task = findTask(id);
         historyService.recordDeleted(task, currentUserEmail());
         repository.delete(task);
         boardService.changed(task.getBoardColumn().getBoard());
@@ -139,13 +139,12 @@ public class TaskController {
     // Newest first. Only for the owner; shared boards don't show history.
     @GetMapping("/{id}/history")
     public List<TaskHistoryService.EventDto> getHistory(@PathVariable("id") int id) {
-        return historyService.historyOf(findOwnTask(id));
+        return historyService.historyOf(findTask(id));
     }
 
-    // Tasks of other users are reported as "not found" so their ids don't leak.
-    private Task findOwnTask(int id) {
-        return repository.findByIdAndUserEmail(id, currentUserEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+    // Tasks of boards the user can't open are reported as "not found" so their ids don't leak.
+    private Task findTask(int id) {
+        return boardService.findTask(id, currentUserEmail());
     }
 
     // Only the editable fields are copied, so a client can't set id, owner, column or timestamps.

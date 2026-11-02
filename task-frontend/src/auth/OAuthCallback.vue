@@ -34,7 +34,10 @@ onMounted(async () => {
     }
     sessionStorage.removeItem('pkce_code_verifier')
     await auth.checkLoginStatus()
-    router.push('/boards')
+    // Back to the page that needed the login. Only paths within the app, never another site.
+    const returnTo = sessionStorage.getItem('returnTo')
+    sessionStorage.removeItem('returnTo')
+    router.push(returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/boards')
   } catch {
     error.value = 'The server could not be reached. Try again in a moment.'
   }

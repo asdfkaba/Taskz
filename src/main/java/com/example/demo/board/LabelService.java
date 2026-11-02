@@ -36,7 +36,7 @@ public class LabelService {
 
     @Transactional
     public BoardLabel addLabel(int boardId, String email, String name, String color) {
-        Board board = boardService.findOwnBoard(boardId, email);
+        Board board = boardService.findBoard(boardId, email);
         boardService.changed(board);
         return labelRepository.save(new BoardLabel(validName(name), validColor(color), board));
     }
@@ -44,7 +44,7 @@ public class LabelService {
     /** Absent (null) fields stay unchanged. */
     @Transactional
     public BoardLabel updateLabel(int labelId, String email, String name, String color) {
-        BoardLabel label = findOwnLabel(labelId, email);
+        BoardLabel label = findLabel(labelId, email);
         if (name != null) {
             label.setName(validName(name));
         }
@@ -58,7 +58,7 @@ public class LabelService {
     /** Deletes the label and takes it off every task that carries it. */
     @Transactional
     public void deleteLabel(int labelId, String email) {
-        BoardLabel label = findOwnLabel(labelId, email);
+        BoardLabel label = findLabel(labelId, email);
         for (Task task : taskRepository.findByLabelsContaining(label)) {
             TaskHistoryService.Snapshot before = TaskHistoryService.Snapshot.of(task);
             task.getLabels().remove(label);
@@ -90,8 +90,9 @@ public class LabelService {
         return result;
     }
 
-    private BoardLabel findOwnLabel(int labelId, String email) {
-        return labelRepository.findByIdAndBoardUserEmail(labelId, email)
+    private BoardLabel findLabel(int labelId, String email) {
+        return labelRepository.findById(labelId)
+                .filter(label -> boardService.canAccess(label.getBoard(), email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Label not found"));
     }
 

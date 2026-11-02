@@ -28,6 +28,12 @@ let share // { key, created }
 let shareRequests
 const newKey = () => Array.from({ length: 22 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[Math.floor(Math.random() * 64)]).join('')
 let boardDeleted
+// Members of board 1 ([{ userId, name, joined }]) and its open invite keys. Board 2 is Bob's; Alice
+// joins it with the fixed link /join/team-invite.
+let members
+let invites
+let teamJoined
+const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob' }
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
 const streams = new Set()
 const endStreams = () => { for (const res of streams) res.end(); streams.clear() }
@@ -39,6 +45,9 @@ let log
 
 function reset() {
   endStreams()
+  members = []
+  invites = []
+  teamJoined = false
   nextId = 100
   columns = [
     { id: 10, name: 'To do', color: '#64748b', position: 0 },
@@ -77,7 +86,39 @@ function api(method, url, body) {
     if (body?.code === 'unverified') return [401, { message: 'Your account there has no confirmed email address. Confirm one and try again.' }]
     return [200, 'Login successful']
   }
-  if (method === 'GET' && p === '/boards') return [200, boardDeleted ? [] : [{ id: 1, name: board.name, slug: board.slug }]]
+  if (method === 'GET' && p === '/boards') {
+    const own = boardDeleted ? [] : [{ id: 1, name: board.name, slug: board.slug, own: true, ownerName: null }]
+    return [200, teamJoined ? [...own, TEAM_BOARD] : own]
+  }
+  if (method === 'GET' && p === '/boards/1/members') {
+    return [200, [{ userId: 1, name: 'Alice', owner: true, joined: null }, ...members.map((m) => ({ ...m, owner: false }))]]
+  }
+  if (method === 'POST' && p === '/boards/1/invites') {
+    const key = newKey()
+    invites.push(key)
+    return [201, { path: `/join/${key}`, expires: '2026-11-09T20:00:00Z' }]
+  }
+  if (method === 'DELETE' && (m = p.match(/^\/boards\/1\/members\/(\d+)$/))) {
+    members = members.filter((x) => x.userId !== +m[1])
+    return [204, null]
+  }
+  if ((m = p.match(/^\/invites\/([^/]+)$/))) {
+    const key = decodeURIComponent(m[1])
+    if (key === 'team-invite') {
+      if (method === 'POST') teamJoined = true
+      return [200, method === 'POST' ? TEAM_BOARD : { boardName: 'Team board', ownerName: 'Bob', member: teamJoined }]
+    }
+    // Alice owns board 1, so her own links only open it.
+    if (invites.includes(key)) return [200, method === 'POST' ? { id: 1, name: board.name, slug: board.slug, own: true, ownerName: null } : { boardName: board.name, ownerName: 'Alice', member: true }]
+    return [404, { message: "This invite link doesn't work anymore" }]
+  }
+  if (teamJoined && method === 'GET' && p === '/boards/2') {
+    return [200, { id: 2, name: 'Team board', slug: 'team-board', columns: [{ id: 20, name: 'Ideas', color: null, position: 0 }], labels: [], tasks: [], taskTemplate: null }]
+  }
+  if (teamJoined && method === 'GET' && p === '/boards/2/members') {
+    return [200, [{ userId: 2, name: 'Bob', owner: true, joined: null }, { userId: 1, name: 'Alice', owner: false, joined: '2026-11-02T20:00:00Z' }]]
+  }
+  if (teamJoined && method === 'DELETE' && p === '/boards/2/membership') { teamJoined = false; return [204, null] }
   if (method === 'DELETE' && p === '/boards/1') { boardDeleted = true; return [204, null] }
   if (method === 'GET' && p === '/boards/1') {
     const cols = sortedColumns()
@@ -90,7 +131,7 @@ function api(method, url, body) {
     // Simplified slug rule of the backend (there is only one board, so no clashes).
     board.name = name
     board.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'board'
-    return [200, { id: 1, name: board.name, slug: board.slug }]
+    return [200, { id: 1, name: board.name, slug: board.slug, own: true, ownerName: null }]
   }
   if (method === 'POST' && p === '/boards/1/columns') {
     const c = { id: nextId++, name: body.name.trim(), color: body.color ?? null, position: columns.length }
@@ -174,7 +215,7 @@ function api(method, url, body) {
     if (method === 'POST') {
       const text = (body.text ?? '').trim()
       if (!text || text.length > 5000) return [400, {}]
-      const note = { id: nextId++, taskId, text, user: 'Alice', created: now(), edited: null }
+      const note = { id: nextId++, taskId, text, user: 'Alice', created: now(), edited: null, canEdit: true, canDelete: true }
       notes.push(note)
       const { taskId: _, ...out } = note
       return [201, out]

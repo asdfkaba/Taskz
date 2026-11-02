@@ -136,6 +136,48 @@ export const useBoardStore = defineStore('board', {
       await expectOk(await authFetch(`/api/boards/${boardId}/share`, { method: 'DELETE' }), 'Stopping sharing')
     },
 
+    // ---- Members: the owner and whoever joined through an invite link ----
+
+    // [{ userId, name, owner, joined }], the owner first.
+    async fetchMembers(boardId) {
+      return (await expectOk(await authFetch(`/api/boards/${boardId}/members`), 'Loading members')).json()
+    },
+
+    // { path, expires }. Works once; the server keeps only its hash, so it can't be shown again.
+    async createInvite(boardId) {
+      const response = await expectOk(
+        await authFetch(`/api/boards/${boardId}/invites`, { method: 'POST' }),
+        'Creating invite link',
+      )
+      return response.json()
+    },
+
+    async removeMember(boardId, userId) {
+      await expectOk(await authFetch(`/api/boards/${boardId}/members/${userId}`, { method: 'DELETE' }), 'Removing member')
+    },
+
+    async leaveBoard(boardId) {
+      await expectOk(await authFetch(`/api/boards/${boardId}/membership`, { method: 'DELETE' }), 'Leaving board')
+      this.boards = this.boards.filter((b) => b.id !== boardId)
+      if (this.board?.id === boardId) this.closeBoard()
+    },
+
+    // { boardName, ownerName, member }; 404 for unknown, used and expired links.
+    async fetchInvite(token) {
+      return (await expectOk(await authFetch(`/api/invites/${encodeURIComponent(token)}`), 'Loading invite')).json()
+    },
+
+    // Returns the board's summary { id, name, slug, own, ownerName }.
+    async joinBoard(token) {
+      const response = await expectOk(
+        await authFetch(`/api/invites/${encodeURIComponent(token)}`, { method: 'POST' }),
+        'Joining board',
+      )
+      // The list gets the board with the address it has for this user.
+      this.boardsLoaded = false
+      return response.json()
+    },
+
     // ---- Tasks ----
 
     findTask(id) {
