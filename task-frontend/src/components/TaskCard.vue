@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import Button from 'primevue/button'
-import { fromApi, formatDue } from '@/utils/date'
+import { fromApi, formatDue, formatShort } from '@/utils/date'
 import { DEFAULT_COLUMN_COLOR } from '@/utils/task'
 import { checkboxStates, renderMarkdown } from '@/utils/markdown'
 import LabelPill from '@/components/LabelPill.vue'
@@ -29,6 +29,8 @@ const emit = defineEmits(['open', 'menu', 'move'])
 
 const due = computed(() => fromApi(props.task.due_date))
 const isOverdue = computed(() => due.value !== null && due.value < new Date())
+// Last change, like the table's "Changed" column; never-edited tasks show when they were created.
+const changed = computed(() => (props.compact ? null : fromApi(props.task.edited) ?? fromApi(props.task.created)))
 const showArrows = computed(() => !props.readonly && (props.leftColumn || props.rightColumn))
 // The menu button sets the header height of editable cards; read-only ones need their own spacing.
 // Compact cards on mouse devices drop the row that would only hold the (hidden) arrows; dragging
@@ -100,7 +102,7 @@ function onClick(event) {
       <div v-if="descriptionHtml" class="markdown line-clamp-3" v-html="descriptionHtml" />
 
       <div
-        v-if="due || checklist || showArrows || (compact && labels.length)"
+        v-if="due || checklist || changed || showArrows || (compact && labels.length)"
         class="flex flex-wrap items-center gap-2 text-xs"
         :class="{ '-mt-1': compact && !readonly, '[@media(hover:hover)]:hidden': compact && onlyArrows }"
       >
@@ -138,33 +140,46 @@ function onClick(event) {
           <i class="pi text-xs" :class="isOverdue ? 'pi-exclamation-circle' : 'pi-calendar'" />
           {{ formatDue(due) }}
         </span>
-        <!-- With a mouse the arrows show on hover or keyboard focus; on touch screens always. -->
-        <div
-          v-if="showArrows"
-          class="-my-1 ml-auto flex transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
-        >
-          <Button
-            v-if="leftColumn"
-            icon="pi pi-chevron-left"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            :aria-label="`Move to ${leftColumn.name}`"
-            :title="`Move to ${leftColumn.name}`"
-            @click.stop="emit('move', task, leftColumn.id)"
-          />
-          <Button
-            v-if="rightColumn"
-            icon="pi pi-chevron-right"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            :aria-label="`Move to ${rightColumn.name}`"
-            :title="`Move to ${rightColumn.name}`"
-            @click.stop="emit('move', task, rightColumn.id)"
-          />
+        <div v-if="changed || showArrows" class="relative ml-auto flex items-center gap-1">
+          <span
+            v-if="changed"
+            data-testid="card-changed"
+            class="text-slate-400 transition-opacity dark:text-slate-500"
+            :class="{ 'group-hover:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-0': showArrows }"
+            :title="`Last changed ${formatShort(changed)}`"
+          >
+            <span class="sr-only">Last changed </span>{{ formatShort(changed) }}
+          </span>
+          <!-- With a mouse the arrows show on hover or keyboard focus, on top of the date; on touch
+               screens always, next to it. -->
+          <div
+            v-if="showArrows"
+            class="-my-1 flex transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
+            :class="{ '[@media(hover:hover)]:absolute [@media(hover:hover)]:right-0': changed }"
+          >
+            <Button
+              v-if="leftColumn"
+              icon="pi pi-chevron-left"
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              :aria-label="`Move to ${leftColumn.name}`"
+              :title="`Move to ${leftColumn.name}`"
+              @click.stop="emit('move', task, leftColumn.id)"
+            />
+            <Button
+              v-if="rightColumn"
+              icon="pi pi-chevron-right"
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              :aria-label="`Move to ${rightColumn.name}`"
+              :title="`Move to ${rightColumn.name}`"
+              @click.stop="emit('move', task, rightColumn.id)"
+            />
+          </div>
         </div>
       </div>
     </div>
