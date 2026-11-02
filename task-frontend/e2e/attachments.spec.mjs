@@ -38,6 +38,8 @@ test('Task attachments', async ({ browser }) => {
     ensure((await count().count()) === 0, 'paperclip without attachments')
     await openTask()
     await section().getByText('Drop files here').waitFor()
+    const types = (await section().getByTestId('allowed-types').innerText()).trim()
+    ensure(types === 'PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV', types)
   })
 
   await test.step('files from the picker are listed newest first, images with a preview', async () => {
