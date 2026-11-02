@@ -54,6 +54,8 @@ const form = reactive({ title: '', description: '', dueDate: null, labelIds: [] 
 const labelPickerOpen = ref(false)
 const formLabels = computed(() => store.labels.filter((l) => form.labelIds.includes(l.id)))
 let initialForm = ''
+// The task's revision when editing started; the server refuses the save if it changed since.
+let baseRevision = null
 const isDirty = computed(() => JSON.stringify(form) !== initialForm)
 const titleMissing = computed(() => submitted.value && !form.title.trim())
 
@@ -76,6 +78,7 @@ function fillForm() {
   form.labelIds = [...(t?.labelIds ?? [])].sort((a, b) => a - b)
   labelPickerOpen.value = false
   initialForm = JSON.stringify(form)
+  baseRevision = t?.revision ?? null
 }
 
 watch(visible, (open) => {
@@ -157,7 +160,8 @@ function onDateSelect(date) {
   form.dueDate = noon
 }
 
-async function save() {
+// overwrite: save even though someone else changed the task since editing started.
+async function save(overwrite = false) {
   submitted.value = true
   if (!form.title.trim()) return
 
@@ -167,6 +171,7 @@ async function save() {
     due_date: toApi(form.dueDate),
     labelIds: form.labelIds,
   }
+  if (!isNew.value && !overwrite) data.revision = baseRevision
 
   busy.value = true
   try {
@@ -181,10 +186,29 @@ async function save() {
       else visible.value = false
     }
   } catch (err) {
-    toast.add({ severity: 'error', summary: 'Could not save task', detail: err.message, life: 5000 })
+    if (err.status === 409) askOverwrite()
+    else toast.add({ severity: 'error', summary: 'Could not save task', detail: err.message, life: 5000 })
   } finally {
     busy.value = false
   }
+}
+
+// Someone else saved the task while it was being edited here.
+function askOverwrite() {
+  confirm.require({
+    header: 'Changed in the meantime',
+    message: 'Someone else saved this task while you were editing it. Save yours over theirs, or drop yours and see their version?',
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'See their version', severity: 'secondary', text: true },
+    acceptProps: { label: 'Save mine' },
+    accept: () => save(true),
+    reject: async () => {
+      // Their version, even if no live update brought it yet.
+      await store.refreshBoard()
+      fillForm()
+      if (openedInView.value) mode.value = 'view'
+    },
+  })
 }
 </script>
 
@@ -244,7 +268,7 @@ async function save() {
     </div>
 
     <!-- Edit / create -->
-    <form v-else id="task-form" class="flex flex-col gap-5 pt-1" @submit.prevent="save">
+    <form v-else id="task-form" class="flex flex-col gap-5 pt-1" @submit.prevent="save()">
       <div class="flex flex-col gap-1.5">
         <label for="task-title" class="text-sm font-medium text-slate-700 dark:text-slate-300">Title</label>
         <InputText

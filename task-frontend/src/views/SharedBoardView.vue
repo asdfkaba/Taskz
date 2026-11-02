@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -12,6 +12,7 @@ import { useBoardFilter } from '@/composables/useBoardFilter'
 import { useBoardViewPrefs } from '@/composables/useBoardViewPrefs'
 import ViewSwitch from '@/components/ViewSwitch.vue'
 import { usePageTitle } from '@/utils/title'
+import { useBoardEvents } from '@/composables/useBoardEvents'
 
 // PrimeVue's DataTable is large; load it only when the table view is opened.
 const TaskTable = defineAsyncComponent(() => import('@/components/TaskTable.vue'))
@@ -55,13 +56,9 @@ async function load(token) {
   }
 }
 
-// Live updates: the server only says "changed", and the board is fetched again in the
-// background. The page stays as it is; Vue only patches what differs.
-let events = null
-let refreshTimer = null
-let retryTimer = null
+// Live updates (see useBoardEvents): fetched again in the background, so the page stays as it is;
+// Vue only patches what differs.
 let refreshes = 0
-
 async function refresh() {
   const token = board.value?.path
   if (!token) return
@@ -81,38 +78,8 @@ async function refresh() {
   }
 }
 
-function listen(path) {
-  stopListening()
-  events = new EventSource(`/api/share/${encodeURIComponent(path)}/events`)
-  let opened = false
-  events.onopen = () => {
-    if (opened) refresh() // reconnected: changes in between were missed
-    opened = true
-  }
-  events.addEventListener('changed', () => {
-    // Quick changes in a row (a drag renumbers a column) load the board once.
-    clearTimeout(refreshTimer)
-    refreshTimer = setTimeout(refresh, 300)
-  })
-  // The browser reconnects by itself, unless the reconnect was refused: the link stopped working
-  // (refresh shows that) or the server was away, e.g. during a deploy (try again). Delayed, as
-  // leaving the page also ends the stream, and its timers don't run anymore.
-  events.onerror = () => {
-    if (events?.readyState !== EventSource.CLOSED) return
-    retryTimer = setTimeout(async () => {
-      if ((await refresh()) !== 'gone') listen(path)
-    }, 2000)
-  }
-}
-
-function stopListening() {
-  events?.close()
-  events = null
-  clearTimeout(refreshTimer)
-  clearTimeout(retryTimer)
-}
-
-onBeforeUnmount(stopListening)
+const { listen: listenTo, stop: stopListening } = useBoardEvents({ refresh })
+const listen = (path) => listenTo(`/api/share/${encodeURIComponent(path)}/events`)
 
 const labelsOf = (task) => (board.value?.labels ?? []).filter((l) => task.labelIds?.includes(l.id))
 

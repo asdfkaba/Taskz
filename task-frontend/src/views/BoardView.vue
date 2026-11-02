@@ -22,6 +22,7 @@ import BoardSettings from '@/components/BoardSettings.vue'
 import { usePageTitle } from '@/utils/title'
 import { readStorage, writeStorage } from '@/utils/storage'
 import { useBoardViewPrefs } from '@/composables/useBoardViewPrefs'
+import { useBoardEvents } from '@/composables/useBoardEvents'
 import ViewSwitch from '@/components/ViewSwitch.vue'
 
 // PrimeVue's DataTable is large; load it only when someone opens the table view.
@@ -226,11 +227,56 @@ function onBoardDeleted(board) {
   if (route.params.slug === board.slug) router.replace({ name: 'board' })
 }
 
+// ---- Live updates and who else is here (see useBoardEvents) ----
+const others = ref([]) // names of the others who have this board open
+// A refresh during a drag would pull the card from under the mouse: it waits for the drop.
+let dragging = false
+let refreshWaiting = false
+
+async function liveRefresh() {
+  if (dragging) {
+    refreshWaiting = true
+    return
+  }
+  const result = await store.refreshBoard()
+  if (result === 'gone') {
+    toast.add({ severity: 'warn', summary: 'This board is no longer available to you', life: 5000 })
+    router.replace({ name: 'board' })
+  }
+  return result
+}
+
+const live = useBoardEvents({ refresh: liveRefresh, onPresence: (names) => (others.value = names) })
+watch(
+  () => (store.loaded ? store.board?.id : null),
+  (id) => {
+    others.value = []
+    if (id) live.listen(`/api/boards/${id}/events`)
+    else live.stop()
+  },
+  { immediate: true },
+)
+const othersLabel = computed(() => `${others.value.join(', ')} ${others.value.length === 1 ? 'has' : 'have'} this board open too`)
+const initials = (name) => name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+
+function dragStarted() {
+  dragging = true
+}
+
+function dragEnded() {
+  dragging = false
+  if (refreshWaiting) {
+    refreshWaiting = false
+    liveRefresh()
+  }
+}
+
 // ---- Drag & drop ----
 // The draggable lists already changed the store arrays when "end" fires, so only the
 // backend is left. If that fails, reloading the board puts everything back.
 
 async function onTaskDragEnd(event) {
+  dragEnded()
   if (event.from === event.to && event.oldIndex === event.newIndex) return
   try {
     await store.persistTaskMove(Number(event.item.dataset.taskId))
@@ -241,6 +287,7 @@ async function onTaskDragEnd(event) {
 }
 
 async function onColumnDragEnd(event) {
+  dragEnded()
   if (event.oldIndex === event.newIndex) return
   try {
     await store.persistColumnMove(Number(event.item.dataset.columnId))
@@ -492,6 +539,25 @@ function askDeleteColumn(column) {
               </template>
             </p>
           </div>
+          <!-- Who else has the board open right now. -->
+          <div
+            v-if="others.length && !settingsOpen"
+            class="ml-2 flex shrink-0 -space-x-1.5 self-center"
+            data-testid="presence"
+            role="img"
+            :aria-label="othersLabel"
+            :title="othersLabel"
+          >
+            <span
+              v-for="name in others.slice(0, 4)"
+              :key="name"
+              class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-[0.6875rem] font-semibold text-emerald-800 ring-2 ring-white dark:bg-emerald-900 dark:text-emerald-200 dark:ring-slate-900"
+            >{{ initials(name) }}</span>
+            <span
+              v-if="others.length > 4"
+              class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[0.6875rem] font-semibold text-slate-600 ring-2 ring-white dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-900"
+            >+{{ others.length - 4 }}</span>
+          </div>
         </div>
         <div v-if="store.board && settingsOpen" class="flex shrink-0 gap-2">
           <Button
@@ -630,6 +696,7 @@ function askDeleteColumn(column) {
               :animation="150"
               ghostClass="opacity-40"
               class="flex items-start gap-4"
+              @start="dragStarted"
               @end="onColumnDragEnd"
             >
               <div
@@ -688,6 +755,7 @@ function askDeleteColumn(column) {
                   :class="{
                     'md:m-1 md:min-h-32 md:rounded-md md:border-2 md:border-dashed md:border-slate-300 md:p-1 md:dark:border-slate-700': isEmpty(column.id),
                   }"
+                  @start="dragStarted"
                   @end="onTaskDragEnd"
                 >
                   <TaskCard

@@ -9,6 +9,7 @@ import com.example.demo.board.LabelService;
 import com.example.demo.config.WebSecurityConfig;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskController;
+import com.example.demo.task.TaskDto;
 import com.example.demo.task.TaskHistoryService;
 import com.example.demo.task.TaskRepository;
 import com.example.demo.user.User;
@@ -433,6 +434,38 @@ class TaskControllerTests {
                         .content("{\"title\":\"T\",\"labelIds\":[99]}"))
                 .andExpect(status().isBadRequest());
         verify(taskRepository, never()).save(any());
+    }
+
+    // Saving from an older revision means someone else saved in between: refused, not overwritten.
+    @Test
+    void updateFromAnOlderRevisionIsAConflict() throws Exception {
+        Task task = aliceTask();
+        String current = TaskDto.revisionOf(task);
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Mine\",\"revision\":\"0000000000000000\"}"))
+                .andExpect(status().isConflict());
+        verify(taskRepository, never()).save(any());
+
+        mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Mine\",\"revision\":\"" + current + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(TaskDto.revisionOf(task)));
+        assertThat(TaskDto.revisionOf(task)).isNotEqualTo(current);
+    }
+
+    // Moving and positions are not part of the revision: moving isn't a conflict for an edit.
+    @Test
+    void revisionOnlyCoversTheEditedFields() {
+        Task task = aliceTask();
+        String before = TaskDto.revisionOf(task);
+        task.setPosition(5);
+        task.setBoardColumn(aliceColumn());
+        assertThat(TaskDto.revisionOf(task)).isEqualTo(before);
+        task.setDescription("Changed");
+        assertThat(TaskDto.revisionOf(task)).isNotEqualTo(before);
     }
 
     @Test

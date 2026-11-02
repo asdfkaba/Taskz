@@ -37,6 +37,11 @@ const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, 
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
 const streams = new Set()
 const endStreams = () => { for (const res of streams) res.end(); streams.clear() }
+// The same for the owner's view of board 1 (/boards/1/events), which also gets "presence".
+const boardStreams = new Set()
+const sse = (res, name, data) => res.write(`event: ${name}\ndata: ${data}\n\n`)
+let revisions = 0
+const newRevision = () => `rev${++revisions}`
 const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
 let notes // [{ id, taskId, text, user, created, edited }]
@@ -45,6 +50,8 @@ let log
 
 function reset() {
   endStreams()
+  for (const res of boardStreams) res.end()
+  boardStreams.clear()
   members = []
   invites = []
   teamJoined = false
@@ -66,6 +73,7 @@ function reset() {
     { id: 2, title: 'Task B', description: null, due_date: [2026, 1, 1, 12, 0], created: null, edited: null, columnId: 10, position: 1 },
     { id: 3, title: 'Task C', description: null, due_date: null, created: '2026-08-01T10:00:00Z', edited: null, columnId: 11, position: 0 },
   ]
+  tasks.forEach((t) => (t.revision = newRevision()))
   notes = []
   attachments = []
   log = []
@@ -191,6 +199,7 @@ function api(method, url, body) {
   if (method === 'POST' && p === '/tasks') {
     if (!body.columnId) return [400, {}]
     const t = { id: nextId++, title: body.title, description: body.description, due_date: body.due_date, created: now(), edited: null, columnId: body.columnId, position: inColumn(body.columnId).length, labelIds: body.labelIds ?? [] }
+    t.revision = newRevision()
     tasks.push(t)
     record(t, 'created', { title: t.title, column: colName(t.columnId) })
     return [201, t]
@@ -286,10 +295,14 @@ function api(method, url, body) {
     if (parents.length) changes.parents = parents
     if (subItems) changes.subItems = subItems
     record(t, clicked.checked ? 'checked' : 'unchecked', changes)
+    t.revision = newRevision()
     return [200, t]
   }
   if ((m = p.match(/^\/tasks\/(\d+)$/)) && method === 'PUT') {
     const t = tasks.find((x) => x.id === +m[1])
+    // Like the backend: saving from an older revision is refused.
+    if (body.revision && body.revision !== t.revision) return [409, { message: 'Someone else changed this task in the meantime' }]
+    t.revision = newRevision()
     if (body.labelIds && body.labelIds.some((id) => !labels.some((l) => l.id === id))) return [400, {}]
     const before = { title: t.title, description: t.description || null, due_date: t.due_date ?? null, labels: labelNames(t.labelIds) }
     Object.assign(t, { title: body.title, description: body.description, due_date: body.due_date })
@@ -371,6 +384,20 @@ http.createServer((req, res) => {
     const chunks = []
     req.on('data', (c) => chunks.push(c))
     req.on('end', async () => {
+      if (req.method === 'GET' && req.url === '/api/boards/1/events') {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
+        res.write(':open\n\n')
+        boardStreams.add(res)
+        res.on('close', () => boardStreams.delete(res))
+        return
+      }
+      // Test hooks: who else has board 1 open, and a change by someone else (no own request).
+      if (req.url === '/api/__presence' && req.method === 'POST') {
+        for (const res of boardStreams) sse(res, 'presence', Buffer.concat(chunks).toString())
+        res.writeHead(204)
+        res.end()
+        return
+      }
       const stream = req.method === 'GET' && req.url.match(/^\/api\/share\/([^/]+)\/events$/)
       if (stream) {
         if (!shareOk(decodeURIComponent(stream[1]))) {
@@ -422,6 +449,7 @@ http.createServer((req, res) => {
         // A new or revoked link cuts off the viewers of the old one; anything else is a change.
         if (req.url === '/api/boards/1/share') endStreams()
         else for (const res of streams) res.write('event: changed\ndata: changed\n\n')
+        for (const res of boardStreams) sse(res, 'changed', 'changed')
       }
       res.writeHead(status, { 'Content-Type': 'application/json' })
       res.end(out === null ? '' : JSON.stringify(out))
