@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -25,6 +27,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 // Runs against H2 so the ordering logic is checked with real queries.
 @DataJpaTest
 @Import({BoardService.class, TaskHistoryService.class})
+@RecordApplicationEvents
 class BoardServiceTests {
 
     static final String ALICE = "alice@example.com";
@@ -42,6 +45,8 @@ class BoardServiceTests {
     BoardRepository boardRepository;
     @Autowired
     EntityManager em;
+    @Autowired
+    ApplicationEvents events;
 
     Board board;
     BoardColumn todo;
@@ -90,6 +95,23 @@ class BoardServiceTests {
                         tuple("To do", 0),
                         tuple("In progress", 1),
                         tuple("Done", 2));
+    }
+
+    // Open views of the board reload on these (BoardEvents); a change without one leaves them stale.
+    @Test
+    void changesTellTheBoardsViewers() {
+        Task task = addTask("A", todo);
+        boardService.renameBoard(board.getId(), ALICE, "Renamed");
+        BoardColumn later = boardService.addColumn(board.getId(), ALICE, "Later", null);
+        boardService.updateColumn(later.getId(), ALICE, new BoardDtos.ColumnPatch("Soon", false, null, null));
+        boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
+        boardService.deleteColumn(later.getId(), ALICE, null, false);
+
+        assertThat(events.stream(BoardChanged.class)).hasSize(5).allMatch(e -> e.boardId() == board.getId());
+        assertThat(events.stream(BoardShareEnded.class)).isEmpty();
+
+        boardService.deleteBoard(board.getId(), ALICE);
+        assertThat(events.stream(BoardShareEnded.class)).containsExactly(new BoardShareEnded(board.getId()));
     }
 
     @Test

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -29,11 +29,15 @@ const tasksByColumn = computed(() => {
   return byColumn
 })
 
+const fetchBoard = (token) =>
+  fetch(`/api/share/${encodeURIComponent(token)}`, { headers: { Accept: 'application/json' } })
+
 async function load(token) {
+  stopListening()
   status.value = 'loading'
   board.value = null
   try {
-    const response = await fetch(`/api/share/${encodeURIComponent(token)}`, { headers: { Accept: 'application/json' } })
+    const response = await fetchBoard(token)
     if (response.status === 404) {
       status.value = 'not-found'
       return
@@ -45,10 +49,70 @@ async function load(token) {
     if (board.value.path && board.value.path !== token) {
       router.replace({ name: 'shared-board', params: { token: board.value.path } })
     }
+    listen(board.value.path ?? token)
   } catch {
     status.value = 'error'
   }
 }
+
+// Live updates: the server only says "changed", and the board is fetched again in the
+// background. The page stays as it is; Vue only patches what differs.
+let events = null
+let refreshTimer = null
+let retryTimer = null
+let refreshes = 0
+
+async function refresh() {
+  const token = board.value?.path
+  if (!token) return
+  const current = ++refreshes
+  try {
+    const response = await fetchBoard(token)
+    if (current !== refreshes) return // a newer refresh is under way
+    if (response.status === 404) {
+      stopListening()
+      status.value = 'not-found'
+      board.value = null
+      return 'gone'
+    }
+    if (response.ok) board.value = await response.json()
+  } catch {
+    // Keep showing the board; the next change or reconnect tries again.
+  }
+}
+
+function listen(path) {
+  stopListening()
+  events = new EventSource(`/api/share/${encodeURIComponent(path)}/events`)
+  let opened = false
+  events.onopen = () => {
+    if (opened) refresh() // reconnected: changes in between were missed
+    opened = true
+  }
+  events.addEventListener('changed', () => {
+    // Quick changes in a row (a drag renumbers a column) load the board once.
+    clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(refresh, 300)
+  })
+  // The browser reconnects by itself, unless the reconnect was refused: the link stopped working
+  // (refresh shows that) or the server was away, e.g. during a deploy (try again). Delayed, as
+  // leaving the page also ends the stream, and its timers don't run anymore.
+  events.onerror = () => {
+    if (events?.readyState !== EventSource.CLOSED) return
+    retryTimer = setTimeout(async () => {
+      if ((await refresh()) !== 'gone') listen(path)
+    }, 2000)
+  }
+}
+
+function stopListening() {
+  events?.close()
+  events = null
+  clearTimeout(refreshTimer)
+  clearTimeout(retryTimer)
+}
+
+onBeforeUnmount(stopListening)
 
 const labelsOf = (task) => (board.value?.labels ?? []).filter((l) => task.labelIds?.includes(l.id))
 
@@ -76,9 +140,15 @@ const tableTasks = computed(() =>
   (board.value?.columns ?? []).flatMap((c) => tasksByColumn.value[c.id] ?? []).filter((t) => matchOf(t).matches),
 )
 
-// The task shown in the dialog; read-only, so there is no edit mode.
-const openTask = ref(null)
+// The task shown in the dialog; read-only, so there is no edit mode. Looked up by id, so the
+// dialog follows live updates.
+const openTaskId = ref(null)
+const openTask = computed(() => board.value?.tasks.find((t) => t.id === openTaskId.value) ?? null)
 const detailsVisible = ref(false)
+// Deleted while open, or the link stopped working.
+watch(openTask, (task) => {
+  if (!task) detailsVisible.value = false
+})
 const openColumn = computed(() => board.value?.columns.find((c) => c.id === openTask.value?.columnId) ?? null)
 
 // Browser title, e.g. "Bewerbungen (read only) · Taskz", with the open task in front.
@@ -91,7 +161,7 @@ usePageTitle(() => {
 })
 
 function showTask(task) {
-  openTask.value = task
+  openTaskId.value = task.id
   detailsVisible.value = true
 }
 

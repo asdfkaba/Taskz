@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -25,7 +27,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 // Runs against H2 so the join table and foreign keys are real.
 @DataJpaTest
 @Import({BoardService.class, LabelService.class, TaskHistoryService.class})
+@RecordApplicationEvents
 class LabelServiceTests {
+
+    @Autowired
+    ApplicationEvents events;
 
     static final String ALICE = "alice@example.com";
     static final String BOB = "bob@example.com";
@@ -81,6 +87,7 @@ class LabelServiceTests {
         assertThat(label.getColor()).isEqualTo("#ef4444");
         assertThat(boardService.getBoard(board.getId(), ALICE).labels())
                 .extracting(BoardDtos.LabelDto::name).containsExactly("Urgent");
+        assertThat(events.stream(BoardChanged.class)).containsExactly(new BoardChanged(board.getId()));
     }
 
     @Test

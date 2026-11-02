@@ -28,12 +28,17 @@ let share // { key, created }
 let shareRequests
 const newKey = () => Array.from({ length: 22 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[Math.floor(Math.random() * 64)]).join('')
 let boardDeleted
+// Open live views of shared boards (server-sent events), like BoardEvents in the backend.
+const streams = new Set()
+const endStreams = () => { for (const res of streams) res.end(); streams.clear() }
+const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
 let notes // [{ id, taskId, text, user, created, edited }]
 let attachments // [{ id, taskId, name, contentType, size, image, user, created, data }]
 let log
 
 function reset() {
+  endStreams()
   nextId = 100
   columns = [
     { id: 10, name: 'To do', color: '#64748b', position: 0 },
@@ -202,8 +207,7 @@ function api(method, url, body) {
   if (method === 'GET' && (m = p.match(/^\/share\/(.+)$/)) && m[1] !== 'test-token') {
     const ref = decodeURIComponent(m[1])
     shareRequests.push(ref)
-    const ok = share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key)))
-    if (!ok) return [404, {}]
+    if (!shareOk(ref)) return [404, {}]
     const cols = sortedColumns()
     // Like the backend: no attachments on shared boards, not even their number.
     return [200, { name: board.name, path: `${board.slug}-${share.key}`, columns: cols, labels, tasks: cols.flatMap((c) => inColumn(c.id)).map((t) => ({ ...t, attachments: null })) }]
@@ -259,6 +263,10 @@ function api(method, url, body) {
     if (Object.keys(changes).length) record(t, 'updated', changes)
     t.edited = now()
     return [200, t]
+  }
+  if ((m = p.match(/^\/tasks\/(\d+)\/delete$/)) && method === 'DELETE') {
+    tasks = tasks.filter((t) => t.id !== +m[1])
+    return [200, null]
   }
   return [404, {}]
 }
@@ -322,6 +330,19 @@ http.createServer((req, res) => {
     const chunks = []
     req.on('data', (c) => chunks.push(c))
     req.on('end', async () => {
+      const stream = req.method === 'GET' && req.url.match(/^\/api\/share\/([^/]+)\/events$/)
+      if (stream) {
+        if (!shareOk(decodeURIComponent(stream[1]))) {
+          res.writeHead(404)
+          res.end()
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
+        res.write(':open\n\n')
+        streams.add(res)
+        res.on('close', () => streams.delete(res))
+        return
+      }
       const handled = await attachmentApi(req.method, req.url, Buffer.concat(chunks), req.headers)
       if (handled) {
         const [status, out] = handled
@@ -356,6 +377,11 @@ http.createServer((req, res) => {
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })
       const [status, out] = api(req.method, req.url, body)
+      if (req.method !== 'GET' && status < 400) {
+        // A new or revoked link cuts off the viewers of the old one; anything else is a change.
+        if (req.url === '/api/boards/1/share') endStreams()
+        else for (const res of streams) res.write('event: changed\ndata: changed\n\n')
+      }
       res.writeHead(status, { 'Content-Type': 'application/json' })
       res.end(out === null ? '' : JSON.stringify(out))
     })

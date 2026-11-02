@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -21,7 +23,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 @Import({BoardService.class, BoardShareService.class, TaskHistoryService.class})
+@RecordApplicationEvents
 class BoardShareServiceTests {
+
+    @Autowired
+    ApplicationEvents events;
 
     static final String ALICE = "alice@example.com";
     static final String BOB = "bob@example.com";
@@ -89,6 +95,8 @@ class BoardShareServiceTests {
         assertThatThrownBy(() -> shareService.sharedBoard(old)).satisfies(BoardShareServiceTests::assertNotFound);
         assertThat(shareService.sharedBoard(renewed).name()).isEqualTo("My board");
         assertThat(shareRepository.count()).isEqualTo(1);
+        // Viewers of the old link are cut off.
+        assertThat(events.stream(BoardShareEnded.class)).hasSize(2);
     }
 
     @Test
@@ -100,6 +108,7 @@ class BoardShareServiceTests {
 
         assertThatThrownBy(() -> shareService.sharedBoard(token)).satisfies(BoardShareServiceTests::assertNotFound);
         assertThat(shareService.getShare(board.getId(), ALICE)).isEmpty();
+        assertThat(events.stream(BoardShareEnded.class)).contains(new BoardShareEnded(board.getId()));
     }
 
     @Test

@@ -96,6 +96,7 @@ class TaskControllerTests {
 
         verify(historyService).recordCheckbox(task, "CV", true, List.of(), 0, ALICE);
         verify(historyService, never()).recordUpdate(any(), any(), any());
+        verify(boardService).changed(task.getBoardColumn().getBoard());
     }
 
     // Older clients send no line; then exactly one checkbox may change.
@@ -308,6 +309,7 @@ class TaskControllerTests {
                 .andExpect(status().isOk());
 
         verify(taskRepository).delete(task);
+        verify(boardService).changed(task.getBoardColumn().getBoard());
     }
 
     @Test
@@ -337,6 +339,7 @@ class TaskControllerTests {
         assertThat(saved.getValue().getId()).isNull();
         assertThat(saved.getValue().getTitle()).isEqualTo("New task");
         assertThat(saved.getValue().getUser().getEmail()).isEqualTo(ALICE);
+        verify(boardService).changed(column.getBoard());
     }
 
     @Test
@@ -445,6 +448,7 @@ class TaskControllerTests {
         ArgumentCaptor<TaskHistoryService.Snapshot> before = ArgumentCaptor.forClass(TaskHistoryService.Snapshot.class);
         verify(historyService).recordUpdate(before.capture(), any(Task.class), eq(ALICE));
         assertThat(before.getValue().title()).isEqualTo("Old title");
+        verify(boardService).changed(any());
     }
 
     @Test

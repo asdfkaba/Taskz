@@ -37,6 +37,7 @@ public class LabelService {
     @Transactional
     public BoardLabel addLabel(int boardId, String email, String name, String color) {
         Board board = boardService.findOwnBoard(boardId, email);
+        boardService.changed(board);
         return labelRepository.save(new BoardLabel(validName(name), validColor(color), board));
     }
 
@@ -50,6 +51,7 @@ public class LabelService {
         if (color != null) {
             label.setColor(validColor(color));
         }
+        boardService.changed(label.getBoard());
         return label;
     }
 
@@ -63,6 +65,7 @@ public class LabelService {
             historyService.recordUpdate(before, task, email);
         }
         labelRepository.delete(label);
+        boardService.changed(label.getBoard());
     }
 
     /**
