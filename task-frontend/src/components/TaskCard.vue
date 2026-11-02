@@ -144,10 +144,11 @@ function onClick(event) {
           <span
             v-if="changed"
             data-testid="card-changed"
-            class="text-slate-400 transition-opacity dark:text-slate-500"
+            class="flex items-center gap-1 text-slate-400 transition-opacity dark:text-slate-500"
             :class="{ 'group-hover:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-0': showArrows }"
             :title="`Last changed ${formatShort(changed)}`"
           >
+            <i class="pi pi-pencil text-[0.65rem]" aria-hidden="true" />
             <span class="sr-only">Last changed </span>{{ formatShort(changed) }}
           </span>
           <!-- With a mouse the arrows show on hover or keyboard focus, on top of the date; on touch
