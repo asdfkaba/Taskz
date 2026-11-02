@@ -545,33 +545,41 @@ function askDeleteColumn(column) {
               </template>
             </p>
           </div>
-          <!-- Who has the board open right now: you first, then the others. -->
+          <!-- Who has the board open right now: you first, then the others. On phones only their
+               number, as the icons would push the title and the toolbar aside. -->
           <div
             v-if="others.length && !settingsOpen"
-            class="ml-2 flex shrink-0 items-center gap-1.5 self-center"
+            class="ml-2 flex shrink-0 items-center self-center"
             data-testid="presence"
             role="img"
             :aria-label="othersLabel"
           >
-            <UserIcon
-              :seed="auth.user?.id ?? 'me'"
-              :name="`You (${auth.user?.name || auth.user?.email || 'you'})`"
-              class="ring-2 ring-emerald-500 dark:ring-emerald-400"
-              data-testid="presence-me"
-            />
-            <UserIcon
-              v-for="person in shownOthers"
-              :key="person.id"
-              :seed="person.id"
-              :name="person.name"
-              data-testid="presence-other"
-            />
             <span
-              v-if="hiddenOthers.length"
-              class="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-200 px-1 text-[0.6875rem] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-              :title="hiddenOthers.map((o) => o.name).join(', ')"
-              data-testid="presence-more"
-            >+{{ hiddenOthers.length }}</span>
+              class="flex h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-xs font-semibold text-emerald-700 md:hidden dark:bg-emerald-950 dark:text-emerald-300"
+              :title="others.map((o) => o.name).join(', ')"
+              data-testid="presence-count"
+            ><i class="pi pi-users text-[0.7rem]" aria-hidden="true" />{{ others.length }}</span>
+            <span class="hidden items-center gap-1.5 md:flex">
+              <UserIcon
+                :seed="auth.user?.id ?? 'me'"
+                :name="`You (${auth.user?.name || auth.user?.email || 'you'})`"
+                class="ring-2 ring-emerald-500 dark:ring-emerald-400"
+                data-testid="presence-me"
+              />
+              <UserIcon
+                v-for="person in shownOthers"
+                :key="person.id"
+                :seed="person.id"
+                :name="person.name"
+                data-testid="presence-other"
+              />
+              <span
+                v-if="hiddenOthers.length"
+                class="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-200 px-1 text-[0.6875rem] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                :title="hiddenOthers.map((o) => o.name).join(', ')"
+                data-testid="presence-more"
+              >+{{ hiddenOthers.length }}</span>
+            </span>
           </div>
         </div>
         <div v-if="store.board && settingsOpen" class="flex shrink-0 gap-2">

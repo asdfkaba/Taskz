@@ -20,7 +20,7 @@ test('Board updates live', async ({ browser }) => {
   await page.evaluate(() => { window.stillHere = true })
 
   await test.step('who else has the board open shows next to its name, you first', async () => {
-    const icons = () => page.getByTestId('presence').locator('[data-testid^="presence-"]')
+    const icons = () => page.getByTestId('presence').locator('[data-testid="presence-me"], [data-testid="presence-other"]')
     const fills = async () => icons().evaluateAll((spans) => spans.map((s) => s.querySelector('rect')?.getAttribute('fill')))
     const shapes = async () => icons().evaluateAll((spans) => spans.map((s) => s.querySelector('svg').innerHTML))
     await api('/__presence', 'POST', [{ id: 2, name: 'Bob Builder' }, { id: 3, name: 'Carla' }])
@@ -54,6 +54,17 @@ test('Board updates live', async ({ browser }) => {
     ensure((await page.getByTestId('presence-more').innerText()).trim() === '+3', await page.getByTestId('presence-more').innerText())
     ensure((await page.getByTestId('presence-more').getAttribute('title')) === 'P4, P5, P6', 'hidden names')
     await page.screenshot({ path: out('lb-1b-many.png') })
+
+    // On a phone only the number, so the title and the toolbar keep their room.
+    await page.setViewportSize({ width: 390, height: 800 })
+    const count = page.getByTestId('presence-count')
+    await count.waitFor()
+    ensure((await count.innerText()).trim() === '6', await count.innerText())
+    ensure(!(await page.getByTestId('presence-me').isVisible()), 'icons on a phone')
+    const [presenceBox, searchBox] = [await page.getByTestId('presence').boundingBox(), await page.getByRole('button', { name: 'Search', exact: true }).boundingBox()]
+    ensure(!searchBox || presenceBox.x + presenceBox.width <= searchBox.x, `presence overlaps search: ${JSON.stringify([presenceBox, searchBox])}`)
+    await page.screenshot({ path: out('lb-1c-phone.png'), clip: { x: 0, y: 0, width: 390, height: 160 } })
+    await page.setViewportSize({ width: 1400, height: 900 })
     await api('/__presence', 'POST', [])
     await presence.waitFor({ state: 'detached' })
   })
