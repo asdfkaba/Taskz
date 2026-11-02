@@ -47,7 +47,7 @@ class AuthCookieTests {
     @Test
     void loginCookiesAreStrict() throws Exception {
         RefreshToken refresh = new RefreshToken();
-        refresh.setToken("refresh-value");
+        refresh.setPlainToken("refresh-value");
         when(authService.login(any())).thenReturn(new AuthResponse("access-value", refresh));
 
         List<String> cookies = mockMvc.perform(post("/auth/login")

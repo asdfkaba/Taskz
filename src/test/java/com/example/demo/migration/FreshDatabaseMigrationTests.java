@@ -1,5 +1,6 @@
 package com.example.demo.migration;
 
+import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardService;
 import com.example.demo.task.TaskHistoryService;
@@ -86,5 +87,12 @@ class FreshDatabaseMigrationTests {
         // Last: the failed insert aborts the test's transaction.
         assertThatThrownBy(() -> jdbc.update("insert into \"user\" (name, email) values ('B', 'same@example.com')"))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    // V8 hashes stored refresh tokens in SQL; that must match TokenService.hash, or logins break.
+    @Test
+    void refreshTokensAreHashedLikeTheApp() {
+        String sql = jdbc.queryForObject("select encode(sha256(convert_to(?, 'UTF8')), 'hex')", String.class, "a-token");
+        assertThat(sql).isEqualTo(TokenService.hash("a-token"));
     }
 }
