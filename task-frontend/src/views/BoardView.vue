@@ -650,7 +650,7 @@ function askDeleteColumn(column) {
                   </button>
                   <h2
                     class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-300"
-                    :class="{ 'md:max-h-48 md:flex-none md:py-1 md:[writing-mode:vertical-rl]': isEmpty(column.id) }"
+                    :class="{ 'md:w-full md:flex-none md:text-center md:text-[0.6875rem]': isEmpty(column.id) }"
                     :title="column.name"
                   >
                     {{ column.name }}
@@ -676,6 +676,7 @@ function askDeleteColumn(column) {
                 >
                   No matches
                 </p>
+                <!-- In an empty column's strip the drop target is small; outlined so it can be found. -->
                 <VueDraggable
                   v-model="store.tasksByColumn[column.id]"
                   group="tasks"
@@ -684,7 +685,9 @@ function askDeleteColumn(column) {
                   :delayOnTouchOnly="true"
                   ghostClass="opacity-40"
                   class="flex min-h-16 flex-col gap-2 p-2"
-                  :class="{ 'md:p-1': isEmpty(column.id) }"
+                  :class="{
+                    'md:m-1 md:min-h-32 md:rounded-md md:border-2 md:border-dashed md:border-slate-300 md:p-1 md:dark:border-slate-700': isEmpty(column.id),
+                  }"
                   @end="onTaskDragEnd"
                 >
                   <TaskCard
