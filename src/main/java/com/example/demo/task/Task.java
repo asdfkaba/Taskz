@@ -7,6 +7,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.Formula;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -60,6 +61,11 @@ public class Task {
             inverseJoinColumns = @JoinColumn(name = "label_id"))
     @BatchSize(size = 100)
     private Set<BoardLabel> labels = new HashSet<>();
+
+    // Counted by the database whenever the task is loaded; only for showing it.
+    @Formula("(select count(*) from task_attachment a where a.task_id = id)")
+    @Setter(AccessLevel.NONE)
+    private int attachmentCount;
 
     @PrePersist
     protected void onCreate() {

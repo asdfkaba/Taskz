@@ -17,6 +17,7 @@ import LabelPill from '@/components/LabelPill.vue'
 import TaskDetails from '@/components/TaskDetails.vue'
 import TaskHistory from '@/components/TaskHistory.vue'
 import TaskNotes from '@/components/TaskNotes.vue'
+import TaskAttachments from '@/components/TaskAttachments.vue'
 
 // Shows a task (view) and edits or creates it (edit) in one dialog.
 
@@ -237,6 +238,7 @@ async function save() {
         @edit="startEditing"
         @toggle-checkbox="onToggleCheckbox"
       />
+      <TaskAttachments :taskId="current.id" />
       <TaskNotes :taskId="current.id" />
       <TaskHistory :task="current" />
     </div>

@@ -24,6 +24,13 @@ spring.jackson.serialization.fail-on-empty-beans=false
 server.port=5555
 
 # ==============================
+# Attachments (optional; these are the defaults)
+# ==============================
+#attachments.dir=${user.home}/tasks/attachments
+#attachments.max-file-size=10MB
+#attachments.max-total-per-user=500MB
+
+# ==============================
 # RSA Keys (lokal hinterlegen)
 # ==============================
 rsa.private-key=classpath:certs/private.pem

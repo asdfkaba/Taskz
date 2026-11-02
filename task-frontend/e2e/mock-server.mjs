@@ -30,6 +30,7 @@ const newKey = () => Array.from({ length: 22 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXY
 let boardDeleted
 let tasks
 let notes // [{ id, taskId, text, user, created, edited }]
+let attachments // [{ id, taskId, name, contentType, size, image, user, created, data }]
 let log
 
 function reset() {
@@ -52,6 +53,7 @@ function reset() {
     { id: 3, title: 'Task C', description: null, due_date: null, created: '2026-08-01T10:00:00Z', edited: null, columnId: 11, position: 0 },
   ]
   notes = []
+  attachments = []
   log = []
 }
 reset()
@@ -198,7 +200,8 @@ function api(method, url, body) {
     const ok = share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key)))
     if (!ok) return [404, {}]
     const cols = sortedColumns()
-    return [200, { name: board.name, path: `${board.slug}-${share.key}`, columns: cols, labels, tasks: cols.flatMap((c) => inColumn(c.id)) }]
+    // Like the backend: no attachments on shared boards, not even their number.
+    return [200, { name: board.name, path: `${board.slug}-${share.key}`, columns: cols, labels, tasks: cols.flatMap((c) => inColumn(c.id)).map((t) => ({ ...t, attachments: null })) }]
   }
   if (method === 'GET' && p === '/share/test-token') {
     const cols = sortedColumns()
@@ -257,11 +260,72 @@ function api(method, url, body) {
 
 const types = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' }
 
+// Attachments like the backend: allowed types by extension plus a look at the first bytes for
+// images and PDFs; refused uploads say why in { message }.
+const ATTACHMENT_TYPES = {
+  png: ['image/png', '\x89PNG'], jpg: ['image/jpeg', '\xFF\xD8\xFF'], jpeg: ['image/jpeg', '\xFF\xD8\xFF'],
+  gif: ['image/gif', 'GIF8'], webp: ['image/webp', 'RIFF'], pdf: ['application/pdf', '%PDF-'],
+  txt: ['text/plain; charset=utf-8'], md: ['text/markdown; charset=utf-8'], csv: ['text/csv; charset=utf-8'],
+}
+const attachmentOut = ({ taskId, data, ...a }) => a
+
+async function attachmentApi(method, url, raw, headers) {
+  let m
+  if ((m = url.match(/^\/api\/tasks\/(\d+)\/attachments$/))) {
+    const task = tasks.find((t) => t.id === +m[1])
+    if (!task) return [404, { message: 'Task not found' }]
+    if (method === 'GET') {
+      return [200, attachments.filter((a) => a.taskId === task.id).sort((a, b) => b.id - a.id).map(attachmentOut)]
+    }
+    if (method === 'POST') {
+      const form = await new Request('http://mock', { method, headers, body: raw }).formData()
+      const file = form.get('file')
+      const data = Buffer.from(await file.arrayBuffer())
+      if (data.length > 10 * 1024 * 1024) return [413, { message: 'Files can be at most 10 MB' }]
+      const [contentType, magic] = ATTACHMENT_TYPES[file.name.split('.').pop().toLowerCase()] ?? []
+      if (!contentType || (magic && !data.toString('latin1').startsWith(magic)) || (!magic && data.includes(0))) {
+        return [415, { message: 'Only PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV files can be attached, with an extension that fits the content' }]
+      }
+      const a = { id: nextId++, taskId: task.id, name: file.name, contentType, size: data.length, image: contentType.startsWith('image/'), user: 'Alice', created: now(), data }
+      attachments.push(a)
+      task.attachments = (task.attachments ?? 0) + 1
+      record(task, 'attached', { file: a.name })
+      return [201, attachmentOut(a)]
+    }
+  }
+  if ((m = url.match(/^\/api\/attachments\/(\d+)$/))) {
+    const a = attachments.find((x) => x.id === +m[1])
+    if (!a) return [404, { message: 'Attachment not found' }]
+    if (method === 'GET') return [200, a]
+    if (method === 'DELETE') {
+      attachments = attachments.filter((x) => x !== a)
+      const task = tasks.find((t) => t.id === a.taskId)
+      task.attachments -= 1
+      record(task, 'detached', { file: a.name })
+      return [204, null]
+    }
+  }
+  return null
+}
+
 http.createServer((req, res) => {
   if (req.url.startsWith('/api/')) {
-    let raw = ''
-    req.on('data', (c) => (raw += c))
-    req.on('end', () => {
+    const chunks = []
+    req.on('data', (c) => chunks.push(c))
+    req.on('end', async () => {
+      const handled = await attachmentApi(req.method, req.url, Buffer.concat(chunks), req.headers)
+      if (handled) {
+        const [status, out] = handled
+        if (req.method === 'GET' && status === 200 && out.data) {
+          res.writeHead(200, { 'Content-Type': out.contentType, 'Content-Disposition': `${out.image ? 'inline' : 'attachment'}; filename="${out.name}"` })
+          res.end(out.data)
+        } else {
+          res.writeHead(status, { 'Content-Type': 'application/json' })
+          res.end(out === null ? '' : JSON.stringify(out))
+        }
+        return
+      }
+      const raw = Buffer.concat(chunks).toString()
       const body = raw ? JSON.parse(raw) : null
       // Test hook: add an event as older backends wrote it (e.g. a priority change).
       if (req.url === '/api/__event' && req.method === 'POST') {
@@ -278,7 +342,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, share, shareRequests, notes, columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })

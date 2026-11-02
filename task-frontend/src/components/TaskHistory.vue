@@ -29,9 +29,9 @@ function toggle() {
   if (open.value) load()
 }
 
-// Reload after the task was saved or moved while the history is open.
+// Reload after the task was saved, moved or got attachments while the history is open.
 watch(
-  () => [props.task.edited, props.task.columnId, props.task.labelIds?.join()],
+  () => [props.task.edited, props.task.columnId, props.task.labelIds?.join(), props.task.attachments],
   () => {
     if (open.value) load()
   },
@@ -59,6 +59,8 @@ function lines(event) {
   if (event.type === 'moved') return [`Moved from ${c.column[0]} to ${c.column[1]}`]
   if (event.type === 'deleted') return ['Deleted']
   if (event.type === 'checked' || event.type === 'unchecked') return [checkboxLine(event.type === 'checked', c)]
+  if (event.type === 'attached') return [`Attached ${quoted(c.file)}`]
+  if (event.type === 'detached') return [`Removed attachment ${quoted(c.file)}`]
   const out = []
   if (c.title) out.push(`Renamed from ${quoted(c.title[0])} to ${quoted(c.title[1])}`)
   if (c.description) {
@@ -101,6 +103,8 @@ const ICONS = {
   deleted: 'pi-trash',
   checked: 'pi-check-square',
   unchecked: 'pi-stop',
+  attached: 'pi-paperclip',
+  detached: 'pi-paperclip',
 }
 </script>
 

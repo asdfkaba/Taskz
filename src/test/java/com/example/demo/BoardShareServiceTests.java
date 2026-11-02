@@ -75,6 +75,8 @@ class BoardShareServiceTests {
         assertThat(shared.columns()).extracting(BoardDtos.ColumnDto::name)
                 .containsExactly("To do", "In progress", "Done");
         assertThat(shared.tasks()).extracting(t -> t.title()).containsExactly("Shared task");
+        // Shared boards don't include attachments, not even how many there are.
+        assertThat(shared.tasks()).extracting(t -> t.attachments()).containsOnlyNulls();
         assertThat(shareService.getShare(board.getId(), ALICE)).isPresent();
     }
 
