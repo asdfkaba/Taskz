@@ -99,6 +99,12 @@ public class TaskHistoryService {
         save(task, checked ? Type.CHECKED : Type.UNCHECKED, changes, email);
     }
 
+    /** A file was attached to the task (added) or removed from it; recorded by its name. */
+    @Transactional
+    public void recordAttachment(Task task, String fileName, boolean added, String email) {
+        save(task, added ? Type.ATTACHED : Type.DETACHED, Map.of("file", fileName), email);
+    }
+
     @Transactional
     public void recordDeleted(Task task, String email) {
         save(task, Type.DELETED, Map.of("title", task.getTitle()), email);

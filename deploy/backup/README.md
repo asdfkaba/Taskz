@@ -1,8 +1,13 @@
 # Database backups
 
-A daily `pg_dump` of the `spring` database, run by a systemd user timer on the server, next to the
-`tasks` service. Dumps go to `~/backups/postgres/spring-<UTC time>.dump`, and dumps older than
-14 days are deleted. Old dumps are only deleted after a new dump worked and could be read back.
+A daily `pg_dump` of the `spring` database and a gzip-compressed archive of the attachment files,
+run by a systemd user timer on the server, next to the `tasks` service. They go to
+`~/backups/postgres/spring-<UTC time>.dump` and `~/backups/postgres/attachments-<UTC time>.tar.gz`;
+backups older than 14 days are deleted. Old backups are only deleted after a new one worked and
+could be read back.
+
+Each archive holds all attachments, not only the new ones. With many large files, 14 days of
+archives take up to 14 times their size; lower `KEEP_DAYS` if the disk gets tight.
 
 ## Install
 
@@ -34,7 +39,10 @@ needs it as well, so it is probably on already: `loginctl show-user "$USER" -p L
 (otherwise `sudo loginctl enable-linger "$USER"`).
 
 Settings, if needed, as further `Environment=` lines in `pg-backup.service`: `DB_NAME`
-(default `spring`), `DB_HOST`, `DB_PORT`, `BACKUP_DIR`, `KEEP_DAYS` (default 14).
+(default `spring`), `DB_HOST`, `DB_PORT`, `BACKUP_DIR`, `KEEP_DAYS` (default 14),
+`ATTACHMENTS_DIR` (default `~/tasks/attachments`, the app's `attachments.dir`).
+
+Updating from the database-only version: copy `pg-backup.sh` to `~/tasks/` again; the units stay.
 
 Use a `pg_dump` with the same major version as the server (`pg_dump --version`,
 `psql -c 'select version()'`). A newer `pg_dump` works, but its dumps may not restore cleanly into
@@ -51,13 +59,16 @@ rsync -a --ignore-existing USER@SERVER:backups/postgres/ ~/backups/taskz/
 
 ## Restore
 
-Stop the app, restore into an empty database, start the app again:
+Stop the app, restore the database into an empty one and the attachments of the same time, start
+the app again:
 
 ```bash
 systemctl --user stop tasks
 dropdb -h localhost -U DB_USER spring      # or rename it first: ALTER DATABASE spring RENAME TO spring_old
 createdb -h localhost -U DB_USER spring
 pg_restore -h localhost -U DB_USER -d spring --no-owner ~/backups/postgres/spring-<time>.dump
+mv ~/tasks/attachments ~/tasks/attachments-old    # delete it once all is well
+tar -xzf ~/backups/postgres/attachments-<time>.tar.gz -C ~/tasks
 systemctl --user start tasks
 ```
 

@@ -36,7 +36,7 @@ class JsonDatesTests {
     @Test
     void dueDatesAreIsoStringsWithoutZone() throws Exception {
         TaskDto task = new TaskDto(1, "Title", null, LocalDateTime.of(2026, 11, 2, 9, 30),
-                Instant.parse("2026-10-01T09:00:00Z"), null, 10, 0, List.of());
+                Instant.parse("2026-10-01T09:00:00Z"), null, 10, 0, List.of(), 0);
         String json = mapper.writeValueAsString(task);
         assertThat(json).contains("\"due_date\":\"2026-11-02T09:30:00\"");
         assertThat(json).contains("\"created\":\"2026-10-01T09:00:00Z\"");

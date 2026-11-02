@@ -57,17 +57,21 @@ class FreshDatabaseMigrationTests {
         assertThat(boardService.getBoard(board.getId(), "alice@example.com").columns()).hasSize(3);
     }
 
-    // V3 deletes notes in the database when their task is deleted; checked on PostgreSQL itself.
+    // V3 and V6 delete notes and attachments in the database when their task is deleted; checked on
+    // PostgreSQL itself.
     @Test
-    void deletingATaskDeletesItsNotesInTheDatabase() {
+    void deletingATaskDeletesItsNotesAndAttachmentsInTheDatabase() {
         Board board = boardService.createDefaultBoard(userRepository.save(new User("Bob", "bob@example.com", null)));
         Integer column = jdbc.queryForObject("select min(id) from board_column where board_id = ?", Integer.class, board.getId());
         Integer task = jdbc.queryForObject(
                 "insert into task (title, position, board_column_id) values ('T', 0, ?) returning id", Integer.class, column);
         jdbc.update("insert into task_note (task_id, text, created) values (?, 'note', now())", task);
+        jdbc.update("insert into task_attachment (task_id, file_name, content_type, size, storage_key, created) "
+                + "values (?, 'cv.pdf', 'application/pdf', 3, gen_random_uuid()::text, now())", task);
 
         jdbc.update("delete from task where id = ?", task);
 
         assertThat(jdbc.queryForObject("select count(*) from task_note", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from task_attachment", Integer.class)).isZero();
     }
 }

@@ -35,7 +35,7 @@ const showArrows = computed(() => !props.readonly && (props.leftColumn || props.
 // The menu button sets the header height of editable cards; read-only ones need their own spacing.
 // Compact cards on mouse devices drop the row that would only hold the (hidden) arrows; dragging
 // and the menu still move the task.
-const onlyArrows = computed(() => !due.value && !checklist.value && !props.labels.length)
+const onlyArrows = computed(() => !due.value && !checklist.value && !props.task.attachments && !props.labels.length)
 const descriptionHtml = computed(() => (props.compact ? '' : renderMarkdown(props.task.description)))
 const titlePieces = computed(() => highlight(props.task.title, props.terms))
 // Progress of the description's checkboxes, e.g. { done: 2, total: 5 }; null without checkboxes.
@@ -102,7 +102,7 @@ function onClick(event) {
       <div v-if="descriptionHtml" class="markdown line-clamp-3" v-html="descriptionHtml" />
 
       <div
-        v-if="due || checklist || changed || showArrows || (compact && labels.length)"
+        v-if="due || checklist || task.attachments || changed || showArrows || (compact && labels.length)"
         class="flex flex-wrap items-center gap-2 text-xs"
         :class="{ '-mt-1': compact && !readonly, '[@media(hover:hover)]:hidden': compact && onlyArrows }"
       >
@@ -131,6 +131,16 @@ function onClick(event) {
         >
           <i class="pi pi-check-square text-xs" aria-hidden="true" />
           {{ checklist.done }}/{{ checklist.total }}
+        </span>
+        <span
+          v-if="task.attachments"
+          data-testid="attachment-count"
+          class="flex items-center gap-1 font-medium text-slate-500 dark:text-slate-400"
+          :title="`${task.attachments} ${task.attachments === 1 ? 'attachment' : 'attachments'}`"
+        >
+          <i class="pi pi-paperclip text-xs" aria-hidden="true" />
+          {{ task.attachments }}
+          <span class="sr-only">{{ task.attachments === 1 ? 'attachment' : 'attachments' }}</span>
         </span>
         <span
           v-if="due"

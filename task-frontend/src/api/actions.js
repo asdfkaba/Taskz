@@ -8,13 +8,15 @@ class AuthError extends Error {
 export async function authFetch(input, init = {}) {
   const defaultInit = {
     credentials: 'include',  // always send cookies
+    ...init,
+    // After init, so the caller's headers add to the default instead of replacing it.
     headers: {
-      'Content-Type': 'application/json',
+      // Form data (uploads) needs the browser's multipart type with its boundary.
+      ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(init.headers || {}),
     },
-    ...init,
   };
-  
+
   const response = await fetch(input, defaultInit);
 
   if (response.status === 401) {

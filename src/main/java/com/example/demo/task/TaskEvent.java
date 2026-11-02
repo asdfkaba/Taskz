@@ -18,7 +18,7 @@ import java.time.Instant;
 @NoArgsConstructor
 public class TaskEvent {
 
-    public enum Type { CREATED, UPDATED, MOVED, DELETED, CHECKED, UNCHECKED }
+    public enum Type { CREATED, UPDATED, MOVED, DELETED, CHECKED, UNCHECKED, ATTACHED, DETACHED }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

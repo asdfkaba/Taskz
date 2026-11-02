@@ -1,6 +1,7 @@
 package com.example.demo.board;
 
 import com.example.demo.board.BoardDtos.SharedBoard;
+import com.example.demo.task.TaskDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +53,7 @@ public class BoardShareService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Share link not found"));
         Board board = share.getBoard();
         return new SharedBoard(board.getName(), ShareLinks.path(board.getSlug(), share.getToken()),
-                boardService.columnsOf(board), boardService.labelsOf(board), boardService.tasksOf(board));
+                boardService.columnsOf(board), boardService.labelsOf(board),
+                boardService.tasksOf(board).stream().map(TaskDto::withoutAttachments).toList());
     }
 }

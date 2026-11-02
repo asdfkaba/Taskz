@@ -15,12 +15,19 @@ public record TaskDto(
         Instant edited,
         Integer columnId,
         int position,
-        List<Integer> labelIds) {
+        List<Integer> labelIds,
+        // Number of attached files; null on shared boards, which don't include attachments.
+        Integer attachments) {
 
     public static TaskDto from(Task task) {
         return new TaskDto(task.getId(), task.getTitle(), task.getDescription(), task.getDue_date(),
                 task.getCreated(), task.getEdited(),
                 task.getBoardColumn().getId(), task.getPosition(),
-                task.getLabels().stream().map(BoardLabel::getId).sorted().toList());
+                task.getLabels().stream().map(BoardLabel::getId).sorted().toList(),
+                task.getAttachmentCount());
+    }
+
+    public TaskDto withoutAttachments() {
+        return new TaskDto(id, title, description, due_date, created, edited, columnId, position, labelIds, null);
     }
 }

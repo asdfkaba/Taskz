@@ -245,6 +245,38 @@ export const useBoardStore = defineStore('board', {
       await expectOk(await authFetch(`/api/notes/${id}`, { method: 'DELETE' }), 'Deleting note')
     },
 
+    // ---- Attachments ----
+
+    async fetchAttachments(taskId) {
+      return (await expectOk(await authFetch(`/api/tasks/${taskId}/attachments`), 'Loading attachments')).json()
+    },
+
+    // Rejected uploads (type, size) come with the backend's reason as the error message.
+    async uploadAttachment(taskId, file) {
+      const body = new FormData()
+      body.append('file', file)
+      const response = await authFetch(`/api/tasks/${taskId}/attachments`, { method: 'POST', body })
+      if (!response.ok) {
+        const reason = await response.json().then((b) => b.message, () => null)
+        const error = new Error(reason ?? (response.status === 413 ? 'The file is too large' : `Upload failed (HTTP ${response.status})`))
+        error.status = response.status
+        throw error
+      }
+      this.countAttachments(taskId, +1)
+      return response.json()
+    },
+
+    async deleteAttachment(taskId, id) {
+      await expectOk(await authFetch(`/api/attachments/${id}`, { method: 'DELETE' }), 'Deleting attachment')
+      this.countAttachments(taskId, -1)
+    },
+
+    // Keeps the paperclip count on the card in step, without reloading the task.
+    countAttachments(taskId, change) {
+      const found = this.findTask(taskId)
+      if (found) found.task.attachments = Math.max(0, (found.task.attachments ?? 0) + change)
+    },
+
     // ---- Labels ----
 
     async addLabel(name, color) {
