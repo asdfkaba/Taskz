@@ -7,11 +7,13 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -39,7 +41,11 @@ public class BoardEvents {
 
     /** A stream for the owner or a member, open until they leave or lose access. */
     SseEmitter subscribe(int boardId, Viewer viewer) {
-        SseEmitter emitter = new SseEmitter(0L); // no timeout: dead connections fail the heartbeat
+        return subscribe(boardId, viewer, new SseEmitter(0L)); // no timeout: dead connections fail the heartbeat
+    }
+
+    // The emitter is passed in only so tests can use one whose client is gone.
+    SseEmitter subscribe(int boardId, Viewer viewer, SseEmitter emitter) {
         Listener listener = new Listener(emitter, viewer);
         listeners.compute(boardId, (id, set) -> {
             Set<Listener> all = set != null ? set : ConcurrentHashMap.newKeySet();
@@ -60,7 +66,9 @@ public class BoardEvents {
         emitter.onTimeout(remove);
         emitter.onError(e -> remove.run());
         // Sent right away, so the browser sees the stream open (and reloads after a reconnect).
-        send(emitter, SseEmitter.event().comment("open"));
+        if (!send(listener, SseEmitter.event().comment("open"))) {
+            drop(boardId, List.of(listener));
+        }
         if (viewer != null) {
             sendPresence(boardId);
         }
@@ -70,10 +78,9 @@ public class BoardEvents {
     // After the commit, so the reload sees the change. Also for changes made outside a transaction.
     @TransactionalEventListener(fallbackExecution = true)
     void onChange(BoardChanged event) {
-        for (Listener listener : listenersOf(event.boardId(), l -> true)) {
-            // Browsers drop events without data.
-            send(listener.emitter(), SseEmitter.event().name("changed").data("changed"));
-        }
+        // Browsers drop events without data.
+        sendToAll(event.boardId(), listenersOf(event.boardId(), l -> true),
+                l -> SseEmitter.event().name("changed").data("changed"));
     }
 
     @TransactionalEventListener(fallbackExecution = true)
@@ -95,7 +102,7 @@ public class BoardEvents {
             ending.forEach(set::remove);
             return set.isEmpty() ? null : set;
         });
-        ending.forEach(l -> l.emitter().complete());
+        ending.forEach(BoardEvents::complete);
         if (ending.stream().anyMatch(l -> l.viewer() != null)) {
             sendPresence(boardId);
         }
@@ -104,8 +111,8 @@ public class BoardEvents {
     // nginx closes a proxied connection after 60 s without data.
     @Scheduled(fixedRateString = "PT30S")
     void heartbeat() {
-        listeners.keySet().forEach(boardId -> listenersOf(boardId, l -> true)
-                .forEach(l -> send(l.emitter(), SseEmitter.event().comment("ping"))));
+        listeners.keySet().forEach(boardId ->
+                sendToAll(boardId, listenersOf(boardId, l -> true), l -> SseEmitter.event().comment("ping")));
     }
 
     // Each logged-in viewer gets the others, once per person (several tabs count once), in the
@@ -114,25 +121,64 @@ public class BoardEvents {
         List<Listener> loggedIn = listenersOf(boardId, l -> l.viewer() != null);
         Map<Integer, String> people = new LinkedHashMap<>();
         loggedIn.forEach(l -> people.putIfAbsent(l.viewer().userId(), l.viewer().name()));
-        for (Listener listener : loggedIn) {
+        sendToAll(boardId, loggedIn, listener -> {
             List<String> others = people.entrySet().stream()
                     .filter(person -> person.getKey() != listener.viewer().userId())
                     .map(person -> person.getValue() == null ? "Someone" : person.getValue())
                     .toList();
-            send(listener.emitter(), SseEmitter.event().name("presence").data(others, MediaType.APPLICATION_JSON));
-        }
+            return SseEmitter.event().name("presence").data(others, MediaType.APPLICATION_JSON);
+        });
     }
 
     private List<Listener> listenersOf(int boardId, Predicate<Listener> filter) {
         return listeners.getOrDefault(boardId, Set.of()).stream().filter(filter).toList();
     }
 
-    private static void send(SseEmitter emitter, SseEmitter.SseEventBuilder event) {
+    // Listeners whose client is gone are dropped after the round, so a new presence list can't be
+    // overtaken by the rest of an older one.
+    private void sendToAll(int boardId, List<Listener> to, Function<Listener, SseEmitter.SseEventBuilder> event) {
+        List<Listener> gone = new ArrayList<>();
+        for (Listener listener : to) {
+            if (!send(listener, event.apply(listener))) {
+                gone.add(listener);
+            }
+        }
+        drop(boardId, gone);
+    }
+
+    /**
+     * False if the client is gone. Such a listener is only dropped (see drop): Tomcat ends the
+     * request itself and refuses completeWithError from this thread (IllegalStateException), which
+     * would otherwise fail the request of whoever caused the send, e.g. saving a task.
+     */
+    private static boolean send(Listener listener, SseEmitter.SseEventBuilder event) {
         try {
-            emitter.send(event);
-        } catch (IOException | IllegalStateException gone) {
-            // The client left (or the stream already ended); its callbacks remove it.
-            emitter.completeWithError(gone);
+            listener.emitter().send(event);
+            return true;
+        } catch (IOException | RuntimeException gone) {
+            return false;
+        }
+    }
+
+    private void drop(int boardId, List<Listener> gone) {
+        if (gone.isEmpty()) {
+            return;
+        }
+        listeners.computeIfPresent(boardId, (id, set) -> {
+            gone.forEach(set::remove);
+            return set.isEmpty() ? null : set;
+        });
+        if (gone.stream().anyMatch(l -> l.viewer() != null)) {
+            sendPresence(boardId);
+        }
+    }
+
+    // Ending a stream whose client is gone fails the same way; it is over anyway.
+    private static void complete(Listener listener) {
+        try {
+            listener.emitter().complete();
+        } catch (RuntimeException alreadyOver) {
+            // nothing left to end
         }
     }
 }
