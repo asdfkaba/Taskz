@@ -71,4 +71,9 @@ class FileTypesTests {
         assertThat(detect("<html><script>alert(1)</script></html>", "page.html")).isEmpty();
         assertThat(detect("PK\u0003\u0004", "letter.docx")).isEmpty();
     }
+
+    @Test
+    void extensionsListEveryAcceptedType() {
+        assertThat(FileTypes.extensions()).containsExactly("png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "md", "csv");
+    }
 }

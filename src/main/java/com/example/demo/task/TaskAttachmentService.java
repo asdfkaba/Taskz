@@ -57,6 +57,19 @@ public class TaskAttachmentService {
         }
     }
 
+    /** What the page shows and checks before an upload: the size limit and the accepted types. */
+    public record UploadSettings(long maxFileSize, String types, List<String> extensions) {
+    }
+
+    public UploadSettings uploadSettings() {
+        return new UploadSettings(properties.maxFileSize().toBytes(), FileTypes.ALLOWED, FileTypes.extensions());
+    }
+
+    /** The message for a file above the size limit. */
+    static String tooLargeMessage(AttachmentProperties properties) {
+        return "Files can be at most " + readable(properties.maxFileSize().toBytes());
+    }
+
     /** A file to send: its attachment row and where it is on disk. */
     public record Download(TaskAttachment attachment, Path file) {
     }
@@ -77,8 +90,7 @@ public class TaskAttachmentService {
         }
         long maxFile = properties.maxFileSize().toBytes();
         if (file.getSize() > maxFile) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "Files can be at most " + readable(maxFile));
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, tooLargeMessage(properties));
         }
         long maxTotal = properties.maxTotalPerUser().toBytes();
         if (attachmentRepository.totalSizeOfUser(email) + file.getSize() > maxTotal) {

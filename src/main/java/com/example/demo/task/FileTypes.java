@@ -40,8 +40,13 @@ public final class FileTypes {
         }
     }
 
-    /** For error messages: the extensions that are accepted. */
+    /** For messages: the accepted types, as people know them. */
     public static final String ALLOWED = "PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV";
+
+    /** All accepted file name extensions, lower case, e.g. for the browser's file picker. */
+    public static List<String> extensions() {
+        return Arrays.stream(FileType.values()).flatMap(type -> type.extensions.stream()).toList();
+    }
 
     private static final List<FileType> TEXT_TYPES = List.of(FileType.TEXT, FileType.MARKDOWN, FileType.CSV);
 
