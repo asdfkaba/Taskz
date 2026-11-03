@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { readStorage, writeStorage } from '@/utils/storage'
 
 /**
@@ -24,11 +24,16 @@ export function useBoardViewPrefs(getId) {
     if (id != null) writeStorage(`boardView:${id}`, value)
   }
 
-  function toggleCompact() {
-    compact.value = !compact.value
+  // One switch for both (see ViewSwitch): 'board', 'compact' (the board with compact cards) or 'table'.
+  const mode = computed(() => (view.value === 'table' ? 'table' : compact.value ? 'compact' : 'board'))
+
+  function setMode(value) {
+    setView(value === 'table' ? 'table' : 'board')
+    if (value === 'table') return // the table keeps the board's card size for the way back
+    compact.value = value === 'compact'
     const id = getId()
     if (id != null) writeStorage(`compactCards:${id}`, compact.value ? '1' : '0')
   }
 
-  return { view, compact, setView, toggleCompact }
+  return { view, compact, mode, setMode }
 }

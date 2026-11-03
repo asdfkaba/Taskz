@@ -36,11 +36,15 @@ test('Table view', async ({ browser }) => {
   await page.locator('[data-task-id="1"]').waitFor()
 
   await test.step('switching to the table shows all tasks in board order', async () => {
+    // The switch stays where it is: nothing in the header moves.
+    const switchBox = async () => page.getByRole('group', { name: 'View' }).boundingBox()
+    const boardBox = await switchBox()
     await page.getByRole('button', { name: 'Table view' }).click()
     await table().waitFor()
     ensure((await page.getByRole('button', { name: 'Table view' }).getAttribute('aria-pressed')) === 'true', 'not pressed')
     ensure((await page.locator('[data-task-id]').count()) === 0, 'cards still shown')
-    ensure((await page.getByRole('button', { name: 'Compact cards' }).count()) === 0, 'compact switch shown')
+    ensure(JSON.stringify(await switchBox()) === JSON.stringify(boardBox), `switch moved: ${JSON.stringify([boardBox, await switchBox()])}`)
+    ensure((await page.getByRole('button', { name: 'Compact board view' }).getAttribute('aria-pressed')) === 'false', 'compact pressed in the table')
     ensure(JSON.stringify(await titles()) === '["Task A","Task B","Task C"]', JSON.stringify(await titles()))
     const first = rows().first()
     ensure((await first.getByTestId('label-dots').getByRole('img').getAttribute('title')) === 'Remote', 'label dot')
@@ -122,7 +126,7 @@ test('Table view', async ({ browser }) => {
   })
 
   await test.step('back to the board', async () => {
-    await page.getByRole('button', { name: 'Board view' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
     ensure((await table().count()) === 0, 'table still shown')
   })
