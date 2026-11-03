@@ -1,4 +1,4 @@
-// Compact cards: a per-board switch that hides descriptions and shows labels as dots.
+// Compact cards: the board view's compact form, per board, hides descriptions and shows labels as dots.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
@@ -27,7 +27,7 @@ test('Compact cards', async ({ browser }) => {
   page.on('pageerror', (e) => errors.push(e.message))
   const ensure = (cond, msg) => { if (!cond) throw new Error(msg) }
   const card = () => page.locator('[data-task-id="1"]')
-  const toggle = () => page.getByRole('button', { name: 'Compact cards' })
+  const toggle = () => page.getByRole('button', { name: 'Compact board view' })
   const out = (name) => `${test.info().outputDir}/${name}`
 
   await page.goto(`${BASE}/boards`)
@@ -81,8 +81,9 @@ test('Compact cards', async ({ browser }) => {
     await page.evaluate(() => document.documentElement.classList.remove('dark'))
   })
 
-  await test.step('switching it off brings everything back', async () => {
-    await toggle().click()
+  await test.step('back to the board brings everything back', async () => {
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
+    ensure((await toggle().getAttribute('aria-pressed')) === 'false', 'still pressed')
     await card().getByText('A longer description').waitFor()
     ensure((await card().locator('[data-label-pill]').count()) === 2, 'pills missing')
   })

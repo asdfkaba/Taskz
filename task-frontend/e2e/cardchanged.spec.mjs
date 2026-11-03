@@ -62,9 +62,9 @@ test('Last change on board cards', async ({ browser }) => {
   })
 
   await test.step('compact cards leave it out', async () => {
-    await page.getByRole('button', { name: 'Compact cards' }).click()
+    await page.getByRole('button', { name: 'Compact board view' }).click()
     ensure((await changed(1).count()) === 0, 'date in compact mode')
-    await page.getByRole('button', { name: 'Compact cards' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
   })
 
   if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`)

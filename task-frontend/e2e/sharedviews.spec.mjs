@@ -39,7 +39,7 @@ test('Views on a shared board', async ({ browser }) => {
 
   await test.step('compact cards', async () => {
     await card().getByText('Some text').waitFor()
-    await page.getByRole('button', { name: 'Compact cards' }).click()
+    await page.getByRole('button', { name: 'Compact board view' }).click()
     ensure((await card().getByText('Some text').count()) === 0, 'description still shown')
     ensure((await card().getByTestId('label-dots').getByRole('img').count()) === 1, 'no label dot')
     await page.screenshot({ path: out('sv-1-compact.png') })

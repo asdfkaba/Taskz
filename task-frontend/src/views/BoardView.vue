@@ -132,7 +132,7 @@ function askDeleteBoard(board) {
 }
 
 // ---- Board or table view, compact cards ----
-const { view, compact, setView, toggleCompact } = useBoardViewPrefs(() => store.board?.id ?? null)
+const { view, compact, mode, setMode } = useBoardViewPrefs(() => store.board?.id ?? null)
 // All tasks that pass the filter, in board order (column by column).
 const tableTasks = computed(() =>
   store.columns.flatMap((c) => store.tasksByColumn[c.id] ?? []).filter((t) => matchOf(t).matches),
@@ -605,7 +605,7 @@ function askDeleteColumn(column) {
             :aria-expanded="filterOpen || filterActive"
             @click="toggleFilterRow"
           />
-          <ViewSwitch :view="view" :compact="compact" @update:view="setView" @toggle-compact="toggleCompact" />
+          <ViewSwitch :mode="mode" @update:mode="setMode" />
           <Button
             :label="isMobile ? undefined : 'Settings'"
             aria-label="Board settings"
