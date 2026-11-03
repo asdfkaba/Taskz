@@ -14,9 +14,13 @@ const DESCRIPTION = [
 
 test('Checklists in descriptions', async ({ browser }) => {
   await resetMock()
-  // Like the app: PUT replaces the editable fields.
-  const setDescription = (description) =>
-    fetch(`${BASE}/api/tasks/1`, { method: 'PUT', body: JSON.stringify({ title: 'Task A', description, due_date: null }) })
+  // Like the app: PUT replaces the editable fields. silent: open pages don't hear of it (yet).
+  const setDescription = (description, { silent = false } = {}) =>
+    fetch(`${BASE}/api/tasks/1`, {
+      method: 'PUT',
+      headers: silent ? { 'x-mock-silent': '1' } : {},
+      body: JSON.stringify({ title: 'Task A', description, due_date: null }),
+    })
   await setDescription(DESCRIPTION)
 
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
@@ -131,9 +135,10 @@ test('Checklists in descriptions', async ({ browser }) => {
     await closeDialog()
   })
 
+  // Before the live update of the other change arrives; otherwise the view would already show it.
   await test.step('a description changed elsewhere is not overwritten', async () => {
     await openView(1)
-    await setDescription('- [ ] Changed elsewhere\n- [ ] Second')
+    await setDescription('- [ ] Changed elsewhere\n- [ ] Second', { silent: true })
     await boxes().nth(0).click()
     await page.locator('.p-toast').getByText('The task was changed elsewhere').waitFor()
     // Reloaded: the view shows the other version, unticked.

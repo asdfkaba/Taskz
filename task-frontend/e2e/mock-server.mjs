@@ -445,7 +445,9 @@ http.createServer((req, res) => {
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })
       const [status, out] = api(req.method, req.url, body)
-      if (req.method !== 'GET' && status < 400) {
+      // Test hook: x-mock-silent leaves open pages unaware of the change, like a live update that
+      // hasn't arrived yet.
+      if (req.method !== 'GET' && status < 400 && !req.headers['x-mock-silent']) {
         // A new or revoked link cuts off the viewers of the old one; anything else is a change.
         if (req.url === '/api/boards/1/share') endStreams()
         else for (const res of streams) res.write('event: changed\ndata: changed\n\n')
