@@ -521,7 +521,9 @@ function askDeleteColumn(column) {
     </Drawer>
 
     <section class="flex min-w-0 flex-1 flex-col gap-4 px-4 py-4 md:gap-6 md:py-8">
-      <div class="flex items-center justify-between gap-3 md:items-end">
+      <!-- The toolbar moves to its own line when it doesn't fit next to the title (phones, tablets,
+           narrow windows), so the title and who is online keep their room. -->
+      <div class="flex flex-wrap items-center justify-between gap-3 md:items-end">
         <div class="flex min-w-0 items-center gap-1 md:items-start md:gap-2">
           <Button
             icon="pi pi-bars"
@@ -593,7 +595,7 @@ function askDeleteColumn(column) {
           />
         </div>
         <!-- Icon-only buttons on small screens to keep the header in one line -->
-        <div v-else-if="store.board" class="flex shrink-0 gap-2">
+        <div v-else-if="store.board" class="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
           <Button
             v-if="isMobile"
             icon="pi pi-search"

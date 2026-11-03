@@ -62,7 +62,10 @@ test('Board updates live', async ({ browser }) => {
     ensure((await count.innerText()).trim() === '6', await count.innerText())
     ensure(!(await page.getByTestId('presence-me').isVisible()), 'icons on a phone')
     const [presenceBox, searchBox] = [await page.getByTestId('presence').boundingBox(), await page.getByRole('button', { name: 'Search', exact: true }).boundingBox()]
-    ensure(!searchBox || presenceBox.x + presenceBox.width <= searchBox.x, `presence overlaps search: ${JSON.stringify([presenceBox, searchBox])}`)
+    const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+    ensure(!overlap(presenceBox, searchBox), `presence overlaps search: ${JSON.stringify([presenceBox, searchBox])}`)
+    // The toolbar moves to its own line, so the title isn't cut off either.
+    ensure(await page.locator('h1').first().evaluate((h) => h.scrollWidth <= h.clientWidth), 'title cut off on a phone')
     await page.screenshot({ path: out('lb-1c-phone.png'), clip: { x: 0, y: 0, width: 390, height: 160 } })
     await page.setViewportSize({ width: 1400, height: 900 })
     await api('/__presence', 'POST', [])
