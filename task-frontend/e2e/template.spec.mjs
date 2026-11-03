@@ -1,6 +1,6 @@
 // Task template: one default description per board for new tasks.
 import { test } from '@playwright/test'
-import { BASE, resetMock } from './support.mjs'
+import { BASE, dialogOpened, resetMock } from './support.mjs'
 
 const TEMPLATE = '## Steps\n- [ ] Cover letter\n- [ ] CV'
 
@@ -52,6 +52,7 @@ test('Task template', async ({ browser }) => {
 
   await test.step('a new task starts with the template and can change it', async () => {
     await page.getByRole('button', { name: 'New task' }).click()
+    await dialogOpened(page)
     await page.locator('#task-title').fill('Firma XY')
     ensure((await page.locator('#task-description').inputValue()) === TEMPLATE, 'not prefilled')
     await page.locator('#task-description').fill(TEMPLATE + '\n- [ ] Portfolio')

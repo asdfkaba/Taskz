@@ -1,6 +1,6 @@
 // Task history in the detail view.
 import { test } from '@playwright/test'
-import { BASE, resetMock } from './support.mjs'
+import { BASE, dialogOpened, resetMock } from './support.mjs'
 
 test('Task history', async ({ browser }) => {
   const base = BASE
@@ -30,6 +30,7 @@ test('Task history', async ({ browser }) => {
     await history().locator('ol').waitFor()
   }
   async function edit(fill) {
+    await dialogOpened(page)
     await dialog().getByRole('button', { name: 'Edit', exact: true }).click()
     await page.locator('#task-title').waitFor()
     await fill()
