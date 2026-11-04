@@ -1,5 +1,6 @@
 package com.example.demo.migration;
 
+import com.example.demo.task.RuleEngine;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardService;
@@ -28,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({BoardService.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, TaskHistoryService.class})
 @Testcontainers(disabledWithoutDocker = true)
 class FreshDatabaseMigrationTests {
 

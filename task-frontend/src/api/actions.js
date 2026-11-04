@@ -13,6 +13,8 @@ export async function authFetch(input, init = {}) {
     headers: {
       // Form data (uploads) needs the browser's multipart type with its boundary.
       ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      // Board rules set due dates in the user's wall-clock time (RuleEngine in the backend).
+      'X-Time-Zone': Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...(init.headers || {}),
     },
   };

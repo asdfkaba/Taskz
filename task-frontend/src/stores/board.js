@@ -153,6 +153,25 @@ export const useBoardStore = defineStore('board', {
       await expectOk(await authFetch(`/api/boards/${boardId}/share`, { method: 'DELETE' }), 'Stopping sharing')
     },
 
+    // ---- Rules (automations, owner only): [{ id, columnId, action, items, days, enabled }] ----
+
+    async fetchRules(boardId) {
+      return (await expectOk(await authFetch(`/api/boards/${boardId}/rules`), 'Loading automations')).json()
+    },
+
+    async addRule(boardId, rule) {
+      return (await expectOk(await sendJson(`/api/boards/${boardId}/rules`, 'POST', rule), 'Adding automation')).json()
+    },
+
+    // Sends items/days and enabled; column and action can't change.
+    async updateRule(rule) {
+      return (await expectOk(await sendJson(`/api/rules/${rule.id}`, 'PUT', rule), 'Updating automation')).json()
+    },
+
+    async deleteRule(id) {
+      await expectOk(await authFetch(`/api/rules/${id}`, { method: 'DELETE' }), 'Deleting automation')
+    },
+
     // ---- Members: the owner and whoever joined through an invite link ----
 
     // [{ userId, name, owner, joined }], the owner first.
@@ -270,10 +289,13 @@ export const useBoardStore = defineStore('board', {
       if (!found) return
       found.task.columnId = found.columnId
       this.renumberTasks()
-      await expectOk(
+      const response = await expectOk(
         await sendJson(`/api/tasks/${id}/move`, 'PATCH', { columnId: found.columnId, position: found.index }),
         'Moving task',
       )
+      // Rules of the new column may have changed these; the place stays as it is now locally.
+      const { description, due_date, edited, revision } = await response.json()
+      Object.assign(found.task, { description, due_date, edited, revision })
     },
 
     renumberTasks() {

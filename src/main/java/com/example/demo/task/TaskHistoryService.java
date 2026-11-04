@@ -56,6 +56,23 @@ public class TaskHistoryService {
 
     @Transactional
     public void recordUpdate(Snapshot before, Task task, String email) {
+        Map<String, Object> changes = changesSince(before, task);
+        if (!changes.isEmpty()) {
+            save(task, Type.UPDATED, changes, email);
+        }
+    }
+
+    /** Like {@link #recordUpdate}, but made by a board rule: no user, marked with "automation". */
+    @Transactional
+    public void recordAutomation(Snapshot before, Task task) {
+        Map<String, Object> changes = changesSince(before, task);
+        if (!changes.isEmpty()) {
+            changes.put("automation", true);
+            save(task, Type.UPDATED, changes, null);
+        }
+    }
+
+    private static Map<String, Object> changesSince(Snapshot before, Task task) {
         Snapshot after = Snapshot.of(task);
         Map<String, Object> changes = new LinkedHashMap<>();
         putIfChanged(changes, "title", before.title(), after.title());
@@ -71,9 +88,7 @@ public class TaskHistoryService {
         if (!removed.isEmpty()) {
             changes.put("labelsRemoved", removed);
         }
-        if (!changes.isEmpty()) {
-            save(task, Type.UPDATED, changes, email);
-        }
+        return changes;
     }
 
     @Transactional
@@ -128,7 +143,7 @@ public class TaskHistoryService {
 
     private void save(Task task, Type type, Map<String, Object> changes, String email) {
         eventRepository.save(new TaskEvent(task.getBoardColumn().getBoard(), task.getId(),
-                userRepository.findByEmail(email).orElse(null), type, write(changes)));
+                email == null ? null : userRepository.findByEmail(email).orElse(null), type, write(changes)));
     }
 
     private static void putIfChanged(Map<String, Object> changes, String field, Object before, Object after) {

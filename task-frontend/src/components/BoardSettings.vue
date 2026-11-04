@@ -9,6 +9,7 @@ import TaskTemplateEditor from '@/components/TaskTemplateEditor.vue'
 import LabelPicker from '@/components/LabelPicker.vue'
 import SharePanel from '@/components/SharePanel.vue'
 import BoardMembers from '@/components/BoardMembers.vue'
+import BoardRules from '@/components/BoardRules.vue'
 
 // Settings of the open board, shown by BoardView at /boards/<slug>/settings.
 // Deleting is only asked for here; BoardView owns the delete dialog.
@@ -79,7 +80,12 @@ async function rename() {
       <BoardMembers v-if="boardSummary" :key="boardSummary.id" :board="boardSummary" />
     </section>
 
-    <!-- Sharing and deleting are for the owner only. -->
+    <!-- Automations, sharing and deleting are for the owner only. -->
+    <section v-if="boardSummary?.own" class="flex flex-col gap-3 rounded-xl border bg-white p-4 dark:bg-slate-900 border-slate-200 dark:border-slate-800" aria-labelledby="settings-rules">
+      <h2 id="settings-rules" class="text-base font-semibold text-slate-900 dark:text-slate-100">Automations</h2>
+      <BoardRules :key="boardSummary.id" :boardId="boardSummary.id" />
+    </section>
+
     <section v-if="boardSummary?.own" class="flex flex-col gap-3 rounded-xl border bg-white p-4 dark:bg-slate-900 border-slate-200 dark:border-slate-800" aria-labelledby="settings-share">
       <h2 id="settings-share" class="text-base font-semibold text-slate-900 dark:text-slate-100">Share link</h2>
       <!-- Remounted after a rename, so the link shows the new name. -->

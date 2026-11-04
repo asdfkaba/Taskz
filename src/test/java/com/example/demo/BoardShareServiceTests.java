@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.task.RuleEngine;
 import com.example.demo.board.*;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskHistoryService;
@@ -22,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
-@Import({BoardService.class, BoardShareService.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, BoardShareService.class, TaskHistoryService.class})
 @RecordApplicationEvents
 class BoardShareServiceTests {
 
