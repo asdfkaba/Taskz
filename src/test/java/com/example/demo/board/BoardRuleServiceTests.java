@@ -78,6 +78,11 @@ class BoardRuleServiceTests {
         return taskRepository.save(task);
     }
 
+    // Checklist as "text", ticked ones as "x:text".
+    private static List<String> items(Task task) {
+        return task.getChecklist().stream().map(i -> (i.isChecked() ? "x:" : "") + i.getText()).toList();
+    }
+
     private void checklistRule(BoardColumn column, String... items) {
         ruleService.addRule(board.getId(), ALICE, new RuleRequest(column.getId(), "APPEND_CHECKLIST", List.of(items), null, null));
     }
@@ -90,13 +95,14 @@ class BoardRuleServiceTests {
 
         boardService.moveTask(task.getId(), doing.getId(), 0, BOB);
 
-        assertThat(task.getDescription()).isEqualTo("Notes\n\n- [ ] Prepare\n- [ ] Thank-you mail");
+        assertThat(items(task)).containsExactly("Prepare", "Thank-you mail");
+        assertThat(task.getDescription()).isEqualTo("Notes");
         LocalDateTime expected = LocalDateTime.now().plusDays(14);
         assertThat(task.getDue_date()).isBetween(expected.minusMinutes(2), expected);
         var latest = historyService.historyOf(task).get(0);
         assertThat(latest.type()).isEqualTo("updated");
         assertThat(latest.user()).isNull();
-        assertThat(latest.changes()).containsEntry("automation", true).containsKeys("description", "due_date");
+        assertThat(latest.changes()).containsEntry("automation", true).containsKeys("checklistAdded", "due_date");
     }
 
     @Test
@@ -106,14 +112,30 @@ class BoardRuleServiceTests {
         boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
         boardService.moveTask(task.getId(), todo.getId(), 0, ALICE);
         boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
-        assertThat(task.getDescription()).isEqualTo("- [ ] Prepare");
+        assertThat(items(task)).containsExactly("Prepare");
 
         checklistRule(todo, "Review");
         ruleService.updateRule(ruleRepository.findByColumnBoardOrderById(board).get(1).getId(), ALICE,
                 new RuleRequest(null, null, List.of("Review"), null, false));
         boardService.moveTask(task.getId(), todo.getId(), 0, ALICE);
         boardService.moveTask(task.getId(), todo.getId(), 5, ALICE);
-        assertThat(task.getDescription()).isEqualTo("- [ ] Prepare");
+        assertThat(items(task)).containsExactly("Prepare");
+    }
+
+    @Test
+    void eachStageReplacesTheChecklist() {
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "REPLACE_CHECKLIST", List.of("Prepare", "Research"), null, null));
+        BoardColumn done = columnRepository.findByBoardOrderByPosition(board).get(2);
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(done.getId(), "REPLACE_CHECKLIST", List.of("Research", "Thank-you mail"), null, null));
+        Task task = addTask("Contact: Ann\n- [ ] Apply");
+
+        boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
+        assertThat(items(task)).containsExactly("Prepare", "Research");
+
+        task.getChecklist().get(1).setChecked(true);
+        boardService.moveTask(task.getId(), done.getId(), 0, ALICE);
+        assertThat(items(task)).containsExactly("x:Research", "Thank-you mail");
+        assertThat(task.getDescription()).isEqualTo("Contact: Ann\n- [ ] Apply");
     }
 
     @Test
@@ -144,6 +166,14 @@ class BoardRuleServiceTests {
     }
 
     @Test
+    void itemsTypedAsMarkdownLoseTheirListPrefix() {
+        checklistRule(doing, "- [ ] Folder", "* [x] CV", "1. Cover letter", "[ ]Photo", "- [ ] Folder", "-5 degrees");
+        assertThat(ruleService.rulesOf(board.getId(), ALICE).get(0).items())
+                .containsExactly("Folder", "CV", "Cover letter", "Photo", "-5 degrees");
+        assertThatThrownBy(() -> checklistRule(doing, "- [ ] ")).hasMessageContaining("1 to 20 items");
+    }
+
+    @Test
     void invalidRulesAreRejected() {
         assertThatThrownBy(() -> checklistRule(doing, " ")).hasMessageContaining("1 to 20 items");
         assertThatThrownBy(() -> checklistRule(doing, "a\nb")).hasMessageContaining("one line");
@@ -165,7 +195,7 @@ class BoardRuleServiceTests {
 
         boardService.deleteColumn(todo.getId(), ALICE, doing.getId(), false);
 
-        assertThat(task.getDescription()).isEqualTo("- [ ] Prepare");
+        assertThat(items(task)).containsExactly("Prepare");
         assertThat(ruleRepository.findByColumnBoardOrderById(board)).extracting(r -> r.getColumn().getId())
                 .containsExactly(doing.getId());
         boardService.deleteBoard(board.getId(), ALICE);

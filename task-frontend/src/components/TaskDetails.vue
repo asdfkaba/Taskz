@@ -4,35 +4,26 @@ import LabelPill from '@/components/LabelPill.vue'
 import { formatDue, formatShort, fromApi } from '@/utils/date'
 import { DEFAULT_COLUMN_COLOR } from '@/utils/task'
 import { renderMarkdown } from '@/utils/markdown'
+import TaskChecklist from '@/components/TaskChecklist.vue'
 
 // Everything about a task, read-only. Used by the task dialog and on shared boards.
 const props = defineProps({
   task: { type: Object, required: true },
   column: { type: Object, default: null }, // { name, color }
   labels: { type: Array, default: () => [] }, // the task's labels as { id, name, color }
-  // Offers "Add one" when there is no description, and makes the checkboxes clickable.
+  // Offers "Add one" when there is no description, and makes the checklist clickable.
   canEdit: { type: Boolean, default: false },
-  // A checkbox click is being saved; further clicks wait.
+  // A checklist tick is being saved; further clicks wait.
   checking: { type: Boolean, default: false },
 })
-// toggle-checkbox: (index) of the clicked task list item, see utils/markdown applyCheckbox()
-const emit = defineEmits(['edit', 'toggle-checkbox'])
+// toggle-item: (item) of the checklist that was clicked
+const emit = defineEmits(['edit', 'toggle-item'])
 
 const due = computed(() => fromApi(props.task.due_date))
 const isOverdue = computed(() => due.value !== null && due.value < new Date())
 const created = computed(() => fromApi(props.task.created))
 const edited = computed(() => fromApi(props.task.edited))
-const descriptionHtml = computed(() =>
-  renderMarkdown(props.task.description, { clickableCheckboxes: props.canEdit }),
-)
-
-// The box shows the saved state: the click is undone here and the parent saves the change.
-function onDescriptionClick(event) {
-  const box = event.target.closest('input[data-task-index]')
-  if (!box || !props.canEdit) return
-  event.preventDefault()
-  if (!props.checking) emit('toggle-checkbox', Number(box.dataset.taskIndex))
-}
+const descriptionHtml = computed(() => renderMarkdown(props.task.description))
 </script>
 
 <template>
@@ -65,10 +56,7 @@ function onDescriptionClick(event) {
     <div
       v-if="descriptionHtml"
       class="markdown markdown-large border-t border-slate-200 pt-4 dark:border-slate-800"
-      :class="{ 'opacity-60': checking }"
-      :aria-busy="checking"
       data-testid="task-description"
-      @click="onDescriptionClick"
       v-html="descriptionHtml"
     />
     <p v-else class="border-t border-slate-200 pt-4 text-sm text-slate-400 dark:border-slate-800 dark:text-slate-500">
@@ -77,6 +65,13 @@ function onDescriptionClick(event) {
         Add one
       </button>
     </p>
+
+    <TaskChecklist
+      :items="task.checklist ?? []"
+      :canEdit="canEdit"
+      :busy="checking"
+      @toggle="(item) => emit('toggle-item', item)"
+    />
 
     <p v-if="created || edited" class="text-xs text-slate-400 dark:text-slate-500">
       <span v-if="created">Created {{ formatShort(created) }}</span>

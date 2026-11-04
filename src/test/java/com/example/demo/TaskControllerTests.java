@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import com.example.demo.task.RuleEngine;
+import com.example.demo.task.ChecklistItem;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardColumn;
@@ -86,114 +87,80 @@ class TaskControllerTests {
         return task;
     }
 
+    private static ChecklistItem item(Task task, int id, String text, boolean checked) {
+        ChecklistItem item = new ChecklistItem();
+        item.setId(id);
+        item.setTask(task);
+        item.setText(text);
+        item.setChecked(checked);
+        task.getChecklist().add(item);
+        return item;
+    }
+
     @Test
-    void tickingACheckboxSavesAndRecordsIt() throws Exception {
+    void tickingAnItemSavesAndRecordsItWithoutChangingTheRevision() throws Exception {
         Task task = aliceTask();
-        task.setDescription("- [ ] Cover letter\n- [ ] CV");
+        item(task, 5, "Cover letter", false);
+        String revision = TaskDto.revisionOf(task);
         when(boardService.findTask(1, ALICE)).thenReturn(task);
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        mockMvc.perform(patch("/tasks/1/checkbox")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [ ] Cover letter\\n- [x] CV\",\"line\":1}"))
+        mockMvc.perform(patch("/tasks/1/checklist/5").contentType(MediaType.APPLICATION_JSON).content("{\"checked\":true}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.description").value("- [ ] Cover letter\n- [x] CV"));
+                .andExpect(jsonPath("$.checklist[0].checked").value(true))
+                .andExpect(jsonPath("$.revision").value(revision));
 
-        verify(historyService).recordCheckbox(task, "CV", true, List.of(), 0, ALICE);
-        verify(historyService, never()).recordUpdate(any(), any(), any());
+        verify(historyService).recordCheckbox(task, "Cover letter", true, ALICE);
         verify(boardService).changed(task.getBoardColumn().getBoard());
     }
 
-    // Older clients send no line; then exactly one checkbox may change.
     @Test
-    void checkboxWithoutLineMustBeTheOnlyChange() throws Exception {
+    void tickingAnUnknownItemIsNotFound() throws Exception {
         Task task = aliceTask();
-        task.setDescription("- [ ] Cover letter\n- [ ] CV");
-        when(boardService.findTask(1, ALICE)).thenReturn(task);
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Cover letter\\n- [ ] CV\"}"))
-                .andExpect(status().isOk());
-        verify(historyService).recordCheckbox(task, "Cover letter", true, List.of(), 0, ALICE);
-
-        task.setDescription("- [ ] Cover letter\n- [ ] CV");
-        mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Cover letter\\n- [x] CV\"}"))
-                .andExpect(status().isConflict());
-    }
-
-    @Test
-    void tickingTheLastSubItemCompletesTheParent() throws Exception {
-        Task task = aliceTask();
-        task.setDescription("- [ ] Application\n  - [x] Cover letter\n  - [ ] CV");
-        when(boardService.findTask(1, ALICE)).thenReturn(task);
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Application\\n  - [x] Cover letter\\n  - [x] CV\",\"line\":2}"))
-                .andExpect(status().isOk());
-
-        verify(historyService).recordCheckbox(task, "CV", true, List.of("Application"), 0, ALICE);
-    }
-
-    @Test
-    void tickingAParentTicksItsSubItems() throws Exception {
-        Task task = aliceTask();
-        task.setDescription("- [ ] Application\n  - [x] Cover letter\n  - [ ] CV\n  - [ ] Portfolio");
-        when(boardService.findTask(1, ALICE)).thenReturn(task);
-        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Application\\n  - [x] Cover letter\\n  - [x] CV\\n  - [x] Portfolio\",\"line\":0}"))
-                .andExpect(status().isOk());
-
-        verify(historyService).recordCheckbox(task, "Application", true, List.of(), 2, ALICE);
-    }
-
-    @Test
-    void changesInDifferentDirectionsOrWithoutTheClickedLineAreRejected() throws Exception {
-        Task task = aliceTask();
-        task.setDescription("- [ ] Cover letter\n- [x] CV");
+        item(task, 5, "Cover letter", false);
         when(boardService.findTask(1, ALICE)).thenReturn(task);
 
-        mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Cover letter\\n- [ ] CV\",\"line\":0}"))
-                .andExpect(status().isConflict());
-        mockMvc.perform(patch("/tasks/1/checkbox").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Cover letter\\n- [x] CV\",\"line\":1}"))
-                .andExpect(status().isConflict());
-
-        verify(taskRepository, never()).save(any());
-        verifyNoInteractions(historyService);
-    }
-
-    @Test
-    void checkboxRequestWithOtherChangesIsRejected() throws Exception {
-        Task task = aliceTask();
-        task.setDescription("- [ ] Cover letter\n- [ ] CV");
-        when(boardService.findTask(1, ALICE)).thenReturn(task);
-
-        // E.g. the description was edited in another tab in the meantime.
-        mockMvc.perform(patch("/tasks/1/checkbox")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] Cover letter\\nCV\",\"line\":0}"))
-                .andExpect(status().isConflict());
-
-        verify(taskRepository, never()).save(any());
-        verifyNoInteractions(historyService);
-        assertThat(task.getDescription()).isEqualTo("- [ ] Cover letter\n- [ ] CV");
-    }
-
-    @Test
-    void checkboxOfOtherUsersTaskIsNotFound() throws Exception {
-        when(boardService.findTask(1, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
-        mockMvc.perform(patch("/tasks/1/checkbox")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"description\":\"- [x] CV\"}"))
+        mockMvc.perform(patch("/tasks/1/checklist/6").contentType(MediaType.APPLICATION_JSON).content("{\"checked\":true}"))
                 .andExpect(status().isNotFound());
-        verify(taskRepository, never()).save(any());
+        mockMvc.perform(patch("/tasks/1/checklist/5").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void savingReplacesTheChecklistKeepingTicksOfKnownItems() throws Exception {
+        Task task = aliceTask();
+        item(task, 5, "Cover letter", true);
+        item(task, 6, "CV", false);
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"T\",\"checklist\":[{\"text\":\"- [ ] Photo\"},{\"id\":5,\"text\":\"Letter\"},{\"text\":\" \"}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checklist.length()").value(2))
+                .andExpect(jsonPath("$.checklist[0].text").value("Photo"))
+                .andExpect(jsonPath("$.checklist[0].checked").value(false))
+                .andExpect(jsonPath("$.checklist[1].id").value(5))
+                .andExpect(jsonPath("$.checklist[1].text").value("Letter"))
+                .andExpect(jsonPath("$.checklist[1].checked").value(true));
+        assertThat(task.getChecklist()).extracting(ChecklistItem::getPosition).containsExactly(0, 1);
+    }
+
+    @Test
+    void savingWithoutAChecklistKeepsItAndForeignItemsAreRejected() throws Exception {
+        Task task = aliceTask();
+        item(task, 5, "CV", false);
+        when(boardService.findTask(1, ALICE)).thenReturn(task);
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"T\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checklist[0].text").value("CV"));
+        mockMvc.perform(put("/tasks/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"T\",\"checklist\":[{\"id\":99,\"text\":\"x\"}]}"))
+                .andExpect(status().isBadRequest());
+    }
+
 
     @Test
     void updateChangesOwnTaskAndKeepsCreated() throws Exception {

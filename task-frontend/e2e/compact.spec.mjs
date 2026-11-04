@@ -15,12 +15,14 @@ test('Compact cards', async ({ browser }) => {
   await resetMock()
   const remote = await api('POST', '/boards/1/labels', { name: 'Remote', color: '#3b82f6' })
   const urgent = await api('POST', '/boards/1/labels', { name: 'Urgent', color: '#ef4444' })
-  await api('PUT', '/tasks/1', {
+  const task = await api('PUT', '/tasks/1', {
     title: 'Task A',
-    description: 'A longer description\n\n- [x] Cover letter\n- [ ] CV',
+    description: 'A longer description',
     due_date: null,
     labelIds: [remote.id, urgent.id],
+    checklist: [{ text: 'Cover letter' }, { text: 'CV' }],
   })
+  await api('PATCH', `/tasks/1/checklist/${task.checklist[0].id}`, { checked: true })
 
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   const errors = []

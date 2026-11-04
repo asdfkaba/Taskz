@@ -14,12 +14,14 @@ async function api(method, path, body) {
 test('Table view', async ({ browser }) => {
   await resetMock()
   const remote = await api('POST', '/boards/1/labels', { name: 'Remote', color: '#3b82f6' })
-  await api('PUT', '/tasks/1', {
+  const task = await api('PUT', '/tasks/1', {
     title: 'Task A',
-    description: '- [x] Cover letter\n- [ ] CV',
+    description: null,
     due_date: null,
     labelIds: [remote.id],
+    checklist: [{ text: 'Cover letter' }, { text: 'CV' }],
   })
+  await api('PATCH', `/tasks/1/checklist/${task.checklist[0].id}`, { checked: true })
 
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   const errors = []

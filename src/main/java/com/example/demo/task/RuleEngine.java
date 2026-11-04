@@ -3,8 +3,6 @@ package com.example.demo.task;
 import com.example.demo.board.BoardRule;
 import com.example.demo.board.BoardRuleRepository;
 import com.example.demo.board.RulePayload;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -22,7 +20,6 @@ import java.time.temporal.ChronoUnit;
 @Service
 public class RuleEngine {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RuleEngine.class);
     // The browser's time zone (authFetch sends it), so "in 14 days" means the user's wall-clock time.
     static final String TIME_ZONE_HEADER = "X-Time-Zone";
 
@@ -56,14 +53,8 @@ public class RuleEngine {
     private void apply(BoardRule rule, Task task) {
         RulePayload payload = RulePayload.parse(rule.getPayload());
         switch (BoardRule.Action.valueOf(rule.getAction())) {
-            case APPEND_CHECKLIST -> {
-                String description = Checklists.append(task.getDescription(), payload.items());
-                if (description != null && description.length() > TaskController.MAX_DESCRIPTION_LENGTH) {
-                    LOG.warn("Rule {} skipped: description of task {} would get too long", rule.getId(), task.getId());
-                    return;
-                }
-                task.setDescription(description);
-            }
+            case APPEND_CHECKLIST -> Checklists.append(task, payload.items());
+            case REPLACE_CHECKLIST -> Checklists.replace(task, payload.items());
             case SET_DUE_IN -> task.setDue_date(
                     LocalDateTime.now(userZone()).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
         }

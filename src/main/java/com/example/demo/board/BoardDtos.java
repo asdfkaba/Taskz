@@ -81,7 +81,7 @@ public final class BoardDtos {
     public record MoveTaskRequest(Integer columnId, Integer position) {
     }
 
-    // An automation of a board; items for APPEND_CHECKLIST, days for SET_DUE_IN.
+    // An automation of a board; items for APPEND_CHECKLIST and REPLACE_CHECKLIST, days for SET_DUE_IN.
     public record RuleDto(Integer id, Integer columnId, String action, List<String> items, Integer days, boolean enabled) {
         static RuleDto from(BoardRule rule) {
             RulePayload payload = RulePayload.parse(rule.getPayload());

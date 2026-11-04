@@ -253,18 +253,15 @@ export const useBoardStore = defineStore('board', {
       return updated
     },
 
-    // Ticks or unticks a checkbox: description is the task's description with only checkboxes changed,
-    // line the clicked one (see utils/markdown applyCheckbox). The backend rejects it (409) if the
-    // description changed in the meantime.
-    async toggleCheckbox(id, description, line) {
-      const found = this.findTask(id)
-      if (!found) throw new Error('Task not found')
+    // Ticks or unticks one checklist item; 404 if the item is gone (someone changed the checklist).
+    async setChecklistItem(taskId, itemId, checked) {
       const response = await expectOk(
-        await sendJson(`/api/tasks/${id}/checkbox`, 'PATCH', { description, line }),
+        await sendJson(`/api/tasks/${taskId}/checklist/${itemId}`, 'PATCH', { checked }),
         'Updating checklist',
       )
       const updated = await response.json()
-      this.tasksByColumn[found.columnId].splice(found.index, 1, updated)
+      const found = this.findTask(taskId)
+      if (found) this.tasksByColumn[found.columnId].splice(found.index, 1, updated)
       return updated
     },
 
@@ -294,8 +291,8 @@ export const useBoardStore = defineStore('board', {
         'Moving task',
       )
       // Rules of the new column may have changed these; the place stays as it is now locally.
-      const { description, due_date, edited, revision } = await response.json()
-      Object.assign(found.task, { description, due_date, edited, revision })
+      const { checklist, due_date, edited, revision } = await response.json()
+      Object.assign(found.task, { checklist, due_date, edited, revision })
     },
 
     renumberTasks() {

@@ -1,89 +1,60 @@
 package com.example.demo.task;
 
-import com.example.demo.task.Checklists.Toggle;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ChecklistsTests {
 
-    private static final String LIST = """
-            Steps:
-            - [ ] Cover letter
-            - [x] CV
-              * [ ] Nested item
-            1. [ ] Numbered
-            > - [ ] Quoted""";
+    private static Task taskWith(String... ticked) {
+        Task task = new Task();
+        for (String text : ticked) {
+            task.getChecklist().add(new ChecklistItem(task, text.replace("x:", ""), text.startsWith("x:")));
+        }
+        return task;
+    }
 
-    @Test
-    void tickingOneItemIsFoundWithLineAndText() {
-        String after = LIST.replace("- [ ] Cover letter", "- [x] Cover letter");
-        assertThat(Checklists.toggles(LIST, after)).containsExactly(new Toggle(1, "Cover letter", true));
+    private static List<String> view(Task task) {
+        return task.getChecklist().stream()
+                .map(i -> (i.isChecked() ? "x:" : "") + i.getText() + "@" + i.getPosition())
+                .toList();
     }
 
     @Test
-    void untickingAndOtherListStyles() {
-        assertThat(Checklists.toggles(LIST, LIST.replace("- [x] CV", "- [ ] CV")))
-                .containsExactly(new Toggle(2, "CV", false));
-        assertThat(Checklists.toggles(LIST, LIST.replace("* [ ] Nested", "* [X] Nested")))
-                .containsExactly(new Toggle(3, "Nested item", true));
-        assertThat(Checklists.toggles(LIST, LIST.replace("1. [ ] Numbered", "1. [x] Numbered")))
-                .containsExactly(new Toggle(4, "Numbered", true));
-        assertThat(Checklists.toggles(LIST, LIST.replace("> - [ ] Quoted", "> - [x] Quoted")))
-                .containsExactly(new Toggle(5, "Quoted", true));
+    void cleanDropsMarkdownPrefixesAndRejectsLongOrMultiLineItems() {
+        assertThat(Checklists.clean("- [ ] Folder")).isEqualTo("Folder");
+        assertThat(Checklists.clean("* [x] CV")).isEqualTo("CV");
+        assertThat(Checklists.clean("1. Cover letter")).isEqualTo("Cover letter");
+        assertThat(Checklists.clean("[ ]Photo")).isEqualTo("Photo");
+        assertThat(Checklists.clean("-5 degrees")).isEqualTo("-5 degrees");
+        assertThat(Checklists.clean("- [ ] ")).isEmpty();
+        assertThat(Checklists.clean(null)).isEmpty();
+        assertThatThrownBy(() -> Checklists.clean("a\nb")).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> Checklists.clean("x".repeat(201))).isInstanceOf(ResponseStatusException.class);
     }
 
     @Test
-    void severalItemsAreListedInLineOrder() {
-        String after = LIST.replace("- [x] CV", "- [ ] CV").replace("* [ ] Nested", "* [x] Nested");
-        assertThat(Checklists.toggles(LIST, after))
-                .containsExactly(new Toggle(2, "CV", false), new Toggle(3, "Nested item", true));
+    void appendAddsOnlyMissingItemsAtTheEnd() {
+        Task task = taskWith("x:CV");
+        Checklists.append(task, List.of("CV", "Prepare", "Prepare"));
+        assertThat(view(task)).containsExactly("x:CV@0", "Prepare@1");
     }
 
     @Test
-    void anyOtherChangeIsRejected() {
-        String ticked = LIST.replace("- [ ] Cover letter", "- [x] Cover letter");
-        // Item text changed as well
-        assertThat(Checklists.toggles(LIST, LIST.replace("- [ ] Cover letter", "- [x] Cover"))).isEmpty();
-        // A checkbox plus another line
-        assertThat(Checklists.toggles(LIST, ticked.replace("Steps:", "Steps"))).isEmpty();
-        // Line added
-        assertThat(Checklists.toggles(LIST, ticked + "\n")).isEmpty();
-        // Nothing changed, or only the case of the x
-        assertThat(Checklists.toggles(LIST, LIST)).isEmpty();
-        assertThat(Checklists.toggles(LIST, LIST.replace("- [x] CV", "- [X] CV"))).isEmpty();
-        // No description
-        assertThat(Checklists.toggles(null, LIST)).isEmpty();
-        assertThat(Checklists.toggles(LIST, null)).isEmpty();
+    void appendStopsAtTheLimit() {
+        Task task = new Task();
+        Checklists.append(task, java.util.stream.IntStream.range(0, 120).mapToObj(i -> "Item " + i).toList());
+        assertThat(task.getChecklist()).hasSize(Checklists.MAX_ITEMS);
     }
 
     @Test
-    void textThatOnlyLooksLikeABoxIsNotAnItem() {
-        assertThat(Checklists.toggles("Use [ ] for empty boxes", "Use [x] for empty boxes")).isEmpty();
-    }
-
-    @Test
-    void longItemTextIsShortened() {
-        String before = "- [ ] " + "a".repeat(300);
-        assertThat(Checklists.toggles(before, before.replace("[ ]", "[x]")).get(0).item()).hasSize(201).endsWith("…");
-    }
-
-    @Test
-    void appendAddsMissingItemsBelowAListThatEndsTheText() {
-        assertThat(Checklists.append("Notes\n- [x] CV\n", java.util.List.of("CV", "Prepare", "Prepare")))
-                .isEqualTo("Notes\n- [x] CV\n- [ ] Prepare");
-    }
-
-    @Test
-    void appendStartsANewParagraphAfterText() {
-        assertThat(Checklists.append("Call them back", java.util.List.of("Prepare")))
-                .isEqualTo("Call them back\n\n- [ ] Prepare");
-        assertThat(Checklists.append(null, java.util.List.of("Prepare"))).isEqualTo("- [ ] Prepare");
-    }
-
-    @Test
-    void appendLeavesTheTextAloneWhenEveryItemIsThere() {
-        String text = "> - [X] Prepare  \nmore";
-        assertThat(Checklists.append(text, java.util.List.of("Prepare"))).isSameAs(text);
+    void replaceKeepsTicksOfItemsInBothLists() {
+        Task task = taskWith("Apply", "x:Research", "x:CV");
+        Checklists.replace(task, List.of("Research", "Thank-you mail"));
+        assertThat(view(task)).containsExactly("x:Research@0", "Thank-you mail@1");
     }
 }

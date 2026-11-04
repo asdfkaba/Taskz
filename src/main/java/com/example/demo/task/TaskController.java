@@ -16,7 +16,10 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/tasks")
@@ -65,6 +68,7 @@ public class TaskController {
         task.setUser(user);
         task.setBoardColumn(column);
         applyLabels(input, task);
+        applyChecklist(input, task);
         task.setPosition(repository.countByBoardColumn(column));
         repository.save(task);
         historyService.recordCreated(task, email);
@@ -88,43 +92,35 @@ public class TaskController {
         TaskHistoryService.Snapshot before = TaskHistoryService.Snapshot.of(task);
         copyEditableFields(input, task);
         applyLabels(input, task);
+        applyChecklist(input, task);
         Task saved = repository.save(task);
         historyService.recordUpdate(before, saved, currentUserEmail());
         boardService.changed(saved.getBoardColumn().getBoard());
         return TaskDto.from(saved);
     }
 
-    /**
-     * Ticks or unticks a checkbox of the description. The client sends the whole description with the
-     * clicked item (line, 0-based) changed, plus its sub-items and the parents that follow from it.
-     * Parents come before their sub-items in the text, so items above the clicked line are parents.
-     * Only checkboxes may change, all in the same direction; anything else (or a description changed
-     * in the meantime) is rejected.
-     */
-    @PatchMapping("/{id}/checkbox")
-    public TaskDto toggleCheckbox(@PathVariable("id") int id, @RequestBody CheckboxRequest input) {
-        Task task = findTask(id);
-        List<Checklists.Toggle> toggles = Checklists.toggles(task.getDescription(), input.description());
-        // Without a line (older clients) exactly one checkbox may change.
-        Checklists.Toggle clicked = toggles.stream()
-                .filter(t -> input.line() == null ? toggles.size() == 1 : t.line() == input.line())
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
-                        "The description must differ only in checkboxes, including the clicked one"));
-        if (toggles.stream().anyMatch(t -> t.checked() != clicked.checked())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "All changed checkboxes must change the same way");
+    /** Ticks or unticks one checklist item. Not a conflict for someone editing the task (see TaskDto.revisionOf). */
+    @PatchMapping("/{id}/checklist/{itemId}")
+    public TaskDto setChecked(@PathVariable("id") int id, @PathVariable("itemId") int itemId,
+                              @RequestBody CheckedRequest input) {
+        if (input.checked() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "checked is required");
         }
-        List<String> parents = toggles.stream().filter(t -> t.line() < clicked.line()).map(Checklists.Toggle::item).toList();
-        int subItems = (int) toggles.stream().filter(t -> t.line() > clicked.line()).count();
-
-        task.setDescription(input.description());
+        Task task = findTask(id);
+        ChecklistItem item = task.getChecklist().stream()
+                .filter(i -> i.getId() == itemId)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Checklist item not found"));
+        if (item.isChecked() != input.checked()) {
+            item.setChecked(input.checked());
+            historyService.recordCheckbox(task, item.getText(), input.checked(), currentUserEmail());
+        }
         Task saved = repository.save(task);
-        historyService.recordCheckbox(saved, clicked.item(), clicked.checked(), parents, subItems, currentUserEmail());
         boardService.changed(saved.getBoardColumn().getBoard());
         return TaskDto.from(saved);
     }
 
-    public record CheckboxRequest(String description, Integer line) {
+    public record CheckedRequest(Boolean checked) {
     }
 
     @PatchMapping("/{id}/move")
@@ -171,6 +167,36 @@ public class TaskController {
         to.setTitle(title);
         to.setDescription(from.description());
         to.setDue_date(from.due_date());
+    }
+
+    // Items with an id must be items of this task; they keep their tick. Blank items are dropped.
+    private static void applyChecklist(TaskRequest from, Task to) {
+        if (from.checklist() == null) {
+            return;
+        }
+        Map<Integer, ChecklistItem> existing = new HashMap<>();
+        to.getChecklist().forEach(item -> existing.put(item.getId(), item));
+        List<ChecklistItem> items = new ArrayList<>();
+        for (TaskRequest.ChecklistItemRequest request : from.checklist()) {
+            String text = Checklists.clean(request == null ? null : request.text());
+            if (text.isEmpty()) {
+                continue;
+            }
+            ChecklistItem item = request.id() == null ? new ChecklistItem(to, text, false) : existing.remove(request.id());
+            if (item == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Checklist item " + request.id() + " is not an item of this task");
+            }
+            item.setText(text);
+            items.add(item);
+        }
+        if (items.size() > Checklists.MAX_ITEMS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A checklist can have at most " + Checklists.MAX_ITEMS + " items");
+        }
+        to.getChecklist().clear();
+        to.getChecklist().addAll(items);
+        Checklists.renumber(to);
     }
 
     // Only labels of the task's own board are accepted (checked in LabelService).
