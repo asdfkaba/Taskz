@@ -9,6 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * The automations of a board (see {@link BoardRule}; run by RuleEngine). Only the owner sees and
@@ -20,6 +21,8 @@ public class BoardRuleService {
     static final int MAX_ITEMS = 20;
     static final int MAX_ITEM_LENGTH = 200;
     static final int MAX_DAYS = 365;
+    // "- [ ] ", "* ", "1. ", "[x] ": people paste items as Markdown; the rule adds its own "- [ ] ".
+    private static final Pattern MARKDOWN_PREFIX = Pattern.compile("^(?:(?:[-*+]|\\d{1,9}[.)])\\s+)?(?:\\[[ xX]]\\s*)?");
 
     private final BoardService boardService;
     private final BoardRuleRepository ruleRepository;
@@ -83,7 +86,7 @@ public class BoardRuleService {
 
     private static RulePayload validPayload(BoardRule.Action action, RuleRequest request) {
         return switch (action) {
-            case APPEND_CHECKLIST -> new RulePayload(validItems(request.items()), null);
+            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null);
             case SET_DUE_IN -> {
                 if (request.days() == null || request.days() < 0 || request.days() > MAX_DAYS) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 0 and " + MAX_DAYS);
@@ -93,11 +96,11 @@ public class BoardRuleService {
         };
     }
 
-    // Trimmed, without blanks and duplicates; one line each, so every item stays one checkbox.
+    // Trimmed, without a Markdown list prefix, blanks and duplicates; one line each, so every item stays one checkbox.
     private static List<String> validItems(List<String> items) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
         for (String item : items == null ? List.<String>of() : items) {
-            String trimmed = item == null ? "" : item.strip();
+            String trimmed = item == null ? "" : MARKDOWN_PREFIX.matcher(item.strip()).replaceFirst("").strip();
             if (trimmed.contains("\n") || trimmed.contains("\r")) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checklist items must be one line each");
             }

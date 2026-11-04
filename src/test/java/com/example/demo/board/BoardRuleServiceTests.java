@@ -117,6 +117,21 @@ class BoardRuleServiceTests {
     }
 
     @Test
+    void eachStageReplacesTheChecklist() {
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "REPLACE_CHECKLIST", List.of("Prepare", "Research"), null, null));
+        BoardColumn done = columnRepository.findByBoardOrderByPosition(board).get(2);
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(done.getId(), "REPLACE_CHECKLIST", List.of("Research", "Thank-you mail"), null, null));
+        Task task = addTask("Contact: Ann\n- [ ] Apply");
+
+        boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
+        assertThat(task.getDescription()).isEqualTo("Contact: Ann\n- [ ] Prepare\n- [ ] Research");
+
+        task.setDescription(task.getDescription().replace("[ ] Research", "[x] Research"));
+        boardService.moveTask(task.getId(), done.getId(), 0, ALICE);
+        assertThat(task.getDescription()).isEqualTo("Contact: Ann\n- [x] Research\n- [ ] Thank-you mail");
+    }
+
+    @Test
     void dueDateUsesTheBrowsersTimeZone() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Time-Zone", "Pacific/Kiritimati"); // UTC+14, far from any server
@@ -141,6 +156,14 @@ class BoardRuleServiceTests {
 
     private void checklistRuleAs(String email) {
         ruleService.addRule(board.getId(), email, new RuleRequest(doing.getId(), "APPEND_CHECKLIST", List.of("x"), null, null));
+    }
+
+    @Test
+    void itemsTypedAsMarkdownLoseTheirListPrefix() {
+        checklistRule(doing, "- [ ] Folder", "* [x] CV", "1. Cover letter", "[ ]Photo", "- [ ] Folder", "-5 degrees");
+        assertThat(ruleService.rulesOf(board.getId(), ALICE).get(0).items())
+                .containsExactly("Folder", "CV", "Cover letter", "Photo", "-5 degrees");
+        assertThatThrownBy(() -> checklistRule(doing, "- [ ] ")).hasMessageContaining("1 to 20 items");
     }
 
     @Test

@@ -70,6 +70,23 @@ test('Board automations', async ({ browser }) => {
     ensure(task.description === 'first\n- [ ] Research\n- [ ] Prepare\n- [ ] Thank-you mail', JSON.stringify(task.description))
   })
 
+  await test.step('a replacing rule swaps the checklist when the task enters Done', async () => {
+    await page.goto(`${BASE}/boards/my-board/settings`)
+    await choose('Column', 'Done')
+    await choose('Action', 'Replace the checklist')
+    await rules().getByRole('textbox', { name: 'Checklist items' }).fill('Thank-you mail\nFollow up')
+    await rules().getByRole('button', { name: 'Add automation' }).click()
+    await rules().getByText('Replace the checklist with: Thank-you mail, Follow up').waitFor()
+    ensure((await state()).rules.at(-1).action === 'REPLACE_CHECKLIST', 'wrong action saved')
+
+    await page.goto(`${BASE}/boards/my-board`)
+    await card(1).hover()
+    await card(1).getByRole('button', { name: 'Move to Done' }).click()
+    await card(1).getByTestId('checklist-progress').getByText('0/2').waitFor()
+    const task = (await state()).tasks.find((t) => t.id === 1)
+    ensure(task.description === 'first\n- [ ] Thank-you mail\n- [ ] Follow up', JSON.stringify(task.description))
+  })
+
   await test.step('the history names the automation', async () => {
     await card(1).locator('h3').click()
     await page.getByTestId('task-view').waitFor()

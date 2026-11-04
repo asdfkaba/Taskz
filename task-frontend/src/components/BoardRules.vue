@@ -17,6 +17,7 @@ const MAX_ITEMS = 20
 const MAX_DAYS = 365
 const ACTIONS = [
   { value: 'APPEND_CHECKLIST', label: 'Add checklist items' },
+  { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist' },
   { value: 'SET_DUE_IN', label: 'Set the due date' },
 ]
 
@@ -29,6 +30,7 @@ const busy = ref(false)
 
 const columnId = ref(store.columns[0]?.id ?? null)
 const action = ref('APPEND_CHECKLIST')
+const hasItems = (ruleAction) => ruleAction !== 'SET_DUE_IN'
 const itemsText = ref('')
 const days = ref('14')
 
@@ -36,7 +38,7 @@ const toItems = (text) => text.split('\n').map((line) => line.trim()).filter(Boo
 const toDays = (text) => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : null)
 // The settings the backend expects for the action, or null if they aren't valid yet.
 function settings(ruleAction, text, daysText) {
-  if (ruleAction === 'APPEND_CHECKLIST') {
+  if (hasItems(ruleAction)) {
     const list = toItems(text)
     return list.length > 0 && list.length <= MAX_ITEMS ? { items: list } : null
   }
@@ -63,6 +65,7 @@ const byColumn = computed(() =>
 
 function describe(rule) {
   if (rule.action === 'APPEND_CHECKLIST') return `Add checklist items: ${rule.items.join(', ')}`
+  if (rule.action === 'REPLACE_CHECKLIST') return `Replace the checklist with: ${rule.items.join(', ')}`
   return `Set the due date to ${rule.days} ${rule.days === 1 ? 'day' : 'days'} from now`
 }
 
@@ -133,7 +136,8 @@ async function remove(rule) {
 <template>
   <div class="flex flex-col gap-4" data-testid="board-rules">
     <p class="text-sm text-slate-600 dark:text-slate-400">
-      Run when a task is moved into a column or created in it. Items already in the description are not added again.
+      Run when a task is moved into a column or created in it. Adding skips items the description already has.
+      Replacing removes every checkbox of the description and puts the new list in its place; items in both stay ticked.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>
@@ -144,7 +148,7 @@ async function remove(rule) {
         <li v-for="rule in group.rules" :key="rule.id" class="py-1" data-testid="rule">
           <form v-if="editing?.id === rule.id" class="flex flex-col gap-2" @submit.prevent="saveEdit(rule)" @keydown.esc.stop="editing = null">
             <Textarea
-              v-if="rule.action === 'APPEND_CHECKLIST'"
+              v-if="hasItems(rule.action)"
               v-model="editing.itemsText"
               rows="3"
               autoResize
@@ -202,11 +206,11 @@ async function remove(rule) {
         <Select v-model="action" :options="ACTIONS" optionLabel="label" optionValue="value" aria-label="Action" size="small" />
       </div>
       <Textarea
-        v-if="action === 'APPEND_CHECKLIST'"
+        v-if="hasItems(action)"
         v-model="itemsText"
         rows="3"
         autoResize
-        placeholder="One item per line"
+        placeholder="One item per line, e.g. Update CV"
         aria-label="Checklist items"
       />
       <div v-else class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">

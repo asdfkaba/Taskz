@@ -86,4 +86,18 @@ class ChecklistsTests {
         String text = "> - [X] Prepare  \nmore";
         assertThat(Checklists.append(text, java.util.List.of("Prepare"))).isSameAs(text);
     }
+
+    @Test
+    void replaceSwapsTheChecklistInPlaceAndKeepsTicksAndOtherText() {
+        String text = "Contact: Ann\n\n- [ ] Apply\n- [x] CV\n  needs a photo\n  - [ ] Photo\n\nLink: x.com\n";
+        assertThat(Checklists.replace(text, java.util.List.of("CV", "Prepare")))
+                .isEqualTo("Contact: Ann\n\n- [x] CV\n- [ ] Prepare\n\nLink: x.com");
+    }
+
+    @Test
+    void replaceWithoutAChecklistAppendsAndSameListChangesNothing() {
+        assertThat(Checklists.replace("Notes", java.util.List.of("Prepare"))).isEqualTo("Notes\n\n- [ ] Prepare");
+        String text = "- [x] Prepare\n";
+        assertThat(Checklists.replace(text, java.util.List.of("Prepare"))).isSameAs(text);
+    }
 }

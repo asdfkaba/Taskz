@@ -1,6 +1,7 @@
 package com.example.demo.task;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -12,7 +13,7 @@ import java.util.regex.Pattern;
  * Markdown task list items ("- [ ] Cover letter") in descriptions.
  * The frontend ticks a checkbox by sending the whole description with the changed items
  * (the clicked one, plus sub-items and parents that follow it); {@link #toggles} checks that
- * nothing but checkboxes changed and lists them. {@link #append} adds items, for automations.
+ * nothing but checkboxes changed and lists them. {@link #append} and {@link #replace} change items, for automations.
  */
 final class Checklists {
 
@@ -82,6 +83,40 @@ final class Checklists {
         }
         String lastLine = text.substring(text.lastIndexOf('\n') + 1);
         return text + (ITEM.matcher(lastLine).matches() ? "" : "\n") + added;
+    }
+
+    /**
+     * The description with its checklist replaced by {@code items}: every checkbox line goes, with the
+     * indented lines right below it (notes, sub-items), and the new items take the place of the first
+     * one. Items that were ticked before stay ticked. Other text stays. Without a checklist like {@link #append}.
+     */
+    static String replace(String description, List<String> items) {
+        String text = description == null ? "" : description.stripTrailing();
+        Set<String> ticked = new HashSet<>();
+        List<String> kept = new ArrayList<>();
+        int at = -1;
+        boolean inItem = false;
+        for (String line : text.split("\n", -1)) {
+            Matcher item = ITEM.matcher(line);
+            if (item.matches()) {
+                if (!item.group(2).equals(" ")) {
+                    ticked.add(item.group(3).substring(1).trim());
+                }
+                if (at < 0) {
+                    at = kept.size();
+                }
+                inItem = true;
+            } else if (!(inItem && !line.isBlank() && (line.startsWith(" ") || line.startsWith("\t")))) {
+                inItem = false;
+                kept.add(line);
+            }
+        }
+        if (at < 0) {
+            return append(description, items);
+        }
+        kept.addAll(at, items.stream().map(i -> "- [" + (ticked.contains(i) ? "x" : " ") + "] " + i).toList());
+        String result = String.join("\n", kept).stripTrailing();
+        return result.equals(text) ? description : result;
     }
 
     private static Optional<Toggle> toggle(int line, String before, String after) {

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
-/** Settings of a {@link BoardRule}, stored as JSON: items for APPEND_CHECKLIST, days for SET_DUE_IN. */
+/** Settings of a {@link BoardRule}, stored as JSON: items for APPEND_CHECKLIST and REPLACE_CHECKLIST, days for SET_DUE_IN. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RulePayload(List<String> items, Integer days) {
 

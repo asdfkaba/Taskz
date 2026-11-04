@@ -87,11 +87,15 @@ const inColumn = (id) => tasks.filter((t) => t.columnId === id).sort((a, b) => a
 const renumber = (list) => list.forEach((t, i) => (t.position = i))
 const sortedColumns = () => [...columns].sort((a, b) => a.position - b.position)
 
-// Only what the e2e tests need: new checklist items at the end, due date N days from now.
+// Only what the e2e tests need: checklist items added or replaced, due date N days from now.
 function runRules(t) {
   const before = { description: t.description, due_date: t.due_date }
   for (const r of rules.filter((x) => x.columnId === t.columnId && x.enabled)) {
-    if (r.action === 'APPEND_CHECKLIST') {
+    if (r.action === 'REPLACE_CHECKLIST') {
+      // Simplified: no ticks kept, no indented lines.
+      const rest = (t.description ?? '').split('\n').filter((line) => !/^\s*[-*+] \[[ xX]\]/.test(line))
+      t.description = [...rest, ...r.items.map((item) => `- [ ] ${item}`)].filter(Boolean).join('\n')
+    } else if (r.action === 'APPEND_CHECKLIST') {
       const missing = r.items.filter((item) => !(t.description ?? '').includes(`] ${item}`))
       if (missing.length) t.description = [t.description, ...missing.map((item) => `- [ ] ${item}`)].filter(Boolean).join('\n')
     } else {

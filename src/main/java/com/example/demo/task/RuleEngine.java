@@ -56,17 +56,19 @@ public class RuleEngine {
     private void apply(BoardRule rule, Task task) {
         RulePayload payload = RulePayload.parse(rule.getPayload());
         switch (BoardRule.Action.valueOf(rule.getAction())) {
-            case APPEND_CHECKLIST -> {
-                String description = Checklists.append(task.getDescription(), payload.items());
-                if (description != null && description.length() > TaskController.MAX_DESCRIPTION_LENGTH) {
-                    LOG.warn("Rule {} skipped: description of task {} would get too long", rule.getId(), task.getId());
-                    return;
-                }
-                task.setDescription(description);
-            }
+            case APPEND_CHECKLIST -> setDescription(rule, task, Checklists.append(task.getDescription(), payload.items()));
+            case REPLACE_CHECKLIST -> setDescription(rule, task, Checklists.replace(task.getDescription(), payload.items()));
             case SET_DUE_IN -> task.setDue_date(
                     LocalDateTime.now(userZone()).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
         }
+    }
+
+    private static void setDescription(BoardRule rule, Task task, String description) {
+        if (description != null && description.length() > TaskController.MAX_DESCRIPTION_LENGTH) {
+            LOG.warn("Rule {} skipped: description of task {} would get too long", rule.getId(), task.getId());
+            return;
+        }
+        task.setDescription(description);
     }
 
     private static ZoneId userZone() {
