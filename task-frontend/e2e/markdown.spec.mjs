@@ -1,6 +1,6 @@
 // Markdown descriptions: rendering, sanitizing, link clicks, preview.
 import { test } from '@playwright/test'
-import { BASE, resetMock } from './support.mjs'
+import { BASE, dialogOpened, resetMock } from './support.mjs'
 
 test('Markdown descriptions', async ({ browser }) => {
   const base = BASE
@@ -28,6 +28,7 @@ test('Markdown descriptions', async ({ browser }) => {
   // A click on a card opens the view; the editor is one more click away.
   async function openEditor(id) {
     await card(id).click()
+    await dialogOpened(page)
     await page.getByRole('button', { name: 'Edit', exact: true }).click()
     await page.locator('#task-description').waitFor()
   }
