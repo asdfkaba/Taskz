@@ -10,9 +10,10 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 import { fromApi, toApi } from '@/utils/date'
-import { applyCheckbox, renderMarkdown } from '@/utils/markdown'
+import { renderMarkdown } from '@/utils/markdown'
 import LabelPicker from '@/components/LabelPicker.vue'
 import MarkdownHelp from '@/components/MarkdownHelp.vue'
+import ChecklistEditor from '@/components/ChecklistEditor.vue'
 import LabelPill from '@/components/LabelPill.vue'
 import TaskDetails from '@/components/TaskDetails.vue'
 import TaskHistory from '@/components/TaskHistory.vue'
@@ -50,7 +51,7 @@ const labels = computed(() => (current.value ? store.labelsOf(current.value) : [
 
 const busy = ref(false)
 const submitted = ref(false)
-const form = reactive({ title: '', description: '', dueDate: null, labelIds: [] })
+const form = reactive({ title: '', description: '', dueDate: null, labelIds: [], checklist: [] })
 const labelPickerOpen = ref(false)
 const formLabels = computed(() => store.labels.filter((l) => form.labelIds.includes(l.id)))
 let initialForm = ''
@@ -76,6 +77,7 @@ function fillForm() {
   form.description = t ? (t.description ?? '') : (store.taskTemplate ?? '')
   form.dueDate = fromApi(t?.due_date)
   form.labelIds = [...(t?.labelIds ?? [])].sort((a, b) => a - b)
+  form.checklist = (t?.checklist ?? []).map(({ id, text }) => ({ id, text }))
   labelPickerOpen.value = false
   initialForm = JSON.stringify(form)
   baseRevision = t?.revision ?? null
@@ -117,24 +119,18 @@ function switchMode(target) {
   else backToView()
 }
 
-// Ticking a checkbox in the view saves right away; sub-items and parents follow (see applyCheckbox).
+// Ticking a checklist item in the view saves right away.
 const checking = ref(false)
-async function onToggleCheckbox(index) {
-  const task = current.value
-  const change = applyCheckbox(task.description ?? '', index)
-  if (change === null) {
-    toast.add({ severity: 'error', summary: 'Could not find that checkbox', life: 5000 })
-    return
-  }
+async function onToggleItem(item) {
   checking.value = true
   try {
-    await store.toggleCheckbox(task.id, change.description, change.line)
+    await store.setChecklistItem(current.value.id, item.id, !item.checked)
   } catch (err) {
-    if (err.status === 409) {
-      toast.add({ severity: 'warn', summary: 'The task was changed elsewhere', detail: 'Loaded the current version.', life: 5000 })
-      await store.fetchBoard(store.board.id).catch(() => {})
+    if (err.status === 404) {
+      toast.add({ severity: 'warn', summary: 'The checklist was changed elsewhere', detail: 'Loaded the current version.', life: 5000 })
+      await store.refreshBoard().catch(() => {})
     } else {
-      toast.add({ severity: 'error', summary: 'Could not save the checkbox', detail: err.message, life: 5000 })
+      toast.add({ severity: 'error', summary: 'Could not save the checklist', detail: err.message, life: 5000 })
     }
   } finally {
     checking.value = false
@@ -170,6 +166,7 @@ async function save(overwrite = false) {
     description: form.description.trim(),
     due_date: toApi(form.dueDate),
     labelIds: form.labelIds,
+    checklist: form.checklist.filter((i) => i.text.trim()).map(({ id, text }) => ({ id, text: text.trim() })),
   }
   if (!isNew.value && !overwrite) data.revision = baseRevision
 
@@ -260,7 +257,7 @@ function askOverwrite() {
         canEdit
         :checking="checking"
         @edit="startEditing"
-        @toggle-checkbox="onToggleCheckbox"
+        @toggle-item="onToggleItem"
       />
       <TaskAttachments :taskId="current.id" />
       <TaskNotes :taskId="current.id" />
@@ -326,6 +323,13 @@ function askOverwrite() {
           <p v-else class="text-sm text-slate-400 dark:text-slate-500">Nothing to preview</p>
         </div>
         <MarkdownHelp />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <span id="task-checklist-label" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+          Checklist <span class="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
+        </span>
+        <ChecklistEditor v-model="form.checklist" aria-labelledby="task-checklist-label" />
       </div>
 
       <div class="flex flex-col gap-1.5">

@@ -84,13 +84,11 @@ test('Markdown descriptions', async ({ browser }) => {
     expect((await d.innerHTML()).includes('Line one<br>'), 'single newline is not a line break')
   })
 
-  await check('task list checkboxes are shown and disabled', async () => {
-    const boxes = desc(1).locator('input[type="checkbox"]')
-    expect((await boxes.count()) === 2, `checkboxes ${await boxes.count()}`)
-    expect(await boxes.nth(0).isDisabled(), 'first enabled')
-    expect(!(await boxes.nth(0).isChecked()) && (await boxes.nth(1).isChecked()), 'checked state wrong')
-    const bullet = await desc(1).locator('li').first().evaluate((el) => getComputedStyle(el).listStyleType)
-    expect(bullet === 'none', `bullet ${bullet}`)
+  // Checklists have their own list (task.checklist); in descriptions the marks are text.
+  await check('task list marks are plain text', async () => {
+    expect((await desc(1).locator('input').count()) === 0, 'checkbox rendered')
+    const items = await desc(1).locator('li').allInnerTexts()
+    expect(items.includes('[ ] open item') && items.includes('[x] done item'), JSON.stringify(items))
   })
 
   await check('dangerous html is removed', async () => {

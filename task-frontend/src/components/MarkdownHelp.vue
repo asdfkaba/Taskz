@@ -37,20 +37,10 @@ const SECTIONS = [
     ],
   },
   {
-    title: 'Checklists',
-    examples: [
-      { source: '- [ ] Cover letter\n- [x] CV', note: 'Tick them in the task view. The card shows the progress, e.g. 1/2.' },
-      {
-        source: '- [ ] Application\n  - [x] Cover letter\n  - [ ] CV',
-        note: 'Sub-items with 2 spaces. Ticking all sub-items ticks the parent; ticking the parent ticks all sub-items.',
-      },
-    ],
-  },
-  {
     title: 'Quotes and code',
     examples: [
       { source: '> Quoted text' },
-      { source: '```\nCode block\n```', note: 'Checkboxes inside a code block are plain text.' },
+      { source: '```\nCode block\n```' },
     ],
   },
   {

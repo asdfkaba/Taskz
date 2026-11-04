@@ -34,11 +34,13 @@ public class TaskHistoryService {
         this.userRepository = userRepository;
     }
 
-    /** The fields whose changes are recorded. Labels by name, sorted. */
-    public record Snapshot(String title, String description, LocalDateTime dueDate, List<String> labels) {
+    /** The fields whose changes are recorded. Labels by name, sorted; checklist items by text, in order. */
+    public record Snapshot(String title, String description, LocalDateTime dueDate, List<String> labels,
+                           List<String> checklist) {
         public static Snapshot of(Task task) {
             List<String> labels = task.getLabels().stream().map(BoardLabel::getName).sorted().toList();
-            return new Snapshot(task.getTitle(), task.getDescription(), task.getDue_date(), labels);
+            List<String> checklist = task.getChecklist().stream().map(ChecklistItem::getText).toList();
+            return new Snapshot(task.getTitle(), task.getDescription(), task.getDue_date(), labels, checklist);
         }
     }
 
@@ -88,6 +90,17 @@ public class TaskHistoryService {
         if (!removed.isEmpty()) {
             changes.put("labelsRemoved", removed);
         }
+        // Renaming an item shows as removed and added; reordering alone isn't recorded.
+        List<String> itemsAdded = new ArrayList<>(after.checklist());
+        itemsAdded.removeAll(before.checklist());
+        List<String> itemsRemoved = new ArrayList<>(before.checklist());
+        itemsRemoved.removeAll(after.checklist());
+        if (!itemsAdded.isEmpty()) {
+            changes.put("checklistAdded", itemsAdded);
+        }
+        if (!itemsRemoved.isEmpty()) {
+            changes.put("checklistRemoved", itemsRemoved);
+        }
         return changes;
     }
 
@@ -98,21 +111,10 @@ public class TaskHistoryService {
         }
     }
 
-    /**
-     * A checkbox in the description was ticked or unticked; recorded by its text, not as a description change.
-     * parents: items that changed with it (completed or reopened); subItems: how many sub-items changed with it.
-     */
+    /** A checklist item was ticked or unticked; recorded by its text. */
     @Transactional
-    public void recordCheckbox(Task task, String item, boolean checked, List<String> parents, int subItems, String email) {
-        Map<String, Object> changes = new LinkedHashMap<>();
-        changes.put("item", item);
-        if (!parents.isEmpty()) {
-            changes.put("parents", parents);
-        }
-        if (subItems > 0) {
-            changes.put("subItems", subItems);
-        }
-        save(task, checked ? Type.CHECKED : Type.UNCHECKED, changes, email);
+    public void recordCheckbox(Task task, String item, boolean checked, String email) {
+        save(task, checked ? Type.CHECKED : Type.UNCHECKED, Map.of("item", item), email);
     }
 
     /** A file was attached to the task (added) or removed from it; recorded by its name. */

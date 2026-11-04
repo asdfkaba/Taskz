@@ -44,6 +44,7 @@ let revisions = 0
 const newRevision = () => `rev${++revisions}`
 const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
+let itemId // ids of checklist items
 // Automations of board 1 ([{ id, columnId, action, items, days, enabled }]), applied like RuleEngine.
 let rules
 let notes // [{ id, taskId, text, user, created, edited }]
@@ -75,7 +76,8 @@ function reset() {
     { id: 2, title: 'Task B', description: null, due_date: [2026, 1, 1, 12, 0], created: null, edited: null, columnId: 10, position: 1 },
     { id: 3, title: 'Task C', description: null, due_date: null, created: '2026-08-01T10:00:00Z', edited: null, columnId: 11, position: 0 },
   ]
-  tasks.forEach((t) => (t.revision = newRevision()))
+  tasks.forEach((t) => Object.assign(t, { revision: newRevision(), checklist: [] }))
+  itemId = 1000
   rules = []
   notes = []
   attachments = []
@@ -87,25 +89,33 @@ const inColumn = (id) => tasks.filter((t) => t.columnId === id).sort((a, b) => a
 const renumber = (list) => list.forEach((t, i) => (t.position = i))
 const sortedColumns = () => [...columns].sort((a, b) => a.position - b.position)
 
-// Only what the e2e tests need: checklist items added or replaced, due date N days from now.
+// Checklist items like the backend: Markdown prefix dropped, blanks skipped, new ones unticked.
+const cleanItem = (text) => (text ?? '').trim().replace(/^(?:(?:[-*+]|\d{1,9}[.)])\s+)?(?:\[[ xX]]\s*)?/, '').trim()
+const newItem = (text, checked = false) => ({ id: itemId++, text, checked })
+const itemTexts = (t) => (t.checklist ?? []).map((i) => i.text)
+
+// Rules like RuleEngine: checklist items added or replaced (ticks kept), due date N days from now.
 function runRules(t) {
-  const before = { description: t.description, due_date: t.due_date }
+  const before = { checklist: itemTexts(t), due_date: t.due_date }
   for (const r of rules.filter((x) => x.columnId === t.columnId && x.enabled)) {
     if (r.action === 'REPLACE_CHECKLIST') {
-      // Simplified: no ticks kept, no indented lines.
-      const rest = (t.description ?? '').split('\n').filter((line) => !/^\s*[-*+] \[[ xX]\]/.test(line))
-      t.description = [...rest, ...r.items.map((item) => `- [ ] ${item}`)].filter(Boolean).join('\n')
+      t.checklist = r.items.map((text) => t.checklist.find((i) => i.text === text) ?? newItem(text))
     } else if (r.action === 'APPEND_CHECKLIST') {
-      const missing = r.items.filter((item) => !(t.description ?? '').includes(`] ${item}`))
-      if (missing.length) t.description = [t.description, ...missing.map((item) => `- [ ] ${item}`)].filter(Boolean).join('\n')
+      t.checklist = [...t.checklist, ...r.items.filter((text) => !itemTexts(t).includes(text)).map((text) => newItem(text))]
     } else {
       const d = new Date(Date.now() + r.days * 86400000)
       t.due_date = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()]
     }
   }
-  if (t.description !== before.description || t.due_date !== before.due_date) {
+  const changes = { automation: true }
+  const added = itemTexts(t).filter((x) => !before.checklist.includes(x))
+  const removed = before.checklist.filter((x) => !itemTexts(t).includes(x))
+  if (added.length) changes.checklistAdded = added
+  if (removed.length) changes.checklistRemoved = removed
+  if (t.due_date !== before.due_date) changes.due_date = [before.due_date, t.due_date]
+  if (Object.keys(changes).length > 1) {
     t.revision = newRevision()
-    events.unshift({ id: eventId++, taskId: t.id, type: 'updated', at: now(), user: null, userId: null, changes: { automation: true, description: [before.description, t.description] } })
+    events.unshift({ id: eventId++, taskId: t.id, type: 'updated', at: now(), user: null, userId: null, changes })
   }
 }
 
@@ -223,7 +233,7 @@ function api(method, url, body) {
   }
   if (method === 'POST' && p === '/tasks') {
     if (!body.columnId) return [400, {}]
-    const t = { id: nextId++, title: body.title, description: body.description, due_date: body.due_date, created: now(), edited: null, columnId: body.columnId, position: inColumn(body.columnId).length, labelIds: body.labelIds ?? [] }
+    const t = { id: nextId++, title: body.title, description: body.description, due_date: body.due_date, created: now(), edited: null, columnId: body.columnId, position: inColumn(body.columnId).length, labelIds: body.labelIds ?? [], checklist: (body.checklist ?? []).map((i) => cleanItem(i.text)).filter(Boolean).map((text) => newItem(text)) }
     t.revision = newRevision()
     tasks.push(t)
     record(t, 'created', { title: t.title, column: colName(t.columnId) })
@@ -310,32 +320,14 @@ function api(method, url, body) {
     board.taskTemplate = body.template?.trim() ? body.template.trim() : null
     return [200, { template: board.taskTemplate }]
   }
-  // Like the backend: only checkbox lines may differ, all the same way, including the clicked line; otherwise 409.
-  if ((m = p.match(/^\/tasks\/(\d+)\/checkbox$/)) && method === 'PATCH') {
+  if ((m = p.match(/^\/tasks\/(\d+)\/checklist\/(\d+)$/)) && method === 'PATCH') {
     const t = tasks.find((x) => x.id === +m[1])
-    const before = (t.description ?? '').split('\n')
-    const after = (body.description ?? '').split('\n')
-    if (before.length !== after.length) return [409, {}]
-    const itemRe = /^((?:[ \t]*>)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+\[)([ xX])(\].*)$/
-    const toggles = []
-    for (let i = 0; i < before.length; i++) {
-      if (before[i] === after[i]) continue
-      const was = itemRe.exec(before[i])
-      const is = itemRe.exec(after[i])
-      if (!was || !is || was[1] !== is[1] || was[3] !== is[3] || (was[2] === ' ') === (is[2] === ' ')) return [409, {}]
-      toggles.push({ line: i, item: is[3].slice(1).trim(), checked: is[2] !== ' ' })
+    const item = t?.checklist.find((i) => i.id === +m[2])
+    if (!item) return [404, { message: 'Checklist item not found' }]
+    if (item.checked !== body.checked) {
+      item.checked = body.checked
+      record(t, body.checked ? 'checked' : 'unchecked', { item: item.text })
     }
-    const clicked = toggles.find((x) => (body.line == null ? toggles.length === 1 : x.line === body.line))
-    if (!clicked || toggles.some((x) => x.checked !== clicked.checked)) return [409, {}]
-    t.description = body.description
-    t.edited = now()
-    const changes = { item: clicked.item }
-    const parents = toggles.filter((x) => x.line < clicked.line).map((x) => x.item)
-    const subItems = toggles.filter((x) => x.line > clicked.line).length
-    if (parents.length) changes.parents = parents
-    if (subItems) changes.subItems = subItems
-    record(t, clicked.checked ? 'checked' : 'unchecked', changes)
-    t.revision = newRevision()
     return [200, t]
   }
   if ((m = p.match(/^\/tasks\/(\d+)$/)) && method === 'PUT') {
@@ -347,6 +339,13 @@ function api(method, url, body) {
     const before = { title: t.title, description: t.description || null, due_date: t.due_date ?? null, labels: labelNames(t.labelIds) }
     Object.assign(t, { title: body.title, description: body.description, due_date: body.due_date })
     if (body.labelIds) t.labelIds = [...body.labelIds].sort((a, b) => a - b)
+    const itemsBefore = itemTexts(t)
+    if (body.checklist) {
+      t.checklist = body.checklist
+        .map((i) => ({ id: i.id, text: cleanItem(i.text) }))
+        .filter((i) => i.text)
+        .map((i) => (i.id ? { ...t.checklist.find((x) => x.id === i.id), text: i.text } : newItem(i.text)))
+    }
     const after = { title: t.title, description: t.description || null, due_date: t.due_date ?? null, labels: labelNames(t.labelIds) }
     const changes = {}
     for (const f of ['title', 'description', 'due_date']) if (JSON.stringify(before[f]) !== JSON.stringify(after[f])) changes[f] = [before[f], after[f]]
@@ -354,6 +353,10 @@ function api(method, url, body) {
     const removed = before.labels.filter((n) => !after.labels.includes(n))
     if (added.length) changes.labelsAdded = added
     if (removed.length) changes.labelsRemoved = removed
+    const itemsAdded = itemTexts(t).filter((x) => !itemsBefore.includes(x))
+    const itemsRemoved = itemsBefore.filter((x) => !itemTexts(t).includes(x))
+    if (itemsAdded.length) changes.checklistAdded = itemsAdded
+    if (itemsRemoved.length) changes.checklistRemoved = itemsRemoved
     if (Object.keys(changes).length) record(t, 'updated', changes)
     t.edited = now()
     return [200, t]

@@ -5,7 +5,6 @@ import Column from 'primevue/column'
 import Select from 'primevue/select'
 import { fromApi, formatDue, formatShort } from '@/utils/date'
 import { DEFAULT_COLUMN_COLOR } from '@/utils/task'
-import { checkboxStates } from '@/utils/markdown'
 import { highlight } from '@/utils/search'
 
 // The board's tasks as a sortable table. Without a sort they are in board order (column by column).
@@ -32,8 +31,8 @@ const rows = computed(() =>
     const due = fromApi(task.due_date)
     const created = fromApi(task.created)
     const edited = fromApi(task.edited) ?? created
-    const states = checkboxStates(task.description)
-    const done = states.filter(Boolean).length
+    const items = task.checklist ?? []
+    const done = items.filter((i) => i.checked).length
     return {
       id: task.id,
       task,
@@ -46,8 +45,8 @@ const rows = computed(() =>
       due,
       dueSort: due?.getTime() ?? LAST,
       overdue: due !== null && due < new Date(),
-      checklist: states.length ? { done, total: states.length } : null,
-      checklistSort: states.length ? done / states.length : -1,
+      checklist: items.length ? { done, total: items.length } : null,
+      checklistSort: items.length ? done / items.length : -1,
       created,
       createdSort: created?.getTime() ?? LAST,
       edited,

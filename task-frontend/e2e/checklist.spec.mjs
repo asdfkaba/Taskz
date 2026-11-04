@@ -1,37 +1,32 @@
-// Checkboxes in descriptions: progress on the card, ticking in the task view, history, shared boards.
+// The checklist of a task: progress on the card, ticking in the view, editing in the dialog,
+// history, shared boards. "- [ ]" in descriptions is plain text.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
-const DESCRIPTION = [
-  'Steps:',
-  '- [ ] Cover letter',
-  '- [ ] CV',
-  '```',
-  '- [ ] CV',
-  '```',
-  '- [x] Research',
-].join('\n')
-
-test('Checklists in descriptions', async ({ browser }) => {
+test('Task checklists', async ({ browser }) => {
   await resetMock()
   // Like the app: PUT replaces the editable fields. silent: open pages don't hear of it (yet).
-  const setDescription = (description, { silent = false } = {}) =>
+  const put = (body, { silent = false } = {}) =>
     fetch(`${BASE}/api/tasks/1`, {
       method: 'PUT',
       headers: silent ? { 'x-mock-silent': '1' } : {},
-      body: JSON.stringify({ title: 'Task A', description, due_date: null }),
+      body: JSON.stringify({ title: 'Task A', description: 'first', due_date: null, ...body }),
     })
-  await setDescription(DESCRIPTION)
+  const state = async () => (await fetch(`${BASE}/api/__state`)).json()
+  const task1 = async () => (await state()).tasks.find((t) => t.id === 1)
+  await put({ checklist: [{ text: 'Cover letter' }, { text: 'CV' }, { text: 'Research' }] })
+  const research = (await task1()).checklist[2]
+  await fetch(`${BASE}/api/tasks/1/checklist/${research.id}`, { method: 'PATCH', body: JSON.stringify({ checked: true }) })
 
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
   const ensure = (cond, msg) => { if (!cond) throw new Error(msg) }
-  const state = async () => (await fetch(`${BASE}/api/__state`)).json()
-  const task1 = async () => (await state()).tasks.find((t) => t.id === 1)
   const progress = () => page.locator('[data-task-id="1"]').getByTestId('checklist-progress')
-  const boxes = () => page.getByTestId('task-description').locator('input[type="checkbox"]')
+  const boxes = () => page.getByTestId('task-checklist').getByRole('checkbox')
   const checked = async () => boxes().evaluateAll((els) => els.map((e) => e.checked))
+  const ticks = async (n) => page.waitForFunction((count) => document.querySelectorAll('[data-testid="task-checklist"] input:checked').length === count, n)
+  const historyFirst = () => page.getByTestId('task-history').locator('li[data-event-type]').first()
   const closeDialog = async () => {
     await page.keyboard.press('Escape')
     await page.waitForFunction(() => !document.querySelector('.p-dialog'))
@@ -44,107 +39,97 @@ test('Checklists in descriptions', async ({ browser }) => {
   await page.goto(`${BASE}/boards`)
   await page.locator('[data-task-id="1"]').waitFor()
 
-  await test.step('the card shows the progress; the code block does not count', async () => {
+  await test.step('the card shows the progress', async () => {
     ensure((await progress().innerText()).trim() === '1/3', await progress().innerText())
     ensure((await progress().getAttribute('aria-label')) === '1 of 3 checklist items done', 'label')
-    ensure((await page.locator('[data-task-id="2"]').getByTestId('checklist-progress').count()) === 0, 'progress without boxes')
+    ensure((await page.locator('[data-task-id="2"]').getByTestId('checklist-progress').count()) === 0, 'progress without items')
   })
 
-  await test.step('ticking in the view changes only that line and is saved', async () => {
+  await test.step('ticking in the view is saved right away', async () => {
     await openView(1)
     ensure(JSON.stringify(await checked()) === '[false,false,true]', JSON.stringify(await checked()))
-    await boxes().nth(1).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 2)
-    const expected = DESCRIPTION.replace('- [ ] CV\n```', '- [x] CV\n```')
-    ensure((await task1()).description === expected, JSON.stringify((await task1()).description))
+    await page.getByTestId('task-checklist').getByText('CV').click()
+    await ticks(2)
+    ensure((await task1()).checklist.map((i) => i.checked).join() === 'false,true,true', 'not saved')
     ensure((await progress().innerText()).trim() === '2/3', 'card not updated')
     ensure((await page.getByTestId('task-view').count()) === 1, 'left the view')
   })
 
-  await test.step('the history says what was ticked, not "changed the description"', async () => {
+  await test.step('the history says what was ticked', async () => {
     await page.getByTestId('task-history').getByRole('button', { name: 'History' }).click()
-    const first = page.getByTestId('task-history').locator('li[data-event-type]').first()
-    await first.waitFor()
-    ensure((await first.getAttribute('data-event-type')) === 'checked', await first.getAttribute('data-event-type'))
-    ensure((await first.innerText()).includes('Checked “CV”'), await first.innerText())
+    await historyFirst().waitFor()
+    ensure((await historyFirst().getAttribute('data-event-type')) === 'checked', await historyFirst().getAttribute('data-event-type'))
+    ensure((await historyFirst().innerText()).includes('Checked “CV”'), await historyFirst().innerText())
   })
 
   await test.step('unticking with the keyboard; history updates while open', async () => {
     await boxes().nth(2).focus()
     await page.keyboard.press('Space')
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 1)
-    ensure((await task1()).description.endsWith('- [ ] Research'), 'not saved')
-    const first = page.getByTestId('task-history').locator('li[data-event-type]').first()
+    await ticks(1)
     await page.waitForFunction(() => document.querySelector('[data-testid="task-history"] li[data-event-type]')?.dataset.eventType === 'unchecked')
-    ensure((await first.innerText()).includes('Unchecked “Research”'), await first.innerText())
+    ensure((await historyFirst().innerText()).includes('Unchecked “Research”'), await historyFirst().innerText())
   })
 
   await test.step('all done turns the progress green', async () => {
     await boxes().nth(0).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 2)
+    await ticks(2)
     await boxes().nth(2).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 3)
+    await ticks(3)
     await closeDialog()
     ensure((await progress().innerText()).trim() === '3/3', await progress().innerText())
     ensure((await progress().getAttribute('class')).includes('text-green-700'), 'not green')
-    await page.screenshot({ path: `${test.info().outputDir}/cl-1-board.png` })
   })
 
-  await test.step('nested items are indented under their parent', async () => {
-    await setDescription('- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n  - Plain bullet\n- [ ] Next')
-    await page.reload()
+  await test.step('editing: rename, reorder, remove, add; ticks stay with their items', async () => {
     await openView(1)
-    // Measure after the dialog's opening animation (it scales the content).
+    await page.getByRole('button', { name: 'Edit', exact: true }).click()
+    const editor = page.getByTestId('checklist-editor')
+    await editor.waitFor()
+    // The dialog moves focus to the title after its animation; type only after that.
     await page.locator('.p-dialog').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)))
-    const x = (i) => boxes().nth(i).evaluate((e) => e.getBoundingClientRect().left)
-    const [parent, child, grandchild, next] = [await x(0), await x(1), await x(2), await x(3)]
-    ensure(child - parent >= 16 && grandchild - child >= 16, `not indented: ${parent} ${child} ${grandchild}`)
-    ensure(Math.abs(next - parent) < 1, `siblings differ: ${parent} ${next}`)
-    // The child's box lines up with the parent's text.
-    const parentText = await page.getByTestId('task-description').locator('li').first().evaluate((li) => {
-      const range = document.createRange()
-      range.selectNodeContents(li.childNodes[1])
-      return range.getBoundingClientRect().left
-    })
-    ensure(Math.abs(child - parentText) < 3, `child ${child} vs parent text ${parentText}`)
-    await page.screenshot({ path: `${test.info().outputDir}/cl-2-nested.png` })
-    await closeDialog()
-  })
+    await page.locator('#task-title:focus').waitFor()
+    await editor.getByRole('textbox', { name: 'Checklist item 1' }).fill('Cover letter v2')
+    await editor.getByRole('button', { name: 'Move Research up' }).click()
+    await editor.getByRole('button', { name: 'Move Research up' }).click()
+    await editor.getByRole('button', { name: 'Remove CV' }).click()
+    const newItem = editor.getByRole('textbox', { name: 'New checklist item' })
+    await newItem.fill('- [ ] Photo')
+    await newItem.press('Enter')
+    ensure((await newItem.inputValue()) === '', 'new item field not cleared')
+    ensure((await page.getByTestId('task-view').count()) === 0, 'Enter submitted the form')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await page.getByTestId('task-view').waitFor()
 
-  await test.step('nested: the last sub-item completes its parents, a parent takes its sub-items along', async () => {
-    // Parent > Child > Grandchild, a plain bullet under Parent, then Next
-    await openView(1)
-    const historyFirst = () => page.getByTestId('task-history').locator('li[data-event-type]').first()
+    const items = (await task1()).checklist
+    ensure(items.map((i) => `${i.checked ? 'x:' : ''}${i.text}`).join() === 'x:Research,x:Cover letter v2,Photo', JSON.stringify(items))
+    ensure((await progress().innerText()).trim() === '2/3', await progress().innerText())
     await page.getByTestId('task-history').getByRole('button', { name: 'History' }).click()
-    await boxes().nth(2).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 3)
-    ensure(JSON.stringify(await checked()) === '[true,true,true,false]', JSON.stringify(await checked()))
-    ensure((await task1()).description === '- [x] Parent\n  - [x] Child\n    - [x] Grandchild\n  - Plain bullet\n- [ ] Next', 'saved')
-    await page.getByTestId('task-history').getByText('Checked “Grandchild”, completing “Parent”, “Child”').waitFor()
-
-    await boxes().nth(0).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 0)
-    await page.getByTestId('task-history').getByText('Unchecked “Parent” and 2 sub-items').waitFor()
-    ensure((await historyFirst().getAttribute('data-event-type')) === 'unchecked', 'type')
-
-    await boxes().nth(0).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 3)
-    await boxes().nth(1).click()
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="task-description"] input:checked').length === 0)
-    await page.getByTestId('task-history').getByText('Unchecked “Child” and 1 sub-item, reopening “Parent”').waitFor()
+    const text = await historyFirst().innerText()
+    ensure(text.includes('Added checklist items “Cover letter v2”, “Photo”'), text)
+    ensure(text.includes('Removed checklist items “Cover letter”, “CV”'), text)
+    await page.screenshot({ path: `${test.info().outputDir}/cl-1-view.png` })
     await closeDialog()
   })
 
   // Before the live update of the other change arrives; otherwise the view would already show it.
-  await test.step('a description changed elsewhere is not overwritten', async () => {
+  await test.step('ticking an item someone else removed reloads the task', async () => {
     await openView(1)
-    await setDescription('- [ ] Changed elsewhere\n- [ ] Second', { silent: true })
-    await boxes().nth(0).click()
-    await page.locator('.p-toast').getByText('The task was changed elsewhere').waitFor()
-    // Reloaded: the view shows the other version, unticked.
-    await page.getByTestId('task-description').getByText('Changed elsewhere').waitFor()
-    ensure((await task1()).description === '- [ ] Changed elsewhere\n- [ ] Second', 'overwritten')
-    ensure(JSON.stringify(await checked()) === '[false,false]', JSON.stringify(await checked()))
+    await put({ checklist: [{ text: 'Changed elsewhere' }] }, { silent: true })
+    await page.getByTestId('task-checklist').getByText('Photo').click()
+    await page.locator('.p-toast').getByText('The checklist was changed elsewhere').waitFor()
+    await page.getByTestId('task-checklist').getByText('Changed elsewhere').waitFor()
+    ensure((await task1()).checklist.length === 1, 'changed anyway')
+    await closeDialog()
+  })
+
+  await test.step('"- [ ]" in the description is plain text', async () => {
+    await put({ description: '- [ ] Not a box\n- [x] Neither', checklist: null })
+    await page.reload()
+    await openView(1)
+    const description = page.getByTestId('task-description')
+    await description.getByText('[ ] Not a box').waitFor()
+    ensure((await description.locator('input').count()) === 0, 'checkbox rendered')
+    ensure((await progress().innerText()).trim() === '0/1', 'description boxes counted')
     await closeDialog()
   })
 
@@ -153,16 +138,16 @@ test('Checklists in descriptions', async ({ browser }) => {
     await guest.goto(`${BASE}/share/test-token`)
     const card = guest.locator('[data-task-id="1"]')
     await card.waitFor()
-    ensure((await card.getByTestId('checklist-progress').innerText()).trim() === '0/2', 'shared progress')
+    ensure((await card.getByTestId('checklist-progress').innerText()).trim() === '0/1', 'shared progress')
     await card.locator('h3').click()
-    const box = guest.getByTestId('task-view').locator('input[type="checkbox"]').first()
+    const box = guest.getByTestId('task-checklist').getByRole('checkbox').first()
     await box.waitFor()
     ensure(await box.isDisabled(), 'checkbox enabled on shared board')
-    const checkboxRequests = async () => (await state()).log.filter((e) => e.url.includes('/checkbox')).length
-    const before = await checkboxRequests()
+    const requests = async () => (await state()).log.filter((e) => e.url.includes('/checklist/')).length
+    const before = await requests()
     await box.click({ force: true })
     await guest.waitForTimeout(300)
-    ensure((await checkboxRequests()) === before, 'request sent')
+    ensure((await requests()) === before, 'request sent')
     ensure(!(await box.isChecked()), 'ticked anyway')
     await guest.close()
   })

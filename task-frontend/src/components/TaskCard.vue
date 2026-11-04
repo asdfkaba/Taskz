@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import Button from 'primevue/button'
 import { fromApi, formatDue, formatShort } from '@/utils/date'
 import { DEFAULT_COLUMN_COLOR } from '@/utils/task'
-import { checkboxStates, renderMarkdown } from '@/utils/markdown'
+import { renderMarkdown } from '@/utils/markdown'
 import LabelPill from '@/components/LabelPill.vue'
 import { highlight } from '@/utils/search'
 
@@ -38,10 +38,10 @@ const showArrows = computed(() => !props.readonly && (props.leftColumn || props.
 const onlyArrows = computed(() => !due.value && !checklist.value && !props.task.attachments && !props.labels.length)
 const descriptionHtml = computed(() => (props.compact ? '' : renderMarkdown(props.task.description)))
 const titlePieces = computed(() => highlight(props.task.title, props.terms))
-// Progress of the description's checkboxes, e.g. { done: 2, total: 5 }; null without checkboxes.
+// Progress of the checklist, e.g. { done: 2, total: 5 }; null without one.
 const checklist = computed(() => {
-  const states = checkboxStates(props.task.description)
-  return states.length ? { done: states.filter(Boolean).length, total: states.length } : null
+  const items = props.task.checklist ?? []
+  return items.length ? { done: items.filter((i) => i.checked).length, total: items.length } : null
 })
 
 // A click on a link in the description follows the link instead of opening the task.

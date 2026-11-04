@@ -136,8 +136,8 @@ async function remove(rule) {
 <template>
   <div class="flex flex-col gap-4" data-testid="board-rules">
     <p class="text-sm text-slate-600 dark:text-slate-400">
-      Run when a task is moved into a column or created in it. Adding skips items the description already has.
-      Replacing removes every checkbox of the description and puts the new list in its place; items in both stay ticked.
+      Run when a task is moved into a column or created in it. Adding skips items the checklist already has.
+      Replacing makes the list the task's checklist; items in both stay ticked.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>

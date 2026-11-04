@@ -11,7 +11,9 @@ import org.hibernate.annotations.Formula;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -61,6 +63,12 @@ public class Task {
             inverseJoinColumns = @JoinColumn(name = "label_id"))
     @BatchSize(size = 100)
     private Set<BoardLabel> labels = new HashSet<>();
+
+    // In order; changed through Checklists, TaskController and RuleEngine. BatchSize as for labels.
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("position")
+    @BatchSize(size = 100)
+    private List<ChecklistItem> checklist = new ArrayList<>();
 
     // Counted by the database whenever the task is loaded; only for showing it.
     @Formula("(select count(*) from task_attachment a where a.task_id = id)")

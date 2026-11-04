@@ -63,7 +63,7 @@ async function save() {
       rows="6"
       autoResize
       :maxlength="MAX_LENGTH"
-      placeholder="e.g. ## Steps&#10;- [ ] Cover letter&#10;- [ ] CV"
+      placeholder="e.g. ## Contact&#10;- Name:&#10;- Link:"
       class="max-h-[50vh] font-mono !text-sm"
       fluid
     />

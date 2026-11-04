@@ -78,6 +78,8 @@ function lines(event) {
   }
   if (c.labelsAdded) out.push(`Added ${c.labelsAdded.length === 1 ? 'label' : 'labels'} ${names(c.labelsAdded)}`)
   if (c.labelsRemoved) out.push(`Removed ${c.labelsRemoved.length === 1 ? 'label' : 'labels'} ${names(c.labelsRemoved)}`)
+  if (c.checklistAdded) out.push(`Added ${c.checklistAdded.length === 1 ? 'checklist item' : 'checklist items'} ${c.checklistAdded.map(quoted).join(', ')}`)
+  if (c.checklistRemoved) out.push(`Removed ${c.checklistRemoved.length === 1 ? 'checklist item' : 'checklist items'} ${c.checklistRemoved.map(quoted).join(', ')}`)
   return out
 }
 

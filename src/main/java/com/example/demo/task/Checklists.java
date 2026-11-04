@@ -1,141 +1,70 @@
 package com.example.demo.task;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.Optional;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Markdown task list items ("- [ ] Cover letter") in descriptions.
- * The frontend ticks a checkbox by sending the whole description with the changed items
- * (the clicked one, plus sub-items and parents that follow it); {@link #toggles} checks that
- * nothing but checkboxes changed and lists them. {@link #append} and {@link #replace} change items, for automations.
- */
-final class Checklists {
+/** Rules for checklist items, shared by editing a task and by board rules (RuleEngine). */
+public final class Checklists {
 
-    // List marker (also inside block quotes), then "[ ]" or "[x]", then the item text.
-    private static final Pattern ITEM = Pattern.compile("^((?:[ \\t]*>)*[ \\t]*(?:[-*+]|\\d{1,9}[.)])[ \\t]+\\[)([ xX])(].*)$");
-    private static final int MAX_ITEM_LENGTH = 200;
-
-    /** One ticked or unticked item; line is 0-based. */
-    record Toggle(int line, String item, boolean checked) {
-    }
+    public static final int MAX_ITEM_LENGTH = 200;
+    public static final int MAX_ITEMS = 100;
+    // "- [ ] ", "* ", "1. ", "[x] ": people type items as Markdown; the checklist has its own boxes.
+    private static final Pattern MARKDOWN_PREFIX = Pattern.compile("^(?:(?:[-*+]|\\d{1,9}[.)])\\s+)?(?:\\[[ xX]]\\s*)?");
 
     private Checklists() {
     }
 
-    /**
-     * The checkboxes that differ between the two texts, in line order. Empty if nothing changed
-     * or anything other than a checkbox changed.
-     */
-    static List<Toggle> toggles(String before, String after) {
-        if (before == null || after == null) {
-            return List.of();
+    /** The item's text: trimmed, without a Markdown list prefix; empty if nothing is left. Rejects longer or multi-line text. */
+    public static String clean(String item) {
+        String text = item == null ? "" : MARKDOWN_PREFIX.matcher(item.strip()).replaceFirst("").strip();
+        if (text.contains("\n") || text.contains("\r")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checklist items must be one line each");
         }
-        String[] oldLines = before.split("\n", -1);
-        String[] newLines = after.split("\n", -1);
-        if (oldLines.length != newLines.length) {
-            return List.of();
+        if (text.length() > MAX_ITEM_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Checklist items must be at most " + MAX_ITEM_LENGTH + " characters");
         }
-        List<Toggle> toggles = new ArrayList<>();
-        for (int i = 0; i < oldLines.length; i++) {
-            if (oldLines[i].equals(newLines[i])) {
-                continue;
-            }
-            Optional<Toggle> toggle = toggle(i, oldLines[i], newLines[i]);
-            if (toggle.isEmpty()) {
-                return List.of();
-            }
-            toggles.add(toggle.get());
-        }
-        return toggles;
+        return text;
     }
 
-    /**
-     * The description with an unticked item for each of {@code items} that it doesn't have yet,
-     * ticked or not, anywhere in the text. New items go at the end: right below a list item that ends
-     * the text, else after a blank line.
-     */
-    static String append(String description, List<String> items) {
-        String text = description == null ? "" : description.stripTrailing();
+    /** Adds an unticked item for each text the checklist doesn't have yet, up to {@link #MAX_ITEMS}. */
+    static void append(Task task, List<String> texts) {
         Set<String> present = new LinkedHashSet<>();
-        for (String line : text.split("\n")) {
-            Matcher item = ITEM.matcher(line);
-            if (item.matches()) {
-                present.add(item.group(3).substring(1).trim());
+        task.getChecklist().forEach(item -> present.add(item.getText()));
+        for (String text : texts) {
+            if (task.getChecklist().size() < MAX_ITEMS && present.add(text)) {
+                task.getChecklist().add(new ChecklistItem(task, text, false));
             }
         }
-        StringBuilder added = new StringBuilder();
-        for (String item : items) {
-            if (present.add(item)) {
-                added.append("\n- [ ] ").append(item);
-            }
-        }
-        if (added.isEmpty()) {
-            return description;
-        }
-        if (text.isEmpty()) {
-            return added.substring(1);
-        }
-        String lastLine = text.substring(text.lastIndexOf('\n') + 1);
-        return text + (ITEM.matcher(lastLine).matches() ? "" : "\n") + added;
+        renumber(task);
     }
 
-    /**
-     * The description with its checklist replaced by {@code items}: every checkbox line goes, with the
-     * indented lines right below it (notes, sub-items), and the new items take the place of the first
-     * one. Items that were ticked before stay ticked. Other text stays. Without a checklist like {@link #append}.
-     */
-    static String replace(String description, List<String> items) {
-        String text = description == null ? "" : description.stripTrailing();
-        Set<String> ticked = new HashSet<>();
-        List<String> kept = new ArrayList<>();
-        int at = -1;
-        boolean inItem = false;
-        for (String line : text.split("\n", -1)) {
-            Matcher item = ITEM.matcher(line);
-            if (item.matches()) {
-                if (!item.group(2).equals(" ")) {
-                    ticked.add(item.group(3).substring(1).trim());
-                }
-                if (at < 0) {
-                    at = kept.size();
-                }
-                inItem = true;
-            } else if (!(inItem && !line.isBlank() && (line.startsWith(" ") || line.startsWith("\t")))) {
-                inItem = false;
-                kept.add(line);
-            }
+    /** Makes {@code texts} the checklist. Items whose text was there before keep their tick. */
+    static void replace(Task task, List<String> texts) {
+        Map<String, ChecklistItem> old = new HashMap<>();
+        task.getChecklist().forEach(item -> old.putIfAbsent(item.getText(), item));
+        List<ChecklistItem> items = new ArrayList<>();
+        for (String text : new LinkedHashSet<>(texts)) {
+            ChecklistItem kept = old.remove(text);
+            items.add(kept != null ? kept : new ChecklistItem(task, text, false));
         }
-        if (at < 0) {
-            return append(description, items);
-        }
-        kept.addAll(at, items.stream().map(i -> "- [" + (ticked.contains(i) ? "x" : " ") + "] " + i).toList());
-        String result = String.join("\n", kept).stripTrailing();
-        return result.equals(text) ? description : result;
+        task.getChecklist().clear();
+        task.getChecklist().addAll(items);
+        renumber(task);
     }
 
-    private static Optional<Toggle> toggle(int line, String before, String after) {
-        Matcher was = ITEM.matcher(before);
-        Matcher is = ITEM.matcher(after);
-        if (!was.matches() || !is.matches()
-                || !was.group(1).equals(is.group(1)) || !was.group(3).equals(is.group(3))) {
-            return Optional.empty();
+    static void renumber(Task task) {
+        List<ChecklistItem> items = task.getChecklist();
+        for (int i = 0; i < items.size(); i++) {
+            items.get(i).setPosition(i);
         }
-        boolean checkedBefore = !was.group(2).equals(" ");
-        boolean checkedAfter = !is.group(2).equals(" ");
-        if (checkedBefore == checkedAfter) {
-            return Optional.empty(); // only "x" -> "X"
-        }
-        return Optional.of(new Toggle(line, itemText(is.group(3)), checkedAfter));
-    }
-
-    private static String itemText(String rest) {
-        String text = rest.substring(1).trim(); // without the "]"
-        return text.length() > MAX_ITEM_LENGTH ? text.substring(0, MAX_ITEM_LENGTH) + "…" : text;
     }
 }

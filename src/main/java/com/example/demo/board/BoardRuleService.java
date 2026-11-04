@@ -2,6 +2,7 @@ package com.example.demo.board;
 
 import com.example.demo.board.BoardDtos.RuleDto;
 import com.example.demo.board.BoardDtos.RuleRequest;
+import com.example.demo.task.Checklists;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,7 +10,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * The automations of a board (see {@link BoardRule}; run by RuleEngine). Only the owner sees and
@@ -19,10 +19,7 @@ import java.util.regex.Pattern;
 public class BoardRuleService {
 
     static final int MAX_ITEMS = 20;
-    static final int MAX_ITEM_LENGTH = 200;
     static final int MAX_DAYS = 365;
-    // "- [ ] ", "* ", "1. ", "[x] ": people paste items as Markdown; the rule adds its own "- [ ] ".
-    private static final Pattern MARKDOWN_PREFIX = Pattern.compile("^(?:(?:[-*+]|\\d{1,9}[.)])\\s+)?(?:\\[[ xX]]\\s*)?");
 
     private final BoardService boardService;
     private final BoardRuleRepository ruleRepository;
@@ -96,20 +93,13 @@ public class BoardRuleService {
         };
     }
 
-    // Trimmed, without a Markdown list prefix, blanks and duplicates; one line each, so every item stays one checkbox.
+    // Cleaned like the items of a task (Checklists.clean), without blanks and duplicates.
     private static List<String> validItems(List<String> items) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
         for (String item : items == null ? List.<String>of() : items) {
-            String trimmed = item == null ? "" : MARKDOWN_PREFIX.matcher(item.strip()).replaceFirst("").strip();
-            if (trimmed.contains("\n") || trimmed.contains("\r")) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checklist items must be one line each");
-            }
-            if (trimmed.length() > MAX_ITEM_LENGTH) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Checklist items must be at most " + MAX_ITEM_LENGTH + " characters");
-            }
-            if (!trimmed.isEmpty()) {
-                result.add(trimmed);
+            String text = Checklists.clean(item);
+            if (!text.isEmpty()) {
+                result.add(text);
             }
         }
         if (result.isEmpty() || result.size() > MAX_ITEMS) {

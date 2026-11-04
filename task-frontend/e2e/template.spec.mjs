@@ -2,7 +2,7 @@
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
-const TEMPLATE = '## Steps\n- [ ] Cover letter\n- [ ] CV'
+const TEMPLATE = '## Steps\n- Cover letter\n- CV'
 
 test('Task template', async ({ browser }) => {
   await resetMock()
@@ -39,7 +39,7 @@ test('Task template', async ({ browser }) => {
     ensure(await templateSection().getByRole('button', { name: 'Save template' }).isDisabled(), 'save enabled without change')
     await page.locator('#task-template').fill(`\n${TEMPLATE}\n\n`)
     await templateSection().getByRole('button', { name: 'preview' }).click()
-    ensure((await page.getByTestId('template-preview').locator('input[type="checkbox"]').count()) === 2, 'preview')
+    ensure((await page.getByTestId('template-preview').locator('h2, li').count()) === 3, 'preview')
     await page.screenshot({ path: `${test.info().outputDir}/tp-1-settings.png` })
     await templateSection().getByRole('button', { name: 'Save template' }).click()
     await page.locator('.p-toast').getByText('Template saved').waitFor()
@@ -54,12 +54,11 @@ test('Task template', async ({ browser }) => {
     await page.getByRole('button', { name: 'New task' }).click()
     await page.locator('#task-title').fill('Firma XY')
     ensure((await page.locator('#task-description').inputValue()) === TEMPLATE, 'not prefilled')
-    await page.locator('#task-description').fill(TEMPLATE + '\n- [ ] Portfolio')
+    await page.locator('#task-description').fill(TEMPLATE + '\n- Portfolio')
     await page.getByRole('button', { name: 'Create task' }).click()
     await closed()
     const created = (await state()).tasks.find((t) => t.title === 'Firma XY')
-    ensure(created.description === TEMPLATE + '\n- [ ] Portfolio', created.description)
-    ensure((await page.locator(`[data-task-id="${created.id}"]`).getByTestId('checklist-progress').innerText()).trim() === '0/3', 'progress')
+    ensure(created.description === TEMPLATE + '\n- Portfolio', created.description)
   })
 
   await test.step('closing an untouched new task does not ask about unsaved changes', async () => {

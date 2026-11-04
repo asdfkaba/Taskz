@@ -22,7 +22,8 @@ export function searchTerms(query) {
 }
 
 /**
- * Does the task match? Every term must appear in the title, the description or a label name.
+ * Does the task match? Every term must appear in the title, the description (with the checklist)
+ * or a label name.
  * labelIds (if any): the task needs one of these labels, or no label at all if NO_LABEL is among them.
  * Returns { matches, inTitle, inDescription } so the card can say where the text was found.
  */
@@ -36,7 +37,8 @@ export function matchTask(task, taskLabels, terms, labelIds = []) {
   if (!terms.length) return { matches: true, inTitle: false, inDescription: false }
 
   const title = fold(task.title)
-  const description = fold(task.description)
+  // The checklist counts as part of the description, as it did when it was written there.
+  const description = fold([task.description, ...(task.checklist ?? []).map((i) => i.text)].filter(Boolean).join('\n'))
   const labels = taskLabels.map((l) => fold(l.name))
   const matches = terms.every((t) => title.includes(t) || description.includes(t) || labels.some((l) => l.includes(t)))
   return {
