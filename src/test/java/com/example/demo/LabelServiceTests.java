@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.task.RuleEngine;
 import com.example.demo.board.*;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskDto;
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // Runs against H2 so the join table and foreign keys are real.
 @DataJpaTest
-@Import({BoardService.class, LabelService.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, LabelService.class, TaskHistoryService.class})
 @RecordApplicationEvents
 class LabelServiceTests {
 

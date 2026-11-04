@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Invite links, joining, and what members may do (against H2, with real queries). */
 @DataJpaTest
-@Import({BoardMemberService.class, BoardService.class, LabelService.class, TaskNoteService.class, TaskHistoryService.class})
+@Import({BoardMemberService.class, BoardService.class, RuleEngine.class, LabelService.class, TaskNoteService.class, TaskHistoryService.class})
 class BoardMemberServiceTests {
 
     static final String ALICE = "alice@example.com"; // owner

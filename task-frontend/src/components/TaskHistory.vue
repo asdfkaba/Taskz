@@ -135,7 +135,8 @@ const ICONS = {
           <div class="min-w-0 flex-1">
             <p v-for="line in lines(event)" :key="line" class="break-words text-slate-700 dark:text-slate-300">{{ line }}</p>
             <p class="text-xs text-slate-400 dark:text-slate-500">
-              <span v-if="event.user" data-testid="event-user"><UserIcon :seed="event.userId" size="xs" class="-mt-0.5 mr-1" />{{ event.user }} · </span>
+              <span v-if="event.changes?.automation" data-testid="event-user"><i class="pi pi-bolt mr-1 text-[0.65rem]" aria-hidden="true" />Automation · </span>
+              <span v-else-if="event.user" data-testid="event-user"><UserIcon :seed="event.userId" size="xs" class="-mt-0.5 mr-1" />{{ event.user }} · </span>
               <time :datetime="absolute(event.at)" :title="absolute(event.at)">{{ relative(event.at) }}</time>
             </p>
             <template v-if="event.changes?.description">

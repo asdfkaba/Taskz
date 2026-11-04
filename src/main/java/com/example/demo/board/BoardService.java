@@ -10,6 +10,7 @@ import com.example.demo.task.TaskController;
 import com.example.demo.task.TaskDto;
 import com.example.demo.task.TaskHistoryService;
 import com.example.demo.task.TaskRepository;
+import com.example.demo.task.RuleEngine;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
@@ -56,12 +57,15 @@ public class BoardService {
     private final BoardLabelRepository labelRepository;
     private final TaskHistoryService historyService;
     private final BoardMemberRepository memberRepository;
+    private final BoardRuleRepository ruleRepository;
+    private final RuleEngine ruleEngine;
     private final ApplicationEventPublisher events;
 
     public BoardService(BoardRepository boardRepository, BoardColumnRepository columnRepository,
                         TaskRepository taskRepository, UserRepository userRepository,
                         BoardShareRepository shareRepository, BoardLabelRepository labelRepository,
                         TaskHistoryService historyService, BoardMemberRepository memberRepository,
+                        BoardRuleRepository ruleRepository, RuleEngine ruleEngine,
                         ApplicationEventPublisher events) {
         this.boardRepository = boardRepository;
         this.columnRepository = columnRepository;
@@ -71,6 +75,8 @@ public class BoardService {
         this.labelRepository = labelRepository;
         this.historyService = historyService;
         this.memberRepository = memberRepository;
+        this.ruleRepository = ruleRepository;
+        this.ruleEngine = ruleEngine;
         this.events = events;
     }
 
@@ -88,7 +94,7 @@ public class BoardService {
     }
 
     /**
-     * Deletes the board with all its columns, tasks and labels (members and invites go with it in the
+     * Deletes the board with all its columns, rules, tasks and labels (members and invites go with it in the
      * database). Only its owner can; a user may delete their last board.
      */
     @Transactional
@@ -101,6 +107,7 @@ public class BoardService {
         // Deleting the tasks also clears their rows in task_label.
         taskRepository.deleteAll(taskRepository.findByBoardInOrder(board));
         labelRepository.deleteAll(labelRepository.findByBoardOrderById(board));
+        ruleRepository.deleteByColumnBoard(board);
         columnRepository.deleteAll(columnRepository.findByBoardOrderByPosition(board));
         boardRepository.delete(board);
     }
@@ -305,6 +312,7 @@ public class BoardService {
                     task.setBoardColumn(target);
                     task.setPosition(next++);
                     historyService.recordMove(task, column, target, email);
+                    ruleEngine.taskEntered(task);
                 }
             } else if (deleteTasks) {
                 tasks.forEach(task -> historyService.recordDeleted(task, email));
@@ -316,6 +324,7 @@ public class BoardService {
         }
 
         columns.removeIf(c -> c.getId().equals(column.getId()));
+        ruleRepository.deleteByColumn(column);
         columnRepository.delete(column);
         for (int i = 0; i < columns.size(); i++) {
             columns.get(i).setPosition(i);
@@ -325,7 +334,7 @@ public class BoardService {
 
     /**
      * Moves a task to {@code position} within a column of the same board.
-     * A position beyond the end of the column puts the task last.
+     * A position beyond the end of the column puts the task last. Entering another column runs its rules.
      */
     @Transactional
     public Task moveTask(int taskId, int columnId, int position, String email) {
@@ -350,6 +359,7 @@ public class BoardService {
         renumber(sourceTasks);
         if (!sameColumn) {
             renumber(targetTasks);
+            ruleEngine.taskEntered(task);
         }
         changed(target.getBoard());
         return task;

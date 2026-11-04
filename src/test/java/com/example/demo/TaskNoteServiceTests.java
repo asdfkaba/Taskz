@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
-@Import({TaskNoteService.class, BoardService.class, TaskHistoryService.class})
+@Import({TaskNoteService.class, BoardService.class, RuleEngine.class, TaskHistoryService.class})
 class TaskNoteServiceTests {
 
     static final String ALICE = "alice@example.com";

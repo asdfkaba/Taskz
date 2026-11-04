@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.task.RuleEngine;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.BoardService;
 import com.example.demo.board.LabelService;
@@ -24,6 +25,9 @@ class SecurityTests {
 
     @Autowired
     MockMvc mockMvc;
+
+    @MockBean
+    RuleEngine ruleEngine;
 
     @MockBean
     TaskRepository taskRepository;

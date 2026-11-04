@@ -67,4 +67,23 @@ class ChecklistsTests {
         String before = "- [ ] " + "a".repeat(300);
         assertThat(Checklists.toggles(before, before.replace("[ ]", "[x]")).get(0).item()).hasSize(201).endsWith("…");
     }
+
+    @Test
+    void appendAddsMissingItemsBelowAListThatEndsTheText() {
+        assertThat(Checklists.append("Notes\n- [x] CV\n", java.util.List.of("CV", "Prepare", "Prepare")))
+                .isEqualTo("Notes\n- [x] CV\n- [ ] Prepare");
+    }
+
+    @Test
+    void appendStartsANewParagraphAfterText() {
+        assertThat(Checklists.append("Call them back", java.util.List.of("Prepare")))
+                .isEqualTo("Call them back\n\n- [ ] Prepare");
+        assertThat(Checklists.append(null, java.util.List.of("Prepare"))).isEqualTo("- [ ] Prepare");
+    }
+
+    @Test
+    void appendLeavesTheTextAloneWhenEveryItemIsThere() {
+        String text = "> - [X] Prepare  \nmore";
+        assertThat(Checklists.append(text, java.util.List.of("Prepare"))).isSameAs(text);
+    }
 }

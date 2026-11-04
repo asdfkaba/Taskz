@@ -44,6 +44,8 @@ let revisions = 0
 const newRevision = () => `rev${++revisions}`
 const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
+// Automations of board 1 ([{ id, columnId, action, items, days, enabled }]), applied like RuleEngine.
+let rules
 let notes // [{ id, taskId, text, user, created, edited }]
 let attachments // [{ id, taskId, name, contentType, size, image, user, created, data }]
 let log
@@ -74,6 +76,7 @@ function reset() {
     { id: 3, title: 'Task C', description: null, due_date: null, created: '2026-08-01T10:00:00Z', edited: null, columnId: 11, position: 0 },
   ]
   tasks.forEach((t) => (t.revision = newRevision()))
+  rules = []
   notes = []
   attachments = []
   log = []
@@ -83,6 +86,24 @@ reset()
 const inColumn = (id) => tasks.filter((t) => t.columnId === id).sort((a, b) => a.position - b.position)
 const renumber = (list) => list.forEach((t, i) => (t.position = i))
 const sortedColumns = () => [...columns].sort((a, b) => a.position - b.position)
+
+// Only what the e2e tests need: new checklist items at the end, due date N days from now.
+function runRules(t) {
+  const before = { description: t.description, due_date: t.due_date }
+  for (const r of rules.filter((x) => x.columnId === t.columnId && x.enabled)) {
+    if (r.action === 'APPEND_CHECKLIST') {
+      const missing = r.items.filter((item) => !(t.description ?? '').includes(`] ${item}`))
+      if (missing.length) t.description = [t.description, ...missing.map((item) => `- [ ] ${item}`)].filter(Boolean).join('\n')
+    } else {
+      const d = new Date(Date.now() + r.days * 86400000)
+      t.due_date = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()]
+    }
+  }
+  if (t.description !== before.description || t.due_date !== before.due_date) {
+    t.revision = newRevision()
+    events.unshift({ id: eventId++, taskId: t.id, type: 'updated', at: now(), user: null, userId: null, changes: { automation: true, description: [before.description, t.description] } })
+  }
+}
 
 function api(method, url, body) {
   const u = new URL(url, 'http://x')
@@ -202,6 +223,7 @@ function api(method, url, body) {
     t.revision = newRevision()
     tasks.push(t)
     record(t, 'created', { title: t.title, column: colName(t.columnId) })
+    runRules(t)
     return [201, t]
   }
   if ((m = p.match(/^\/tasks\/(\d+)\/move$/)) && method === 'PATCH') {
@@ -210,9 +232,11 @@ function api(method, url, body) {
     const source = inColumn(t.columnId).filter((x) => x !== t)
     const target = body.columnId === t.columnId ? source : inColumn(body.columnId)
     target.splice(Math.min(body.position, target.length), 0, t)
+    const entered = t.columnId !== body.columnId
     t.columnId = body.columnId
     renumber(source)
     renumber(target)
+    if (entered) runRules(t)
     return [200, t]
   }
   if ((m = p.match(/^\/tasks\/(\d+)\/notes$/))) {
@@ -247,6 +271,18 @@ function api(method, url, body) {
   }
   if ((m = p.match(/^\/tasks\/(\d+)\/history$/)) && method === 'GET') {
     return [200, events.filter((e) => e.taskId === +m[1]).map(({ taskId, ...e }) => e)]
+  }
+  if (method === 'GET' && p === '/boards/1/rules') return [200, rules]
+  if (method === 'POST' && p === '/boards/1/rules') {
+    const r = { id: nextId++, columnId: body.columnId, action: body.action, items: body.items ?? null, days: body.days ?? null, enabled: true }
+    rules.push(r)
+    return [201, r]
+  }
+  if ((m = p.match(/^\/rules\/(\d+)$/))) {
+    const r = rules.find((x) => x.id === +m[1])
+    if (!r) return [404, {}]
+    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, days: body.days ?? r.days, enabled: body.enabled ?? r.enabled }); return [200, r] }
+    if (method === 'DELETE') { rules = rules.filter((x) => x !== r); return [204, null] }
   }
   if (method === 'GET' && p === '/boards/1/share') return share ? [200, { path: `${board.slug}-${share.key}`, created: share.created }] : [204, null]
   if (method === 'POST' && p === '/boards/1/share') {
@@ -440,7 +476,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, rules, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })

@@ -31,14 +31,16 @@ public class TaskController {
     private final BoardService boardService;
     private final LabelService labelService;
     private final TaskHistoryService historyService;
+    private final RuleEngine ruleEngine;
 
     public TaskController(TaskRepository repository, UserRepository userRepository, BoardService boardService,
-                          LabelService labelService, TaskHistoryService historyService) {
+                          LabelService labelService, TaskHistoryService historyService, RuleEngine ruleEngine) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.boardService = boardService;
         this.labelService = labelService;
         this.historyService = historyService;
+        this.ruleEngine = ruleEngine;
     }
 
     @GetMapping("/{id}")
@@ -66,6 +68,7 @@ public class TaskController {
         task.setPosition(repository.countByBoardColumn(column));
         repository.save(task);
         historyService.recordCreated(task, email);
+        ruleEngine.taskEntered(task);
         boardService.changed(column.getBoard());
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()

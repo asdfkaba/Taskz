@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.task.RuleEngine;
 import com.example.demo.board.*;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskHistoryService;
@@ -26,7 +27,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 // Runs against H2 so the ordering logic is checked with real queries.
 @DataJpaTest
-@Import({BoardService.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, TaskHistoryService.class})
 @RecordApplicationEvents
 class BoardServiceTests {
 
