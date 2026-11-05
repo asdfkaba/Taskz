@@ -23,6 +23,8 @@ test('Compact cards', async ({ browser }) => {
     checklist: [{ text: 'Cover letter' }, { text: 'CV' }],
   })
   await api('PATCH', `/tasks/1/checklist/${task.checklist[0].id}`, { checked: true })
+  const longTitle = 'Task C with a title far too long to fit into a single row of a compact card'
+  await api('PUT', '/tasks/3', { title: longTitle, description: null, due_date: null })
 
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   const errors = []
@@ -58,7 +60,15 @@ test('Compact cards', async ({ browser }) => {
     const compactHeight = (await card().boundingBox()).height
     ensure(compactHeight < fullHeight * 0.7, `${compactHeight} vs ${fullHeight}`)
     const taskC = page.locator('[data-task-id="3"]')
-    ensure((await taskC.boundingBox()).height < 45, `card without details too high: ${(await taskC.boundingBox()).height}`)
+    // One row whatever the card holds; the menu moves the task, there are no arrows.
+    for (const c of [card(), taskC]) {
+      ensure((await c.boundingBox()).height < 40, `more than one row: ${(await c.boundingBox()).height}`)
+      ensure((await c.getByRole('button', { name: /^Move to / }).count()) === 0, 'arrows shown')
+      ensure(await c.getByRole('button', { name: 'Task actions' }).isVisible(), 'menu missing')
+    }
+    const title = taskC.locator('h3')
+    ensure(await title.evaluate((el) => el.scrollWidth > el.clientWidth), 'long title not cut off')
+    ensure((await title.getAttribute('title')) === longTitle, 'full title not on hover')
     await page.mouse.move(700, 800)
     await page.screenshot({ path: out('cc-2-compact.png') })
   })

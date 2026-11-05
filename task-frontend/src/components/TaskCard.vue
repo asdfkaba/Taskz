@@ -22,7 +22,8 @@ const props = defineProps({
   terms: { type: Array, default: () => [] },
   // The search matched the description but not the title; say so, the description may be cut off.
   matchInDescription: { type: Boolean, default: false },
-  // Compact cards for large boards: no description, labels as colored dots, smaller title.
+  // Compact cards for large boards: one row with the title cut off, labels as colored dots, no
+  // description and no arrows (the menu and dragging still move the task).
   compact: { type: Boolean, default: false },
 })
 const emit = defineEmits(['open', 'menu', 'move'])
@@ -31,11 +32,8 @@ const due = computed(() => fromApi(props.task.due_date))
 const isOverdue = computed(() => due.value !== null && due.value < new Date())
 // Last change, like the table's "Changed" column; never-edited tasks show when they were created.
 const changed = computed(() => (props.compact ? null : fromApi(props.task.edited) ?? fromApi(props.task.created)))
-const showArrows = computed(() => !props.readonly && (props.leftColumn || props.rightColumn))
+const showArrows = computed(() => !props.readonly && !props.compact && (props.leftColumn || props.rightColumn))
 // The menu button sets the header height of editable cards; read-only ones need their own spacing.
-// Compact cards on mouse devices drop the row that would only hold the (hidden) arrows; dragging
-// and the menu still move the task.
-const onlyArrows = computed(() => !due.value && !checklist.value && !props.task.attachments && !props.labels.length)
 const descriptionHtml = computed(() => (props.compact ? '' : renderMarkdown(props.task.description)))
 const titlePieces = computed(() => highlight(props.task.title, props.terms))
 // Progress of the checklist, e.g. { done: 2, total: 5 }; null without one.
@@ -65,11 +63,13 @@ function onClick(event) {
   >
     <div class="absolute inset-y-0 left-0 w-1.5" :style="{ backgroundColor: color ?? DEFAULT_COLUMN_COLOR }" />
 
-    <div class="flex flex-col pr-2 pl-4" :class="compact ? (readonly ? 'gap-1 py-2' : 'gap-1 py-1.5') : 'gap-2 py-3'">
-      <header class="flex items-start justify-between gap-2">
+    <!-- Compact: one row; the header's title and menu become items of that row. -->
+    <div class="flex pr-2 pl-4" :class="compact ? ['items-center gap-2', readonly ? 'py-2' : 'py-1'] : 'flex-col gap-2 py-3'">
+      <header :class="compact ? 'contents' : 'flex items-start justify-between gap-2'">
         <h3
-          class="leading-snug font-semibold break-words text-slate-900 dark:text-slate-100"
-          :class="compact ? ['text-[0.8125rem]', { 'pt-1': !readonly }] : 'text-sm'"
+          class="leading-snug font-semibold text-slate-900 dark:text-slate-100"
+          :class="compact ? 'min-w-0 flex-1 truncate text-[0.8125rem]' : 'break-words text-sm'"
+          :title="compact ? task.title : undefined"
         >
           <template v-for="(piece, i) in titlePieces" :key="i">
             <mark v-if="piece.hit" class="rounded-sm bg-yellow-200 text-inherit dark:bg-yellow-500/40">{{ piece.text }}</mark>
@@ -84,7 +84,8 @@ function onClick(event) {
           severity="secondary"
           size="small"
           aria-label="Task actions"
-          class="-mt-1.5 -mr-1 shrink-0"
+          class="-mr-1 shrink-0"
+          :class="compact ? 'order-last -my-1' : '-mt-1.5'"
           @click.stop="emit('menu', $event, task)"
         />
       </header>
@@ -93,9 +94,14 @@ function onClick(event) {
         <LabelPill v-for="label in labels" :key="label.id" :label="label" />
       </div>
 
-      <p v-if="matchInDescription" class="-mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+      <p
+        v-if="matchInDescription"
+        class="flex shrink-0 items-center gap-1 text-xs text-slate-500 dark:text-slate-400"
+        :class="{ '-mt-1': !compact }"
+        :title="compact ? 'Match in description' : undefined"
+      >
         <i class="pi pi-search text-[0.65rem]" aria-hidden="true" />
-        Match in description
+        <span :class="{ 'sr-only': compact }">Match in description</span>
       </p>
 
       <!-- Sanitized in renderMarkdown. -->
@@ -103,8 +109,8 @@ function onClick(event) {
 
       <div
         v-if="due || checklist || task.attachments || changed || showArrows || (compact && labels.length)"
-        class="flex flex-wrap items-center gap-2 text-xs"
-        :class="{ '-mt-1': compact && !readonly, '[@media(hover:hover)]:hidden': compact && onlyArrows }"
+        class="flex items-center gap-2 text-xs"
+        :class="compact ? 'shrink-0' : 'flex-wrap'"
       >
         <!-- Compact: labels as dots, the name shows on hover and is read out by screen readers. -->
         <span v-if="compact && labels.length" class="flex flex-wrap items-center gap-1" data-testid="label-dots">
