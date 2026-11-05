@@ -1,4 +1,4 @@
-// Compact cards: the board view's compact form, per board, hides descriptions and shows labels as dots.
+// Compact cards: the board view's compact form, per board, is one row: title, due date and menu.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
@@ -45,16 +45,12 @@ test('Compact cards', async ({ browser }) => {
     await page.screenshot({ path: out('cc-1-normal.png') })
   })
 
-  await test.step('compact hides the description and shows labels as dots', async () => {
+  await test.step('compact shows only the title, the due date and the menu', async () => {
     await toggle().click()
     ensure((await toggle().getAttribute('aria-pressed')) === 'true', 'not pressed')
     ensure((await card().getByText('A longer description').count()) === 0, 'description still shown')
     ensure((await card().locator('[data-label-pill]').count()) === 0, 'pills still shown')
-    const dots = card().getByTestId('label-dots').getByRole('img')
-    ensure((await dots.count()) === 2, 'dots missing')
-    ensure((await dots.first().getAttribute('title')) === 'Remote', 'no hover text')
-    ensure((await dots.first().getAttribute('aria-label')) === 'Label Remote', 'no accessible name')
-    ensure((await card().getByTestId('checklist-progress').innerText()).trim() === '1/2', 'progress missing')
+    ensure((await card().getByTestId('checklist-progress').count()) === 0, 'progress shown')
     const titleSize = await card().locator('h3').evaluate((el) => getComputedStyle(el).fontSize)
     ensure(titleSize === '13px', titleSize)
     const compactHeight = (await card().boundingBox()).height

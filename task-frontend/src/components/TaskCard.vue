@@ -22,8 +22,8 @@ const props = defineProps({
   terms: { type: Array, default: () => [] },
   // The search matched the description but not the title; say so, the description may be cut off.
   matchInDescription: { type: Boolean, default: false },
-  // Compact cards for large boards: one row with the title cut off, labels as colored dots, no
-  // description and no arrows (the menu and dragging still move the task).
+  // Compact cards for large boards: one row with the title cut off and the due date; no labels,
+  // checklist, attachments, description or arrows (the menu and dragging still move the task).
   compact: { type: Boolean, default: false },
 })
 const emit = defineEmits(['open', 'menu', 'move'])
@@ -108,24 +108,12 @@ function onClick(event) {
       <div v-if="descriptionHtml" class="markdown line-clamp-3" v-html="descriptionHtml" />
 
       <div
-        v-if="due || checklist || task.attachments || changed || showArrows || (compact && labels.length)"
+        v-if="due || (!compact && (checklist || task.attachments)) || changed || showArrows"
         class="flex items-center gap-2 text-xs"
         :class="compact ? 'shrink-0' : 'flex-wrap'"
       >
-        <!-- Compact: labels as dots, the name shows on hover and is read out by screen readers. -->
-        <span v-if="compact && labels.length" class="flex flex-wrap items-center gap-1" data-testid="label-dots">
-          <span
-            v-for="label in labels"
-            :key="label.id"
-            role="img"
-            :aria-label="`Label ${label.name}`"
-            :title="label.name"
-            class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 dark:ring-white/20"
-            :style="{ backgroundColor: label.color }"
-          />
-        </span>
         <span
-          v-if="checklist"
+          v-if="checklist && !compact"
           data-testid="checklist-progress"
           class="flex items-center gap-1 font-medium"
           :class="
@@ -139,7 +127,7 @@ function onClick(event) {
           {{ checklist.done }}/{{ checklist.total }}
         </span>
         <span
-          v-if="task.attachments"
+          v-if="task.attachments && !compact"
           data-testid="attachment-count"
           class="flex items-center gap-1 font-medium text-slate-500 dark:text-slate-400"
           :title="`${task.attachments} ${task.attachments === 1 ? 'attachment' : 'attachments'}`"
