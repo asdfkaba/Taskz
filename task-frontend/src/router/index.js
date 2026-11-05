@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { requiresAuth: true, fullWidth: true },
     },
     {
+      path: '/due',
+      name: 'due',
+      component: () => import('../views/DueView.vue'),
+      meta: { requiresAuth: true, title: "What's due" },
+    },
+    {
       // Read-only view of a board through its share link, no login needed.
       path: '/share/:token',
       name: 'shared-board',

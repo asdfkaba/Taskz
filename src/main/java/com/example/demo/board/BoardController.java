@@ -4,6 +4,7 @@ import com.example.demo.board.BoardDtos.BoardDetail;
 import com.example.demo.board.BoardDtos.BoardSummary;
 import com.example.demo.board.BoardDtos.ColumnDto;
 import com.example.demo.board.BoardDtos.ColumnPatch;
+import com.example.demo.board.BoardDtos.DueTask;
 import com.example.demo.board.BoardDtos.NewBoardRequest;
 import com.example.demo.board.BoardDtos.NewColumnRequest;
 import com.example.demo.board.BoardDtos.RenameBoardRequest;
@@ -36,6 +37,11 @@ public class BoardController {
     @GetMapping("/boards")
     public List<BoardSummary> getBoards() {
         return boardService.summariesOf(currentUserEmail());
+    }
+
+    @GetMapping("/due")
+    public List<DueTask> getDueTasks() {
+        return boardService.dueTasksOf(currentUserEmail());
     }
 
     @PostMapping("/boards")

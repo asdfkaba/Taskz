@@ -4,6 +4,7 @@ import com.example.demo.board.BoardDtos.BoardDetail;
 import com.example.demo.board.BoardDtos.BoardSummary;
 import com.example.demo.board.BoardDtos.ColumnDto;
 import com.example.demo.board.BoardDtos.ColumnPatch;
+import com.example.demo.board.BoardDtos.DueTask;
 import com.example.demo.board.BoardDtos.LabelDto;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskController;
@@ -20,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -198,6 +201,26 @@ public class BoardService {
                     board.getUser().getName(), board.getUser().getId()));
         }
         return summaries;
+    }
+
+    /** Tasks with a due date on all boards the user can open, soonest first, without done ones. */
+    @Transactional(readOnly = true)
+    public List<DueTask> dueTasksOf(String email) {
+        Map<Integer, BoardSummary> summaries = new HashMap<>();
+        for (BoardSummary summary : summariesOf(email)) {
+            summaries.put(summary.id(), summary);
+        }
+        if (summaries.isEmpty()) {
+            return List.of();
+        }
+        return taskRepository.findDue(boardRepository.findAllById(summaries.keySet())).stream()
+                .map(task -> {
+                    BoardColumn column = task.getBoardColumn();
+                    BoardSummary board = summaries.get(column.getBoard().getId());
+                    return new DueTask(task.getId(), task.getTitle(), task.getDue_date(), board.name(), board.slug(),
+                            column.getName(), column.getColor());
+                })
+                .toList();
     }
 
     /** One board as {@link #summariesOf} lists it for the user. */

@@ -133,6 +133,19 @@ function api(method, url, body) {
     const own = boardDeleted ? [] : [{ id: 1, name: board.name, slug: board.slug, own: true, ownerName: null }]
     return [200, teamJoined ? [...own, TEAM_BOARD] : own]
   }
+  // Like BoardService.dueTasksOf for board 1: with a due date, not in the last column, soonest first.
+  if (method === 'GET' && p === '/due') {
+    const cols = sortedColumns()
+    const time = (d) => (Array.isArray(d) ? new Date(d[0], d[1] - 1, d[2], d[3] ?? 0, d[4] ?? 0) : new Date(d)).getTime()
+    const due = tasks
+      .filter((t) => t.due_date && (cols.length === 1 || t.columnId !== cols.at(-1).id))
+      .sort((a, b) => time(a.due_date) - time(b.due_date))
+      .map((t) => {
+        const c = columns.find((x) => x.id === t.columnId)
+        return { id: t.id, title: t.title, due_date: t.due_date, boardName: board.name, boardSlug: board.slug, columnName: c.name, columnColor: c.color }
+      })
+    return [200, due]
+  }
   if (method === 'GET' && p === '/boards/1/members') {
     return [200, [{ userId: 1, name: 'Alice', owner: true, joined: null }, ...members.map((m) => ({ ...m, owner: false }))]]
   }

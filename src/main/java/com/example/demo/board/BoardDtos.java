@@ -4,6 +4,7 @@ import com.example.demo.task.TaskDto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public final class BoardDtos {
@@ -13,6 +14,11 @@ public final class BoardDtos {
     // own: the user's own board; else they joined it, and ownerName and ownerId (for the icon) say
     // whose it is. The slug is the board's address for this user (see BoardService.summariesOf).
     public record BoardSummary(Integer id, String name, String slug, boolean own, String ownerName, Integer ownerId) {
+    }
+
+    // A task of GET /due, with where it is. boardSlug is the slug in the user's board list.
+    public record DueTask(Integer id, String title, LocalDateTime due_date, String boardName, String boardSlug,
+                          String columnName, String columnColor) {
     }
 
     // Columns are sorted by position, tasks by column position and then by their own position.
