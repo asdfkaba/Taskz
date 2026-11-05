@@ -68,6 +68,11 @@ export const useBoardStore = defineStore('board', {
       this.boardsLoaded = true
     },
 
+    // Tasks with a due date on all boards, soonest first, without those in a board's last column.
+    async fetchDue() {
+      return (await expectOk(await authFetch('/api/due'), 'Loading due tasks')).json()
+    },
+
     async fetchBoard(id) {
       // Switching boards: don't show the previous board while the new one loads.
       if (this.board?.id !== id) this.closeBoard()

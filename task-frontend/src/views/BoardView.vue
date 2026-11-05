@@ -82,9 +82,13 @@ async function openBoardFromRoute() {
 
   writeStorage(LAST_BOARD_KEY, String(board.id))
   // Same board under a new slug (renamed): it is loaded already.
-  if (store.loaded && store.board?.id === board.id) return
+  if (store.loaded && store.board?.id === board.id) {
+    openTaskFromQuery()
+    return
+  }
   try {
     await store.fetchBoard(board.id)
+    if (store.board?.id === board.id) openTaskFromQuery()
   } catch (err) {
     if (err.status === 404) {
       // Deleted in the meantime, e.g. in another tab.
@@ -97,6 +101,18 @@ async function openBoardFromRoute() {
 }
 
 watch(() => route.params.slug, openBoardFromRoute, { immediate: true })
+
+// /boards/<slug>?task=<id> (from "What's due") opens that task; the query is dropped again.
+// Async: the first call can come while this component is still being set up (board already loaded).
+async function openTaskFromQuery() {
+  const id = Number(route.query.task)
+  if (!id) return
+  await nextTick()
+  router.replace({ name: 'board', params: { slug: route.params.slug } })
+  const found = store.findTask(id)
+  if (found) openTask(found.task)
+  else toast.add({ severity: 'warn', summary: 'Task not found', detail: 'It was moved to another board or deleted.', life: 4000 })
+}
 
 // Puts the open board back to the server state, e.g. after a failed move.
 async function load() {
