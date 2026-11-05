@@ -41,7 +41,7 @@ test('Views on a shared board', async ({ browser }) => {
     await card().getByText('Some text').waitFor()
     await page.getByRole('button', { name: 'Compact board view' }).click()
     ensure((await card().getByText('Some text').count()) === 0, 'description still shown')
-    ensure((await card().getByTestId('label-dots').getByRole('img').count()) === 1, 'no label dot')
+    ensure((await card().boundingBox()).height < 40, `more than one row: ${(await card().boundingBox()).height}`)
     await page.screenshot({ path: out('sv-1-compact.png') })
   })
 
