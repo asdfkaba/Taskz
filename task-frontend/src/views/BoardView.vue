@@ -101,6 +101,15 @@ async function openBoardFromRoute() {
 }
 
 watch(() => route.params.slug, openBoardFromRoute, { immediate: true })
+// Only ?task= changed (a notification about the open board): the board is there already. With a new
+// slug as well, openBoardFromRoute opens the task once that board has loaded.
+watch(
+  () => route.query.task,
+  (task) => {
+    const routeBoard = store.boards.find((b) => b.slug === route.params.slug)
+    if (task && store.loaded && routeBoard && routeBoard.id === store.board?.id) openTaskFromQuery()
+  },
+)
 
 // /boards/<slug>?task=<id> (from "What's due") opens that task; the query is dropped again.
 // Async: the first call can come while this component is still being set up (board already loaded).

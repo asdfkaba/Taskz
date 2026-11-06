@@ -2,6 +2,7 @@ package com.example.demo.board;
 
 import com.example.demo.board.BoardDtos.DueTask;
 import com.example.demo.task.RuleEngine;
+import com.example.demo.notification.NotificationService;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskHistoryService;
 import com.example.demo.task.TaskNoteService;
@@ -20,7 +21,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@Import({BoardService.class, RuleEngine.class, TaskHistoryService.class, TaskNoteService.class})
+@Import({BoardService.class, RuleEngine.class, NotificationService.class, TaskHistoryService.class, TaskNoteService.class})
 class DueTasksTests {
 
     static final String ALICE = "alice@example.com";

@@ -18,7 +18,7 @@ public class BoardRule {
 
     public enum Trigger { ENTERED_COLUMN }
 
-    public enum Action { APPEND_CHECKLIST, REPLACE_CHECKLIST, ADD_NOTE_REMINDER }
+    public enum Action { APPEND_CHECKLIST, REPLACE_CHECKLIST, ADD_NOTE_REMINDER, NOTIFY }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.notification.NotificationService;
 import com.example.demo.board.*;
 import com.example.demo.task.*;
 import com.example.demo.task.TaskAttachmentService.AttachmentDto;
@@ -31,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
-@Import({TaskAttachmentService.class, AttachmentStorage.class, BoardService.class, RuleEngine.class, TaskHistoryService.class})
+@Import({TaskAttachmentService.class, AttachmentStorage.class, BoardService.class, RuleEngine.class, NotificationService.class, TaskHistoryService.class})
 class TaskAttachmentServiceTests {
 
     static final String ALICE = "alice@example.com";

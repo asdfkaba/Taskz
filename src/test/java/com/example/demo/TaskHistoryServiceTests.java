@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.notification.NotificationService;
 import com.example.demo.board.*;
 import com.example.demo.task.*;
 import com.example.demo.task.TaskHistoryService.EventDto;
@@ -21,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 // Against H2, so ordering, the missing foreign key on task_id and board deletion are real.
 @DataJpaTest
-@Import({BoardService.class, RuleEngine.class, LabelService.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, NotificationService.class, LabelService.class, TaskHistoryService.class})
 class TaskHistoryServiceTests {
 
     static final String ALICE = "alice@example.com";

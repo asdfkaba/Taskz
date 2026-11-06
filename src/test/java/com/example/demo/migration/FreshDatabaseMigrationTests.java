@@ -1,6 +1,7 @@
 package com.example.demo.migration;
 
 import com.example.demo.task.RuleEngine;
+import com.example.demo.notification.NotificationService;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardService;
@@ -32,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({BoardService.class, RuleEngine.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, NotificationService.class, TaskHistoryService.class})
 @Testcontainers(disabledWithoutDocker = true)
 class FreshDatabaseMigrationTests {
 
@@ -97,6 +98,30 @@ class FreshDatabaseMigrationTests {
 
         assertThat(jdbc.queryForObject("select count(*) from task_note", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from task_attachment", Integer.class)).isZero();
+    }
+
+    // V13: a notification outlives its task (pointing at the board), not its board or user.
+    @Test
+    void notificationsFollowTheirBoardAndUserButNotTheTask() {
+        User bob = userRepository.save(new User("Bob", "bob@example.com"));
+        Board board = boardService.createDefaultBoard(bob);
+        Integer column = jdbc.queryForObject("select min(id) from board_column where board_id = ?", Integer.class, board.getId());
+        Integer task = jdbc.queryForObject(
+                "insert into task (title, position, board_column_id) values ('T', 0, ?) returning id", Integer.class, column);
+        String insert = "insert into notification (user_id, board_id, task_id, text, created) values (?, ?, ?, 'Hi', now())";
+        jdbc.update(insert, bob.getId(), board.getId(), task);
+        jdbc.update(insert, bob.getId(), null, null);
+
+        jdbc.update("delete from task where id = ?", task);
+        assertThat(jdbc.queryForList("select board_id, task_id from notification where board_id is not null"))
+                .singleElement().satisfies(row -> assertThat(row.get("task_id")).isNull());
+
+        // Columns first, as BoardService.deleteBoard does; they have no cascade.
+        jdbc.update("delete from board_column where board_id = ?", board.getId());
+        jdbc.update("delete from board where id = ?", board.getId());
+        assertThat(jdbc.queryForObject("select count(*) from notification", Integer.class)).isEqualTo(1);
+        jdbc.update("delete from \"user\" where id = ?", bob.getId());
+        assertThat(jdbc.queryForObject("select count(*) from notification", Integer.class)).isZero();
     }
 
     // V7: one account per email, as logins find accounts by it. Several without an email stay possible.
