@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
@@ -36,10 +36,10 @@ class BoardEventsTests {
 
     @Autowired MockMvc mockMvc;
     @Autowired ApplicationEventPublisher events;
-    @MockBean BoardService boardService;
-    @MockBean BoardShareService shareService;
-    @MockBean UserRepository userRepository;
-    @MockBean TokenService tokenService;
+    @MockitoBean BoardService boardService;
+    @MockitoBean BoardShareService shareService;
+    @MockitoBean UserRepository userRepository;
+    @MockitoBean TokenService tokenService;
 
     @BeforeEach
     void setUp() {

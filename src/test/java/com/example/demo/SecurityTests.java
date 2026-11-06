@@ -12,11 +12,16 @@ import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TaskController.class)
@@ -26,30 +31,42 @@ class SecurityTests {
     @Autowired
     MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     RuleEngine ruleEngine;
 
-    @MockBean
+    @MockitoBean
     TaskRepository taskRepository;
 
-    @MockBean
+    @MockitoBean
     UserRepository userRepository;
 
-    @MockBean
+    @MockitoBean
     TokenService tokenService;
 
-    @MockBean
+    @MockitoBean
     BoardService boardService;
 
-    @MockBean
+    @MockitoBean
     LabelService labelService;
 
-    @MockBean
+    @MockitoBean
     TaskHistoryService historyService;
 
     @Test
     void ohneLoginKeinZugriff() throws Exception {
         mockMvc.perform(get("/tasks/1"))
                 .andExpect(status().isForbidden());
+    }
+
+    // The open paths pass the security chain (their controllers aren't part of this slice, so 404).
+    @Test
+    void openPathsNeedNoLogin() throws Exception {
+        for (String path : List.of("/health", "/auth/status", "/share/abc", "/share/abc/events", "/error")) {
+            mockMvc.perform(get(path)).andExpect(result ->
+                    assertThat(result.getResponse().getStatus()).as(path).isNotEqualTo(403));
+        }
+        mockMvc.perform(options("/tasks/1")).andExpect(result ->
+                assertThat(result.getResponse().getStatus()).isNotEqualTo(403));
+        mockMvc.perform(post("/share/abc")).andExpect(status().isForbidden());
     }
 }

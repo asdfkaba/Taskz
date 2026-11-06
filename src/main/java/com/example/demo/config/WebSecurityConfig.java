@@ -107,7 +107,7 @@ public class WebSecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeRequests(authorize -> authorize
+                .authorizeHttpRequests(authorize -> authorize
                         // A live stream ends in a second, internal dispatch without the login; the
                         // request itself was checked when it started.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()

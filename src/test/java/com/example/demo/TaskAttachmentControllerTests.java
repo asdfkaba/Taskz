@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
@@ -43,11 +43,11 @@ class TaskAttachmentControllerTests {
     @Autowired
     MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     TaskAttachmentService attachmentService;
-    @MockBean
+    @MockitoBean
     UserRepository userRepository;
-    @MockBean
+    @MockitoBean
     TokenService tokenService;
 
     @TempDir
