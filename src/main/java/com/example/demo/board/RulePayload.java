@@ -1,8 +1,7 @@
 package com.example.demo.board;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -21,18 +20,10 @@ public record RulePayload(List<String> items, String text, Integer days, Boolean
     private static final ObjectMapper JSON = new ObjectMapper();
 
     public static RulePayload parse(String json) {
-        try {
-            return JSON.readValue(json, RulePayload.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        return JSON.readValue(json, RulePayload.class);
     }
 
     String toJson() {
-        try {
-            return JSON.writeValueAsString(this);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        return JSON.writeValueAsString(this);
     }
 }

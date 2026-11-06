@@ -3,7 +3,7 @@ package com.example.demo.auth;
 import com.example.demo.auth.provider.DiscordOAuth2Provider;
 import com.example.demo.auth.provider.GithubOAuth2Provider;
 import com.example.demo.auth.provider.GoogleOAuth2Provider;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;

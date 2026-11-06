@@ -9,7 +9,7 @@ import com.example.demo.board.BoardDtos.NewBoardRequest;
 import com.example.demo.board.BoardDtos.NewColumnRequest;
 import com.example.demo.board.BoardDtos.RenameBoardRequest;
 import com.example.demo.board.BoardDtos.TaskTemplate;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
@@ -110,11 +110,11 @@ public class BoardController {
             throw badRequest("Body must be a JSON object");
         }
         JsonNode name = body.get("name");
-        if (name != null && !name.isTextual()) {
+        if (name != null && !name.isString()) {
             throw badRequest("name must be a string");
         }
         JsonNode color = body.get("color");
-        if (color != null && !color.isTextual() && !color.isNull()) {
+        if (color != null && !color.isString() && !color.isNull()) {
             throw badRequest("color must be a string or null");
         }
         JsonNode position = body.get("position");
@@ -122,9 +122,9 @@ public class BoardController {
             throw badRequest("position must be an integer");
         }
         return new ColumnPatch(
-                name == null ? null : name.asText(),
+                name == null ? null : name.asString(),
                 color != null,
-                color == null || color.isNull() ? null : color.asText(),
+                color == null || color.isNull() ? null : color.asString(),
                 position == null ? null : position.asInt());
     }
 

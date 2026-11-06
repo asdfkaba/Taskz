@@ -1,7 +1,7 @@
 package com.example.demo.migration;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,7 +17,7 @@ import java.util.Objects;
  */
 final class PostgresTestDatabase {
 
-    private static final PostgreSQLContainer<?> CONTAINER = new PostgreSQLContainer<>("postgres:15-alpine");
+    private static final PostgreSQLContainer CONTAINER = new PostgreSQLContainer("postgres:15-alpine");
 
     static {
         CONTAINER.start();

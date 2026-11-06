@@ -94,14 +94,14 @@ public class TaskAttachmentService {
         }
         long maxFile = properties.maxFileSize().toBytes();
         if (file.getSize() > maxFile) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, tooLargeMessage(properties));
+            throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE, tooLargeMessage(properties));
         }
         // Counted for the board's owner: the files are on their board and go when they delete it.
         Board board = task.getBoardColumn().getBoard();
         long maxTotal = properties.maxTotalPerUser().toBytes();
         if (attachmentRepository.totalSizeOfBoardsOf(board.getUser()) + file.getSize() > maxTotal) {
             String whose = boardService.isOwner(board, email) ? "Your attachments" : "The attachments of this board's owner";
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+            throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE,
                     whose + " would take more than " + readable(maxTotal) + "; delete some first");
         }
 

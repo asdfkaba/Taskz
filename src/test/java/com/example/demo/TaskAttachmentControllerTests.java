@@ -12,7 +12,7 @@ import com.example.demo.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
@@ -109,8 +109,9 @@ class TaskAttachmentControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("application/pdf"))
                 .andExpect(content().string("abc"))
+                // Browsers take filename*; filename is an ASCII stand-in for old clients (Spring 7).
                 .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"=?UTF-8?Q?Lebenslauf_M=C3=A4rz.pdf?=\"; filename*=UTF-8''Lebenslauf%20M%C3%A4rz.pdf"))
+                        "attachment; filename=\"Lebenslauf Maerz.pdf\"; filename*=UTF-8''Lebenslauf%20M%C3%A4rz.pdf"))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Content-Security-Policy", "default-src 'none'; sandbox"));
     }

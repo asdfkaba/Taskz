@@ -3,7 +3,7 @@ package com.example.demo;
 import com.example.demo.config.AppConfig;
 import com.example.demo.task.TaskHistoryService.EventDto;
 import com.example.demo.task.TaskDto;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
