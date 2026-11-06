@@ -11,6 +11,9 @@ public interface BoardMemberRepository extends JpaRepository<BoardMember, Intege
 
     List<BoardMember> findByBoardOrderByJoinedAscIdAsc(Board board);
 
+    // Loads and removes them, like TaskEventRepository.deleteByBoard.
+    void deleteByBoard(Board board);
+
     @Query("select m.board from BoardMember m where m.user.email = :email order by m.joined, m.id")
     List<Board> boardsOf(String email);
 
