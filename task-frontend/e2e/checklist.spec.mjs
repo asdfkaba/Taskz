@@ -86,7 +86,7 @@ test('Task checklists', async ({ browser }) => {
     const editor = page.getByTestId('checklist-editor')
     await editor.waitFor()
     // The dialog moves focus to the title after its animation; type only after that.
-    await page.locator('.p-dialog').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)))
+    await page.locator('.p-dialog').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => {}))))
     await page.locator('#task-title:focus').waitFor()
     await editor.getByRole('textbox', { name: 'Checklist item 1' }).fill('Cover letter v2')
     await editor.getByRole('button', { name: 'Move Research up' }).click()
