@@ -82,7 +82,7 @@ public class NotificationService {
         return new NotificationList(items, repository.countByUserAndSeenAtIsNull(user));
     }
 
-    private static NotificationDto toDto(Notification n, Map<Integer, BoardSummary> boards) {
+    static NotificationDto toDto(Notification n, Map<Integer, BoardSummary> boards) {
         Board board = n.getBoard();
         BoardSummary open = board == null ? null : boards.get(board.getId());
         Task task = open == null ? null : n.getTask();

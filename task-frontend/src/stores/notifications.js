@@ -50,5 +50,30 @@ export const useNotificationStore = defineStore('notifications', {
       this.items.forEach((item) => (item.read = true))
       this.unseen = 0
     },
+
+    // Mail besides the bell: { available, address, delivery: 'OFF' | 'IMMEDIATE' | 'DAILY' | 'WEEKLY' }.
+    async fetchMailSettings() {
+      return (await call('/api/account/notifications/mail')).json()
+    },
+
+    async setMailDelivery(delivery) {
+      const response = await authFetch('/api/account/notifications/mail', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery }),
+      })
+      if (!response.ok) throw new Error(`Saving failed (HTTP ${response.status})`)
+      return response.json()
+    },
+
+    // The link in a mail: works without a login.
+    async unsubscribe(token) {
+      const response = await fetch(`/api/mail/unsubscribe/${encodeURIComponent(token)}`, { method: 'POST' })
+      if (!response.ok) {
+        const error = new Error(`Unsubscribing failed (HTTP ${response.status})`)
+        error.status = response.status
+        throw error
+      }
+    },
   },
 })

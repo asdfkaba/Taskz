@@ -31,6 +31,18 @@ server.port=5555
 #attachments.max-total-per-user=500MB
 
 # ==============================
+# Notification mails (optional; without spring.mail.host mail is off)
+# ==============================
+#spring.mail.host=smtp-relay.brevo.com
+#spring.mail.port=587
+#spring.mail.username=<SMTP login>
+#spring.mail.password=<SMTP key>
+#spring.mail.properties.mail.smtp.auth=true
+#spring.mail.properties.mail.smtp.starttls.enable=true
+#notifications.mail.from=Taskz <taskz@example.com>
+#notifications.mail.base-url=https://taskz.example.com
+
+# ==============================
 # RSA Keys (lokal hinterlegen)
 # ==============================
 rsa.private-key=classpath:certs/private.pem

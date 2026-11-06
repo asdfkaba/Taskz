@@ -29,6 +29,19 @@ const router = createRouter({
       meta: { requiresAuth: true, fullWidth: true },
     },
     {
+      path: '/account',
+      name: 'account',
+      component: () => import('../views/AccountView.vue'),
+      meta: { requiresAuth: true, title: 'Account' },
+    },
+    {
+      // The unsubscribe link in notification mails; no login needed.
+      path: '/unsubscribe/:token',
+      name: 'unsubscribe',
+      component: () => import('../views/UnsubscribeView.vue'),
+      meta: { requiresAuth: false, title: 'Unsubscribe' },
+    },
+    {
       path: '/due',
       name: 'due',
       component: () => import('../views/DueView.vue'),
