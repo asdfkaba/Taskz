@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
@@ -151,13 +151,13 @@ class TaskAttachmentServiceTests {
     @Test
     void sizeLimits() {
         assertThatThrownBy(() -> attachments.upload(task.getId(), ALICE, text("big.txt", "x".repeat(1025))))
-                .satisfies(e -> assertStatus(e, HttpStatus.PAYLOAD_TOO_LARGE))
+                .satisfies(e -> assertStatus(e, HttpStatus.CONTENT_TOO_LARGE))
                 .hasMessageContaining("at most 1 KB");
         attachments.upload(task.getId(), ALICE, text("a.txt", "x".repeat(1000)));
         attachments.upload(task.getId(), ALICE, text("b.txt", "x".repeat(1000)));
         // 2000 of 2048 bytes used.
         assertThatThrownBy(() -> attachments.upload(task.getId(), ALICE, text("c.txt", "x".repeat(100))))
-                .satisfies(e -> assertStatus(e, HttpStatus.PAYLOAD_TOO_LARGE));
+                .satisfies(e -> assertStatus(e, HttpStatus.CONTENT_TOO_LARGE));
         // Bob has his own limit.
         attachments.upload(bobsTask.getId(), BOB, text("c.txt", "x".repeat(100)));
     }
@@ -173,7 +173,7 @@ class TaskAttachmentServiceTests {
         attachments.upload(task.getId(), BOB, text("b.txt", "x".repeat(1000)));
 
         assertThatThrownBy(() -> attachments.upload(task.getId(), ALICE, text("c.txt", "x".repeat(100))))
-                .satisfies(e -> assertStatus(e, HttpStatus.PAYLOAD_TOO_LARGE))
+                .satisfies(e -> assertStatus(e, HttpStatus.CONTENT_TOO_LARGE))
                 .hasMessageContaining("Your attachments");
         assertThatThrownBy(() -> attachments.upload(task.getId(), BOB, text("c.txt", "x".repeat(100))))
                 .hasMessageContaining("this board's owner");

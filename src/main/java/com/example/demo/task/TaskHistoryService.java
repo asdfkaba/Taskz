@@ -5,9 +5,8 @@ import com.example.demo.board.BoardColumn;
 import com.example.demo.board.BoardLabel;
 import com.example.demo.task.TaskEvent.Type;
 import com.example.demo.user.UserRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -159,19 +158,11 @@ public class TaskHistoryService {
     }
 
     private static String write(Map<String, Object> changes) {
-        try {
-            return JSON.writeValueAsString(changes);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        return JSON.writeValueAsString(changes);
     }
 
     private static Map<String, Object> parse(String changes) {
-        try {
-            return JSON.readValue(changes, new TypeReference<>() {
-            });
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
+        return JSON.readValue(changes, new TypeReference<>() {
+        });
     }
 }
