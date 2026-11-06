@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.notification.NotificationService;
 import com.example.demo.board.*;
 import com.example.demo.board.BoardDtos.BoardSummary;
 import com.example.demo.board.BoardMemberService.MemberDto;
@@ -23,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Invite links, joining, and what members may do (against H2, with real queries). */
 @DataJpaTest
-@Import({BoardMemberService.class, BoardService.class, RuleEngine.class, LabelService.class, TaskNoteService.class, TaskHistoryService.class})
+@Import({BoardMemberService.class, BoardService.class, RuleEngine.class, NotificationService.class, LabelService.class, TaskNoteService.class, TaskHistoryService.class})
 class BoardMemberServiceTests {
 
     static final String ALICE = "alice@example.com"; // owner

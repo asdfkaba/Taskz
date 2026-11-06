@@ -3,62 +3,73 @@ import { computed, onMounted, ref } from 'vue'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import InputText from 'primevue/inputtext'
+import MultiSelect from 'primevue/multiselect'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 
-// Automations of the open board: when a task enters a column, change its checklist or add a note with a
-// reminder (written as whoever moved the task, so the reminder is theirs).
-// Part of the board settings, owner only. Column and action of a rule are fixed; its items or days can be edited.
+// Automations of the open board: when a task enters a column, change its checklist, add a note with a
+// reminder (written as whoever moved the task, so the reminder is theirs) or notify people of the board.
+// Part of the board settings, owner only. Column and action of a rule are fixed; its settings can be edited.
 const props = defineProps({ boardId: { type: Number, required: true } })
 
 // Same limits as BoardRuleService and TaskNoteService.
 const MAX_ITEMS = 20
 const MAX_DAYS = 365
 const MAX_NOTE_LENGTH = 5000
+const MAX_NOTIFICATION_LENGTH = 500
 const ACTIONS = [
   { value: 'APPEND_CHECKLIST', label: 'Add checklist items' },
   { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist' },
   { value: 'ADD_NOTE_REMINDER', label: 'Add a note with a reminder' },
+  { value: 'NOTIFY', label: 'Notify people' },
 ]
+// Which settings an action has: 'items', 'note' or 'notify'.
+const kindOf = (ruleAction) =>
+  ruleAction === 'ADD_NOTE_REMINDER' ? 'note' : ruleAction === 'NOTIFY' ? 'notify' : 'items'
 
 const store = useBoardStore()
 const toast = useToast()
 
 const rules = ref([])
+// Owner and members ([{ userId, name, owner }]), whom a NOTIFY rule can tell.
+const people = ref([])
 const loading = ref(true)
 const busy = ref(false)
 
 const columnId = ref(store.columns[0]?.id ?? null)
 const action = ref('APPEND_CHECKLIST')
-const hasItems = (ruleAction) => ruleAction !== 'ADD_NOTE_REMINDER'
-const itemsText = ref('')
-const noteText = ref('')
-const days = ref('14')
-const removeOnLeave = ref(false)
+// The fields of a rule's settings, for the new rule and the one being edited.
+const emptyFields = () => ({ itemsText: '', noteText: '', days: '14', removeOnLeave: false, notifyText: '', userIds: [] })
+const fields = ref(emptyFields())
 
 const toItems = (text) => text.split('\n').map((line) => line.trim()).filter(Boolean)
 const toDays = (text) => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : null)
 // The settings the backend expects for the action, or null if they aren't valid yet.
-function settings(ruleAction, text, note, daysText, remove) {
-  if (hasItems(ruleAction)) {
-    const list = toItems(text)
+function settings(ruleAction, f) {
+  const kind = kindOf(ruleAction)
+  if (kind === 'items') {
+    const list = toItems(f.itemsText)
     return list.length > 0 && list.length <= MAX_ITEMS ? { items: list } : null
   }
-  const n = toDays(daysText)
-  return note.trim() && n != null && n <= MAX_DAYS ? { text: note.trim(), days: n, removeOnLeave: remove } : null
+  if (kind === 'notify') {
+    const text = f.notifyText.trim()
+    return text && f.userIds.length ? { text, userIds: f.userIds } : null
+  }
+  const n = toDays(f.days)
+  return f.noteText.trim() && n != null && n <= MAX_DAYS ? { text: f.noteText.trim(), days: n, removeOnLeave: f.removeOnLeave } : null
 }
 
-const newSettings = computed(() => settings(action.value, itemsText.value, noteText.value, days.value, removeOnLeave.value))
+const newSettings = computed(() => settings(action.value, fields.value))
 const canAdd = computed(() => !busy.value && columnId.value != null && newSettings.value != null)
 
-// The rule being edited: { id, itemsText, noteText, days, removeOnLeave }, or null.
+// The rule being edited: { id, ...fields }, or null.
 const editing = ref(null)
 const editSettings = computed(() => {
   const e = editing.value
   const rule = e && rules.value.find((r) => r.id === e.id)
-  return rule ? settings(rule.action, e.itemsText, e.noteText, e.days, e.removeOnLeave) : null
+  return rule ? settings(rule.action, e) : null
 })
 
 // Rules grouped under their column, in the board's column order.
@@ -68,9 +79,15 @@ const byColumn = computed(() =>
     .filter((group) => group.rules.length > 0),
 )
 
+// Names of the people a NOTIFY rule tells; someone who left the board is no longer told.
+function names(userIds) {
+  return userIds.map((id) => people.value.find((p) => p.userId === id)?.name ?? 'someone who left').join(', ')
+}
+
 function describe(rule) {
   if (rule.action === 'APPEND_CHECKLIST') return `Add checklist items: ${rule.items.join(', ')}`
   if (rule.action === 'REPLACE_CHECKLIST') return `Replace the checklist with: ${rule.items.join(', ')}`
+  if (rule.action === 'NOTIFY') return `Notify ${names(rule.userIds)}: “${rule.text}”`
   const removed = rule.removeOnLeave ? ', removed when the task leaves' : ''
   return `Add the note “${rule.text}” with a reminder in ${rule.days} ${rule.days === 1 ? 'day' : 'days'}${removed}`
 }
@@ -81,7 +98,8 @@ function showError(summary, err) {
 
 onMounted(async () => {
   try {
-    rules.value = await store.fetchRules(props.boardId)
+    ;[rules.value, people.value] = await Promise.all([store.fetchRules(props.boardId), store.fetchMembers(props.boardId)])
+    people.value = people.value.map((p) => ({ ...p, name: p.name ?? 'Someone' }))
   } catch (err) {
     showError('Could not load automations', err)
   } finally {
@@ -94,9 +112,7 @@ async function add() {
   busy.value = true
   try {
     rules.value.push(await store.addRule(props.boardId, { columnId: columnId.value, action: action.value, ...newSettings.value }))
-    itemsText.value = ''
-    noteText.value = ''
-    removeOnLeave.value = false
+    fields.value = emptyFields()
   } catch (err) {
     showError('Could not add the automation', err)
   } finally {
@@ -115,11 +131,14 @@ async function setEnabled(rule, enabled) {
 
 function startEdit(rule) {
   editing.value = {
+    ...emptyFields(),
     id: rule.id,
     itemsText: (rule.items ?? []).join('\n'),
     noteText: rule.text ?? '',
     days: String(rule.days ?? ''),
     removeOnLeave: rule.removeOnLeave,
+    notifyText: rule.text ?? '',
+    userIds: [...(rule.userIds ?? [])],
   }
 }
 
@@ -153,7 +172,7 @@ async function remove(rule) {
       Run when a task is moved into a column or created in it. Adding skips items the checklist already has.
       Replacing makes the list the task's checklist; items in both stay ticked. A note with a reminder is
       written as whoever moved the task, and shows in their “What's due”; it can be removed again when the
-      task leaves the column.
+      task leaves the column. Notifying skips whoever moved the task; it shows under their bell for the others.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>
@@ -164,12 +183,25 @@ async function remove(rule) {
         <li v-for="rule in group.rules" :key="rule.id" class="py-1" data-testid="rule">
           <form v-if="editing?.id === rule.id" class="flex flex-col gap-2" @submit.prevent="saveEdit(rule)" @keydown.esc.stop="editing = null">
             <Textarea
-              v-if="hasItems(rule.action)"
+              v-if="kindOf(rule.action) === 'items'"
               v-model="editing.itemsText"
               rows="3"
               autoResize
               aria-label="Edit checklist items"
             />
+            <div v-else-if="kindOf(rule.action) === 'notify'" class="flex flex-col gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <InputText v-model="editing.notifyText" :maxlength="MAX_NOTIFICATION_LENGTH" size="small" aria-label="Edit message" />
+              <MultiSelect
+                v-model="editing.userIds"
+                :options="people"
+                optionLabel="name"
+                optionValue="userId"
+                display="chip"
+                placeholder="Whom to notify"
+                aria-label="Edit whom to notify"
+                size="small"
+              />
+            </div>
             <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <InputText v-model="editing.noteText" :maxlength="MAX_NOTE_LENGTH" class="min-w-0 flex-1" size="small" aria-label="Edit note" />
               <span>remind in</span>
@@ -227,16 +259,35 @@ async function remove(rule) {
         <Select v-model="action" :options="ACTIONS" optionLabel="label" optionValue="value" aria-label="Action" size="small" />
       </div>
       <Textarea
-        v-if="hasItems(action)"
-        v-model="itemsText"
+        v-if="kindOf(action) === 'items'"
+        v-model="fields.itemsText"
         rows="3"
         autoResize
         placeholder="One item per line, e.g. Update CV"
         aria-label="Checklist items"
       />
+      <div v-else-if="kindOf(action) === 'notify'" class="flex flex-col gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <InputText
+          v-model="fields.notifyText"
+          :maxlength="MAX_NOTIFICATION_LENGTH"
+          placeholder="Message, e.g. Ready for review"
+          size="small"
+          aria-label="Message"
+        />
+        <MultiSelect
+          v-model="fields.userIds"
+          :options="people"
+          optionLabel="name"
+          optionValue="userId"
+          display="chip"
+          placeholder="Whom to notify"
+          aria-label="Whom to notify"
+          size="small"
+        />
+      </div>
       <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
         <InputText
-          v-model="noteText"
+          v-model="fields.noteText"
           :maxlength="MAX_NOTE_LENGTH"
           placeholder="Note, e.g. Follow up"
           class="min-w-0 flex-1"
@@ -244,10 +295,10 @@ async function remove(rule) {
           aria-label="Note"
         />
         <span>remind in</span>
-        <InputText v-model="days" inputmode="numeric" class="w-20" size="small" aria-label="Days from now" />
+        <InputText v-model="fields.days" inputmode="numeric" class="w-20" size="small" aria-label="Days from now" />
         <span>days, at the current time</span>
         <label class="flex w-full items-center gap-2">
-          <Checkbox v-model="removeOnLeave" binary />
+          <Checkbox v-model="fields.removeOnLeave" binary />
           Remove the note when the task leaves the column
         </label>
       </div>

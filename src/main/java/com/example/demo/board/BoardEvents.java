@@ -19,8 +19,9 @@ import java.util.function.Predicate;
 /**
  * Open live views of boards (server-sent events), by board. A change only says "changed"; the
  * view loads the board again, so it can't miss or misapply a detail. Logged-in viewers (owner,
- * members) also get "presence": id and name of the others who have the board open. Viewers of a
- * share link are anonymous and never see names.
+ * members) also get "presence": id and name of the others who have the board open, and
+ * "notification" when they have a new one (see WebUiChannel). Viewers of a share link are
+ * anonymous and never see names.
  */
 @Component
 public class BoardEvents {
@@ -85,6 +86,13 @@ public class BoardEvents {
         // Browsers drop events without data.
         sendToAll(event.boardId(), listenersOf(event.boardId(), l -> true),
                 l -> SseEmitter.event().name("changed").data("changed"));
+    }
+
+    /** Tells the user's open board views, whichever board, that they have a new notification. */
+    public void notifyUser(int userId) {
+        listeners.keySet().forEach(boardId -> sendToAll(boardId,
+                listenersOf(boardId, l -> l.viewer() != null && l.viewer().userId() == userId),
+                l -> SseEmitter.event().name("notification").data("new")));
     }
 
     @TransactionalEventListener(fallbackExecution = true)

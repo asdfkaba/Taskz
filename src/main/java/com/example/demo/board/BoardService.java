@@ -6,6 +6,7 @@ import com.example.demo.board.BoardDtos.ColumnDto;
 import com.example.demo.board.BoardDtos.ColumnPatch;
 import com.example.demo.board.BoardDtos.DueTask;
 import com.example.demo.board.BoardDtos.LabelDto;
+import com.example.demo.notification.NotificationRepository;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskController;
 import com.example.demo.task.TaskDto;
@@ -67,6 +68,7 @@ public class BoardService {
     private final BoardRuleRepository ruleRepository;
     private final RuleEngine ruleEngine;
     private final TaskNoteRepository noteRepository;
+    private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher events;
 
     public BoardService(BoardRepository boardRepository, BoardColumnRepository columnRepository,
@@ -74,7 +76,8 @@ public class BoardService {
                         BoardShareRepository shareRepository, BoardLabelRepository labelRepository,
                         TaskHistoryService historyService, BoardMemberRepository memberRepository,
                         BoardRuleRepository ruleRepository, RuleEngine ruleEngine,
-                        TaskNoteRepository noteRepository, ApplicationEventPublisher events) {
+                        TaskNoteRepository noteRepository, NotificationRepository notificationRepository,
+                        ApplicationEventPublisher events) {
         this.boardRepository = boardRepository;
         this.columnRepository = columnRepository;
         this.taskRepository = taskRepository;
@@ -86,6 +89,7 @@ public class BoardService {
         this.ruleRepository = ruleRepository;
         this.ruleEngine = ruleEngine;
         this.noteRepository = noteRepository;
+        this.notificationRepository = notificationRepository;
         this.events = events;
     }
 
@@ -114,6 +118,7 @@ public class BoardService {
         events.publishEvent(new BoardAccessEnded(boardId, null));
         historyService.forgetBoard(board);
         memberRepository.deleteByBoard(board);
+        notificationRepository.deleteByBoard(board);
         // Deleting the tasks also clears their rows in task_label.
         taskRepository.deleteAll(taskRepository.findByBoardInOrder(board));
         labelRepository.deleteAll(labelRepository.findByBoardOrderById(board));

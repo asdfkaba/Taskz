@@ -1,9 +1,13 @@
 package com.example.demo.task;
 
+import com.example.demo.board.Board;
 import com.example.demo.board.BoardColumn;
+import com.example.demo.board.BoardMemberRepository;
 import com.example.demo.board.BoardRule;
 import com.example.demo.board.BoardRuleRepository;
 import com.example.demo.board.RulePayload;
+import com.example.demo.notification.NotificationService;
+import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +18,7 @@ import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,15 +36,20 @@ public class RuleEngine {
     private final TaskHistoryService historyService;
     private final TaskNoteRepository noteRepository;
     private final UserRepository userRepository;
+    private final BoardMemberRepository memberRepository;
+    private final NotificationService notificationService;
 
     public RuleEngine(BoardRuleRepository ruleRepository, TaskRepository taskRepository,
                       TaskHistoryService historyService, TaskNoteRepository noteRepository,
-                      UserRepository userRepository) {
+                      UserRepository userRepository, BoardMemberRepository memberRepository,
+                      NotificationService notificationService) {
         this.ruleRepository = ruleRepository;
         this.taskRepository = taskRepository;
         this.historyService = historyService;
         this.noteRepository = noteRepository;
         this.userRepository = userRepository;
+        this.memberRepository = memberRepository;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -85,7 +95,19 @@ public class RuleEngine {
                 note.setRuleId(rule.getId());
                 noteRepository.save(note);
             }
+            case NOTIFY -> notificationService.notify(recipients(task.getBoardColumn().getBoard(), payload.userIds(), email),
+                    payload.text(), null, task);
         }
+    }
+
+    // The chosen people who can still open the board, without whoever caused the rule to run.
+    private List<User> recipients(Board board, List<Integer> userIds, String email) {
+        List<User> people = new ArrayList<>();
+        people.add(board.getUser());
+        memberRepository.findByBoardOrderByJoinedAscIdAsc(board).forEach(m -> people.add(m.getUser()));
+        return people.stream()
+                .filter(user -> userIds.contains(user.getId()) && !user.getEmail().equals(email))
+                .toList();
     }
 
     private static ZoneId userZone() {

@@ -1,12 +1,15 @@
 import { onBeforeUnmount } from 'vue'
+import { useNotificationStore } from '@/stores/notifications'
 
 /**
  * Live updates of a board over server-sent events (see BoardEvents in the backend). The server
  * only says "changed", and the page loads the board again in the background with refresh();
  * refresh returns 'gone' when the board can't be opened anymore (link revoked, access removed).
- * Logged-in views also get "presence": the names of the others who have the board open.
+ * Logged-in views also get "presence": the names of the others who have the board open, and
+ * "notification" when the user has a new one, whichever board is open (the bell loads it).
  */
 export function useBoardEvents({ refresh, onPresence = () => {} }) {
+  const notifications = useNotificationStore()
   let source = null
   let refreshTimer = null
   let retryTimer = null
@@ -27,6 +30,7 @@ export function useBoardEvents({ refresh, onPresence = () => {} }) {
     }
     source.addEventListener('changed', refreshSoon)
     source.addEventListener('presence', (event) => onPresence(JSON.parse(event.data)))
+    source.addEventListener('notification', () => notifications.load().catch(() => {}))
     // The browser reconnects by itself, unless the reconnect was refused: the board can't be
     // opened anymore (refresh shows that) or the server was away, e.g. during a deploy (try
     // again). Delayed, as leaving the page also ends the stream, and its timers don't run anymore.

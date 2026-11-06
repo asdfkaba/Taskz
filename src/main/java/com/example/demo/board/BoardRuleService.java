@@ -9,8 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The automations of a board (see {@link BoardRule}; run by RuleEngine). Only the owner sees and
@@ -21,13 +23,18 @@ public class BoardRuleService {
 
     static final int MAX_ITEMS = 20;
     static final int MAX_DAYS = 365;
+    // Like Notification.MAX_TEXT_LENGTH.
+    static final int MAX_NOTIFICATION_LENGTH = 500;
 
     private final BoardService boardService;
     private final BoardRuleRepository ruleRepository;
+    private final BoardMemberRepository memberRepository;
 
-    public BoardRuleService(BoardService boardService, BoardRuleRepository ruleRepository) {
+    public BoardRuleService(BoardService boardService, BoardRuleRepository ruleRepository,
+                            BoardMemberRepository memberRepository) {
         this.boardService = boardService;
         this.ruleRepository = ruleRepository;
+        this.memberRepository = memberRepository;
     }
 
     @Transactional(readOnly = true)
@@ -44,7 +51,7 @@ public class BoardRuleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "columnId must be a column of this board");
         }
         BoardRule.Action action = validAction(request.action());
-        BoardRule rule = new BoardRule(column, action, validPayload(action, request).toJson());
+        BoardRule rule = new BoardRule(column, action, validPayload(action, request, board).toJson());
         if (request.enabled() != null) {
             rule.setEnabled(request.enabled());
         }
@@ -56,7 +63,7 @@ public class BoardRuleService {
     public RuleDto updateRule(int ruleId, String email, RuleRequest request) {
         BoardRule rule = findRule(ruleId, email);
         BoardRule.Action action = BoardRule.Action.valueOf(rule.getAction());
-        rule.setPayload(validPayload(action, request).toJson());
+        rule.setPayload(validPayload(action, request, rule.getColumn().getBoard()).toJson());
         if (request.enabled() != null) {
             rule.setEnabled(request.enabled());
         }
@@ -82,17 +89,37 @@ public class BoardRuleService {
         }
     }
 
-    private static RulePayload validPayload(BoardRule.Action action, RuleRequest request) {
+    private RulePayload validPayload(BoardRule.Action action, RuleRequest request, Board board) {
         return switch (action) {
-            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null, null, null);
+            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null, null, null, null);
             case ADD_NOTE_REMINDER -> {
                 if (request.days() == null || request.days() < 0 || request.days() > MAX_DAYS) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 0 and " + MAX_DAYS);
                 }
                 yield new RulePayload(null, TaskNoteService.validText(request.text()), request.days(),
-                        Boolean.TRUE.equals(request.removeOnLeave()) ? true : null);
+                        Boolean.TRUE.equals(request.removeOnLeave()) ? true : null, null);
+            }
+            case NOTIFY -> {
+                String text = request.text() == null ? "" : request.text().strip();
+                if (text.isEmpty() || text.length() > MAX_NOTIFICATION_LENGTH) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "A notification needs 1 to " + MAX_NOTIFICATION_LENGTH + " characters");
+                }
+                yield new RulePayload(null, text, null, null, validRecipients(request.userIds(), board));
             }
         };
+    }
+
+    // The owner and the members of the board; each at most once, in the order given.
+    private List<Integer> validRecipients(List<Integer> userIds, Board board) {
+        Set<Integer> people = new HashSet<>();
+        people.add(board.getUser().getId());
+        memberRepository.findByBoardOrderByJoinedAscIdAsc(board).forEach(m -> people.add(m.getUser().getId()));
+        List<Integer> result = List.copyOf(new LinkedHashSet<>(userIds == null ? List.of() : userIds));
+        if (result.isEmpty() || !people.containsAll(result)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Notify needs people of this board");
+        }
+        return result;
     }
 
     // Cleaned like the items of a task (Checklists.clean), without blanks and duplicates.

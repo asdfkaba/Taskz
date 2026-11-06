@@ -1,5 +1,6 @@
 <script setup>
 import UserIcon from '@/components/UserIcon.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { computed, onMounted, watch } from 'vue'
 import Toast from 'primevue/toast'
@@ -78,6 +79,7 @@ onMounted(async () => {
         </RouterLink>
 
         <div class="flex min-w-0 items-center gap-2">
+          <NotificationBell v-if="authStore.isAuthenticated" />
           <!-- Your icon, the same one others see on a board; name and email on hover. -->
           <UserIcon
             v-if="authStore.isAuthenticated"

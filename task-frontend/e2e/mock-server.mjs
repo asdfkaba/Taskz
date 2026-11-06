@@ -31,6 +31,10 @@ let boardDeleted
 // Members of board 1 ([{ userId, name, joined }]) and its open invite keys. Board 2 is Bob's; Alice
 // joins it with the fixed link /join/team-invite.
 let members
+// Alice's bell ([{ id, text, boardName, boardSlug, taskId, taskTitle, created, seen, read }]), and what NOTIFY rules
+// sent to others ([{ userId, text, taskId }]).
+let notifications
+let sentToOthers
 let invites
 let teamJoined
 const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
@@ -45,7 +49,7 @@ const newRevision = () => `rev${++revisions}`
 const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
 let itemId // ids of checklist items
-// Automations of board 1 ([{ id, columnId, action, items, text, days, removeOnLeave, enabled }]), applied like RuleEngine.
+// Automations of board 1 ([{ id, columnId, action, items, text, days, removeOnLeave, userIds, enabled }]), applied like RuleEngine.
 let rules
 let notes // [{ id, taskId, text, user, created, edited, remindAt, ruleId }]; all of them Alice's
 let attachments // [{ id, taskId, name, contentType, size, image, user, created, data }]
@@ -56,6 +60,8 @@ function reset() {
   for (const res of boardStreams) res.end()
   boardStreams.clear()
   members = []
+  notifications = []
+  sentToOthers = []
   invites = []
   teamJoined = false
   nextId = 100
@@ -116,6 +122,9 @@ function runRules(t) {
       t.checklist = r.items.map((text) => t.checklist.find((i) => i.text === text) ?? newItem(text))
     } else if (r.action === 'APPEND_CHECKLIST') {
       t.checklist = [...t.checklist, ...r.items.filter((text) => !itemTexts(t).includes(text)).map((text) => newItem(text))]
+    } else if (r.action === 'NOTIFY') {
+      // Alice moved it, so she isn't told; the others' bells aren't in the mock.
+      for (const userId of r.userIds.filter((id) => id !== 1)) sentToOthers.push({ userId, text: r.text, taskId: t.id })
     } else {
       addNote(t.id, r.text, localTime(new Date(Date.now() + r.days * 86400000)), r.id)
     }
@@ -161,6 +170,24 @@ function api(method, url, body) {
       ...notes.filter((n) => n.remindAt).map((n) => [tasks.find((t) => t.id === n.taskId), n]).filter(([t]) => t && open(t)).map(([t, n]) => entry(t, n.remindAt, n)),
     ]
     return [200, due.sort((a, b) => time(a.due_date) - time(b.due_date))]
+  }
+  if (method === 'GET' && p === '/notifications') {
+    const items = [...notifications].reverse().map(({ seen, ...n }) => n)
+    return [200, { items, unseen: notifications.filter((n) => !n.seen).length }]
+  }
+  if (method === 'POST' && p === '/notifications/seen') {
+    notifications.forEach((n) => (n.seen = true))
+    return [204, null]
+  }
+  if (method === 'POST' && (m = p.match(/^\/notifications\/(\d+)\/read$/))) {
+    const n = notifications.find((x) => x.id === +m[1])
+    if (!n) return [404, {}]
+    Object.assign(n, { seen: true, read: true })
+    return [204, null]
+  }
+  if (method === 'POST' && p === '/notifications/read-all') {
+    notifications.forEach((n) => Object.assign(n, { seen: true, read: true }))
+    return [204, null]
   }
   if (method === 'GET' && p === '/boards/1/members') {
     return [200, [{ userId: 1, name: 'Alice', owner: true, joined: null }, ...members.map((m) => ({ ...m, owner: false }))]]
@@ -318,14 +345,14 @@ function api(method, url, body) {
   }
   if (method === 'GET' && p === '/boards/1/rules') return [200, rules]
   if (method === 'POST' && p === '/boards/1/rules') {
-    const r = { id: nextId++, columnId: body.columnId, action: body.action, items: body.items ?? null, text: body.text ?? null, days: body.days ?? null, removeOnLeave: body.removeOnLeave ?? false, enabled: true }
+    const r = { id: nextId++, columnId: body.columnId, action: body.action, items: body.items ?? null, text: body.text ?? null, days: body.days ?? null, removeOnLeave: body.removeOnLeave ?? false, userIds: body.userIds ?? null, enabled: true }
     rules.push(r)
     return [201, r]
   }
   if ((m = p.match(/^\/rules\/(\d+)$/))) {
     const r = rules.find((x) => x.id === +m[1])
     if (!r) return [404, {}]
-    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, text: body.text ?? r.text, days: body.days ?? r.days, removeOnLeave: body.removeOnLeave ?? r.removeOnLeave, enabled: body.enabled ?? r.enabled }); return [200, r] }
+    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, text: body.text ?? r.text, days: body.days ?? r.days, removeOnLeave: body.removeOnLeave ?? r.removeOnLeave, userIds: body.userIds ?? r.userIds, enabled: body.enabled ?? r.enabled }); return [200, r] }
     if (method === 'DELETE') { rules = rules.filter((x) => x !== r); return [204, null] }
   }
   if (method === 'GET' && p === '/boards/1/share') return share ? [200, { path: `${board.slug}-${share.key}`, created: share.created }] : [204, null]
@@ -464,6 +491,22 @@ http.createServer((req, res) => {
         res.on('close', () => boardStreams.delete(res))
         return
       }
+      // Test hooks: a notification for Alice (like WebUiChannel: stored, then a nudge on her board
+      // streams), and members of board 1.
+      if (req.url === '/api/__notify' && req.method === 'POST') {
+        const body = JSON.parse(Buffer.concat(chunks).toString())
+        notifications.push({ id: nextId++, boardName: null, boardSlug: null, taskId: null, taskTitle: null, created: new Date().toISOString(), seen: false, read: false, ...body })
+        for (const res of boardStreams) sse(res, 'notification', 'new')
+        res.writeHead(204)
+        res.end()
+        return
+      }
+      if (req.url === '/api/__members' && req.method === 'POST') {
+        members = JSON.parse(Buffer.concat(chunks).toString())
+        res.writeHead(204)
+        res.end()
+        return
+      }
       // Test hooks: who else has board 1 open, and a change by someone else (no own request).
       if (req.url === '/api/__presence' && req.method === 'POST') {
         for (const res of boardStreams) sse(res, 'presence', Buffer.concat(chunks).toString())
@@ -513,7 +556,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, rules, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, rules, notifications, sentToOthers, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })

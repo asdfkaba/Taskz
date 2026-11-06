@@ -90,16 +90,16 @@ public final class BoardDtos {
 
     // An automation of a board; items for APPEND_CHECKLIST and REPLACE_CHECKLIST, text and days for ADD_NOTE_REMINDER.
     public record RuleDto(Integer id, Integer columnId, String action, List<String> items, String text, Integer days,
-                          boolean removeOnLeave, boolean enabled) {
+                          boolean removeOnLeave, List<Integer> userIds, boolean enabled) {
         static RuleDto from(BoardRule rule) {
             RulePayload payload = RulePayload.parse(rule.getPayload());
             return new RuleDto(rule.getId(), rule.getColumn().getId(), rule.getAction(), payload.items(), payload.text(), payload.days(), payload.removesOnLeave(),
-                    rule.isEnabled());
+                    payload.userIds(), rule.isEnabled());
         }
     }
 
     // columnId and action only count when adding a rule; absent enabled leaves it as it is (new: on).
     public record RuleRequest(Integer columnId, String action, List<String> items, String text, Integer days,
-                              Boolean removeOnLeave, Boolean enabled) {
+                              Boolean removeOnLeave, List<Integer> userIds, Boolean enabled) {
     }
 }

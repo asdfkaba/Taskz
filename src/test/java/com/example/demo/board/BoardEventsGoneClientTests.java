@@ -73,4 +73,24 @@ class BoardEventsGoneClientTests {
         assertThat(presence.get(presence.size() - 1)).contains("name=Carol").doesNotContain("name=Bob");
         assertThat(alice.sent).anyMatch(sent -> sent.startsWith("event:changed"));
     }
+
+    @Test
+    void aNotificationReachesOnlyTheUsersOwnStreamsOnAnyBoard() {
+        BoardEvents events = new BoardEvents();
+        Recording aliceHere = new Recording();
+        Recording aliceElsewhere = new Recording();
+        Recording bob = new Recording();
+        Recording shareLink = new Recording();
+        events.subscribe(7, new BoardEvents.Viewer(1, "Alice"), aliceHere);
+        events.subscribe(8, new BoardEvents.Viewer(1, "Alice"), aliceElsewhere);
+        events.subscribe(7, new BoardEvents.Viewer(2, "Bob"), bob);
+        events.subscribe(7, null, shareLink);
+
+        events.notifyUser(1);
+
+        assertThat(aliceHere.sent).anyMatch(sent -> sent.startsWith("event:notification"));
+        assertThat(aliceElsewhere.sent).anyMatch(sent -> sent.startsWith("event:notification"));
+        assertThat(bob.sent).noneMatch(sent -> sent.startsWith("event:notification"));
+        assertThat(shareLink.sent).noneMatch(sent -> sent.startsWith("event:notification"));
+    }
 }
