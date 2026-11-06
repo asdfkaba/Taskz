@@ -4,6 +4,7 @@ import com.example.demo.task.RuleEngine;
 import com.example.demo.auth.jwt.TokenService;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardService;
+import com.example.demo.board.RulePayload;
 import com.example.demo.task.TaskHistoryService;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -19,6 +21,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,6 +62,23 @@ class FreshDatabaseMigrationTests {
         Board board = boardService.createDefaultBoard(userRepository.save(new User("Alice", "alice@example.com")));
         assertThat(board.getId()).isNotNull();
         assertThat(boardService.getBoard(board.getId(), "alice@example.com").columns()).hasSize(3);
+    }
+
+    // V12 turns SET_DUE_IN rules into note reminders; its UPDATE is run again on such a rule.
+    @Test
+    void oldDueDateRulesBecomeNoteReminders() throws Exception {
+        Board board = boardService.createDefaultBoard(userRepository.save(new User("Alice", "alice@example.com")));
+        Integer column = jdbc.queryForObject("select min(id) from board_column where board_id = ?", Integer.class, board.getId());
+        jdbc.update("insert into board_rule (column_id, trigger, action, payload, enabled) values (?, 'ENTERED_COLUMN', 'SET_DUE_IN', '{\"days\":14}', true)", column);
+
+        String migration = new String(new ClassPathResource("db/migration/V12__note_reminders.sql").getInputStream().readAllBytes());
+        jdbc.update(migration.substring(migration.indexOf("UPDATE board_rule")));
+
+        Map<String, Object> rule = jdbc.queryForMap("select action, payload from board_rule where column_id = ?", column);
+        assertThat(rule.get("action")).isEqualTo("ADD_NOTE_REMINDER");
+        RulePayload payload = RulePayload.parse((String) rule.get("payload"));
+        assertThat(payload.text()).isEqualTo("Follow up");
+        assertThat(payload.days()).isEqualTo(14);
     }
 
     // V3 and V6 delete notes and attachments in the database when their task is deleted; checked on

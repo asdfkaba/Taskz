@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -34,12 +35,13 @@ public class TaskNoteService {
     // canEdit and canDelete are for the user asking, so the page shows only what works.
     // userId: for the author's icon on the page.
     public record NoteDto(Integer id, String text, String user, Integer userId, Instant created, Instant edited,
-                          boolean canEdit, boolean canDelete) {
+                          LocalDateTime remindAt, boolean canEdit, boolean canDelete) {
     }
 
     private NoteDto toDto(TaskNote note, String email) {
         return new NoteDto(note.getId(), note.getText(), note.getUser() == null ? null : note.getUser().getName(),
-                note.getUser() == null ? null : note.getUser().getId(), note.getCreated(), note.getEdited(), canEdit(note, email), canDelete(note, email));
+                note.getUser() == null ? null : note.getUser().getId(), note.getCreated(), note.getEdited(),
+                note.getRemindAt(), canEdit(note, email), canDelete(note, email));
     }
 
     // Notes from before boards had members, or of deleted users, have no author: the owner's then.
@@ -63,14 +65,16 @@ public class TaskNoteService {
     }
 
     @Transactional
-    public NoteDto addNote(int taskId, String email, String text) {
+    public NoteDto addNote(int taskId, String email, String text, LocalDateTime remindAt) {
         Task task = boardService.findTask(taskId, email);
         TaskNote note = new TaskNote(task, userRepository.findByEmail(email).orElse(null), validText(text));
+        note.setRemindAt(remindAt);
         return toDto(noteRepository.save(note), email);
     }
 
+    /** Sets text and reminder; a null remindAt removes the reminder (the "Done" in "What's due"). */
     @Transactional
-    public NoteDto updateNote(int noteId, String email, String text) {
+    public NoteDto updateNote(int noteId, String email, String text, LocalDateTime remindAt) {
         TaskNote note = findNote(noteId, email);
         if (!canEdit(note, email)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the author can edit a note");
@@ -79,6 +83,7 @@ public class TaskNoteService {
         if (!valid.equals(note.getText())) {
             note.changeText(valid);
         }
+        note.setRemindAt(remindAt);
         return toDto(note, email);
     }
 
@@ -98,7 +103,7 @@ public class TaskNoteService {
     }
 
     // Trimmed at the ends only, so line breaks inside stay.
-    private static String validText(String text) {
+    public static String validText(String text) {
         String trimmed = text == null ? "" : text.strip();
         if (trimmed.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Note must not be empty");

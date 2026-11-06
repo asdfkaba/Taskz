@@ -70,6 +70,24 @@ test("What's due", async ({ browser }) => {
     await page.getByTestId('task-view').getByText('Task A').first().waitFor()
   })
 
+  await test.step('a note reminder shows with its task and goes when done', async () => {
+    await api('POST', '/tasks/3/notes', { text: 'Ask about the salary', remindAt: local(inDays(1)) })
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => !document.querySelector('.p-dialog'))
+    await page.getByRole('link', { name: "What's due" }).click()
+    const note = group('week').getByTestId('due-note')
+    await note.waitFor()
+    ensure((await note.innerText()).includes('Task C') && (await note.innerText()).includes('Ask about the salary'), await note.innerText())
+    // Tomorrow's reminder comes before Task C's due date in three days.
+    const rows = await group('week').locator('li').allInnerTexts()
+    ensure(rows[0].includes('Ask about the salary') && rows[1].includes('Task C') && !rows[1].includes('salary'), JSON.stringify(rows))
+    await page.screenshot({ path: `${test.info().outputDir}/due-2-note.png` })
+    await group('week').getByRole('button', { name: 'Reminder done: Ask about the salary' }).click()
+    await note.waitFor({ state: 'detached' })
+    const saved = (await (await fetch(`${BASE}/api/__state`)).json()).notes.find((n) => n.text === 'Ask about the salary')
+    ensure(saved && saved.remindAt === null, JSON.stringify(saved))
+  })
+
   await test.step('a task that is gone says so', async () => {
     await page.goto(`${BASE}/boards/my-board?task=999`)
     await page.locator('.p-toast').getByText('Task not found').waitFor()

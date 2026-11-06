@@ -1,8 +1,10 @@
 package com.example.demo.task;
 
+import com.example.demo.board.BoardColumn;
 import com.example.demo.board.BoardRule;
 import com.example.demo.board.BoardRuleRepository;
 import com.example.demo.board.RulePayload;
+import com.example.demo.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -12,6 +14,7 @@ import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * Runs the board rules of a column when a task enters it (moved there or created in it).
@@ -26,17 +29,25 @@ public class RuleEngine {
     private final BoardRuleRepository ruleRepository;
     private final TaskRepository taskRepository;
     private final TaskHistoryService historyService;
+    private final TaskNoteRepository noteRepository;
+    private final UserRepository userRepository;
 
     public RuleEngine(BoardRuleRepository ruleRepository, TaskRepository taskRepository,
-                      TaskHistoryService historyService) {
+                      TaskHistoryService historyService, TaskNoteRepository noteRepository,
+                      UserRepository userRepository) {
         this.ruleRepository = ruleRepository;
         this.taskRepository = taskRepository;
         this.historyService = historyService;
+        this.noteRepository = noteRepository;
+        this.userRepository = userRepository;
     }
 
-    /** Call after the task was put into its new column. Records what the rules changed. */
+    /**
+     * Call after the task was put into its new column. Records what the rules changed. Notes the
+     * rules add are written as the user who moved or created the task, so the reminder is theirs.
+     */
     @Transactional
-    public void taskEntered(Task task) {
+    public void taskEntered(Task task, String email) {
         var rules = ruleRepository.findByColumnAndTriggerAndEnabledTrueOrderById(
                 task.getBoardColumn(), BoardRule.Trigger.ENTERED_COLUMN.name());
         if (rules.isEmpty()) {
@@ -44,19 +55,36 @@ public class RuleEngine {
         }
         TaskHistoryService.Snapshot before = TaskHistoryService.Snapshot.of(task);
         for (BoardRule rule : rules) {
-            apply(rule, task);
+            apply(rule, task, email);
         }
         taskRepository.save(task);
         historyService.recordAutomation(before, task);
     }
 
-    private void apply(BoardRule rule, Task task) {
+    /** Call when the task leaves the column: deletes the notes its rules added and should remove again. */
+    @Transactional
+    public void taskLeft(Task task, BoardColumn column) {
+        List<Integer> ruleIds = ruleRepository.findByColumnAndTriggerAndEnabledTrueOrderById(
+                        column, BoardRule.Trigger.ENTERED_COLUMN.name()).stream()
+                .filter(rule -> RulePayload.parse(rule.getPayload()).removesOnLeave())
+                .map(BoardRule::getId)
+                .toList();
+        if (!ruleIds.isEmpty()) {
+            noteRepository.deleteByTaskAndRuleIdIn(task, ruleIds);
+        }
+    }
+
+    private void apply(BoardRule rule, Task task, String email) {
         RulePayload payload = RulePayload.parse(rule.getPayload());
         switch (BoardRule.Action.valueOf(rule.getAction())) {
             case APPEND_CHECKLIST -> Checklists.append(task, payload.items());
             case REPLACE_CHECKLIST -> Checklists.replace(task, payload.items());
-            case SET_DUE_IN -> task.setDue_date(
-                    LocalDateTime.now(userZone()).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
+            case ADD_NOTE_REMINDER -> {
+                TaskNote note = new TaskNote(task, userRepository.findByEmail(email).orElse(null), payload.text());
+                note.setRemindAt(LocalDateTime.now(userZone()).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
+                note.setRuleId(rule.getId());
+                noteRepository.save(note);
+            }
         }
     }
 

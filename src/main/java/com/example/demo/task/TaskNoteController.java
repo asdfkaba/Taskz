@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 // Notes need a login; they are not part of shared boards.
@@ -13,7 +14,7 @@ import java.util.List;
 public class TaskNoteController {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NoteRequest(String text) {
+    public record NoteRequest(String text, LocalDateTime remindAt) {
     }
 
     private final TaskNoteService noteService;
@@ -31,12 +32,12 @@ public class TaskNoteController {
     @PostMapping("/tasks/{id}/notes")
     @ResponseStatus(HttpStatus.CREATED)
     public NoteDto addNote(@PathVariable("id") int taskId, @RequestBody NoteRequest request) {
-        return noteService.addNote(taskId, currentUserEmail(), request.text());
+        return noteService.addNote(taskId, currentUserEmail(), request.text(), request.remindAt());
     }
 
     @PatchMapping("/notes/{id}")
     public NoteDto updateNote(@PathVariable("id") int noteId, @RequestBody NoteRequest request) {
-        return noteService.updateNote(noteId, currentUserEmail(), request.text());
+        return noteService.updateNote(noteId, currentUserEmail(), request.text(), request.remindAt());
     }
 
     @DeleteMapping("/notes/{id}")

@@ -6,9 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
-/** Settings of a {@link BoardRule}, stored as JSON: items for APPEND_CHECKLIST and REPLACE_CHECKLIST, days for SET_DUE_IN. */
+/**
+ * Settings of a {@link BoardRule}, stored as JSON: items for APPEND_CHECKLIST and REPLACE_CHECKLIST,
+ * text and days for ADD_NOTE_REMINDER; removeOnLeave (true or absent) deletes that note again when the
+ * task leaves the column.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record RulePayload(List<String> items, Integer days) {
+public record RulePayload(List<String> items, String text, Integer days, Boolean removeOnLeave) {
+
+    public boolean removesOnLeave() {
+        return Boolean.TRUE.equals(removeOnLeave);
+    }
 
     private static final ObjectMapper JSON = new ObjectMapper();
 

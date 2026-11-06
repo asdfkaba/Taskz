@@ -4,6 +4,9 @@ import com.example.demo.board.BoardDtos.RuleRequest;
 import com.example.demo.task.RuleEngine;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskHistoryService;
+import com.example.demo.task.TaskNote;
+import com.example.demo.task.TaskNoteRepository;
+import com.example.demo.task.TaskNoteService;
 import com.example.demo.task.TaskRepository;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
@@ -27,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
-@Import({BoardService.class, BoardRuleService.class, RuleEngine.class, TaskHistoryService.class})
+@Import({BoardService.class, BoardRuleService.class, RuleEngine.class, TaskHistoryService.class, TaskNoteService.class})
 class BoardRuleServiceTests {
 
     static final String ALICE = "alice@example.com";
@@ -51,6 +54,10 @@ class BoardRuleServiceTests {
     BoardRuleRepository ruleRepository;
     @Autowired
     TaskRepository taskRepository;
+    @Autowired
+    TaskNoteRepository noteRepository;
+    @Autowired
+    TaskNoteService noteService;
 
     Board board;
     BoardColumn todo;
@@ -84,25 +91,31 @@ class BoardRuleServiceTests {
     }
 
     private void checklistRule(BoardColumn column, String... items) {
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(column.getId(), "APPEND_CHECKLIST", List.of(items), null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(column.getId(), "APPEND_CHECKLIST", List.of(items), null, null, null, null));
     }
 
     @Test
     void movingIntoTheColumnRunsItsRulesAndRecordsThemAsAutomation() {
         checklistRule(doing, "Prepare", "Thank-you mail");
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "SET_DUE_IN", null, 14, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, " Follow up ", 14, null, null));
         Task task = addTask("Notes");
 
         boardService.moveTask(task.getId(), doing.getId(), 0, BOB);
 
         assertThat(items(task)).containsExactly("Prepare", "Thank-you mail");
         assertThat(task.getDescription()).isEqualTo("Notes");
-        LocalDateTime expected = LocalDateTime.now().plusDays(14);
-        assertThat(task.getDue_date()).isBetween(expected.minusMinutes(2), expected);
+        assertThat(task.getDue_date()).isNull();
         var latest = historyService.historyOf(task).get(0);
         assertThat(latest.type()).isEqualTo("updated");
         assertThat(latest.user()).isNull();
-        assertThat(latest.changes()).containsEntry("automation", true).containsKeys("checklistAdded", "due_date");
+        assertThat(latest.changes()).containsEntry("automation", true).containsKeys("checklistAdded");
+
+        // The note is Bob's, who moved the task, so the reminder is his.
+        TaskNote note = noteRepository.findByTaskOrderByCreatedDescIdDesc(task).get(0);
+        assertThat(note.getText()).isEqualTo("Follow up");
+        assertThat(note.getUser().getEmail()).isEqualTo(BOB);
+        LocalDateTime expected = LocalDateTime.now().plusDays(14);
+        assertThat(note.getRemindAt()).isBetween(expected.minusMinutes(2), expected);
     }
 
     @Test
@@ -116,7 +129,7 @@ class BoardRuleServiceTests {
 
         checklistRule(todo, "Review");
         ruleService.updateRule(ruleRepository.findByColumnBoardOrderById(board).get(1).getId(), ALICE,
-                new RuleRequest(null, null, List.of("Review"), null, false));
+                new RuleRequest(null, null, List.of("Review"), null, null, null, false));
         boardService.moveTask(task.getId(), todo.getId(), 0, ALICE);
         boardService.moveTask(task.getId(), todo.getId(), 5, ALICE);
         assertThat(items(task)).containsExactly("Prepare");
@@ -124,9 +137,9 @@ class BoardRuleServiceTests {
 
     @Test
     void eachStageReplacesTheChecklist() {
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "REPLACE_CHECKLIST", List.of("Prepare", "Research"), null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "REPLACE_CHECKLIST", List.of("Prepare", "Research"), null, null, null, null));
         BoardColumn done = columnRepository.findByBoardOrderByPosition(board).get(2);
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(done.getId(), "REPLACE_CHECKLIST", List.of("Research", "Thank-you mail"), null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(done.getId(), "REPLACE_CHECKLIST", List.of("Research", "Thank-you mail"), null, null, null, null));
         Task task = addTask("Contact: Ann\n- [ ] Apply");
 
         boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
@@ -139,17 +152,45 @@ class BoardRuleServiceTests {
     }
 
     @Test
-    void dueDateUsesTheBrowsersTimeZone() {
+    void aNoteRuleCanRemoveItsNoteWhenTheTaskLeaves() {
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Chase", 7, true, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Keep", 7, null, null));
+        assertThat(ruleService.rulesOf(board.getId(), ALICE)).extracting(r -> r.removeOnLeave()).containsExactly(true, false);
+        Task task = addTask(null);
+        int own = noteService.addNote(task.getId(), ALICE, "Written by hand", null).id();
+
+        boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
+        assertThat(noteTexts(task)).containsExactlyInAnyOrder("Chase", "Keep", "Written by hand");
+        boardService.moveTask(task.getId(), doing.getId(), 3, ALICE); // reordering is no leaving
+        assertThat(noteTexts(task)).hasSize(3);
+
+        boardService.moveTask(task.getId(), todo.getId(), 0, ALICE);
+        assertThat(noteTexts(task)).containsExactlyInAnyOrder("Keep", "Written by hand");
+        assertThat(noteRepository.findById(own)).isPresent();
+
+        // Deleting the column moves the task out too.
+        boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
+        boardService.deleteColumn(doing.getId(), ALICE, todo.getId(), false);
+        assertThat(noteTexts(task)).containsExactlyInAnyOrder("Keep", "Keep", "Written by hand");
+    }
+
+    private List<String> noteTexts(Task task) {
+        return noteRepository.findByTaskOrderByCreatedDescIdDesc(task).stream().map(TaskNote::getText).toList();
+    }
+
+    @Test
+    void reminderUsesTheBrowsersTimeZone() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Time-Zone", "Pacific/Kiritimati"); // UTC+14, far from any server
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "SET_DUE_IN", null, 0, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Now", 0, null, null));
         Task task = addTask(null);
 
         boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
 
         LocalDateTime there = LocalDateTime.now(ZoneId.of("Pacific/Kiritimati")).truncatedTo(ChronoUnit.MINUTES);
-        assertThat(task.getDue_date()).isBetween(there.minusMinutes(1), there);
+        assertThat(noteRepository.findByTaskOrderByCreatedDescIdDesc(task).get(0).getRemindAt())
+                .isBetween(there.minusMinutes(1), there);
     }
 
     @Test
@@ -162,7 +203,7 @@ class BoardRuleServiceTests {
     }
 
     private void checklistRuleAs(String email) {
-        ruleService.addRule(board.getId(), email, new RuleRequest(doing.getId(), "APPEND_CHECKLIST", List.of("x"), null, null));
+        ruleService.addRule(board.getId(), email, new RuleRequest(doing.getId(), "APPEND_CHECKLIST", List.of("x"), null, null, null, null));
     }
 
     @Test
@@ -178,13 +219,15 @@ class BoardRuleServiceTests {
         assertThatThrownBy(() -> checklistRule(doing, " ")).hasMessageContaining("1 to 20 items");
         assertThatThrownBy(() -> checklistRule(doing, "a\nb")).hasMessageContaining("one line");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "SET_DUE_IN", null, -1, null))).hasMessageContaining("days");
+                new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Text", -1, null, null))).hasMessageContaining("days");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "DELETE_TASK", null, null, null))).hasMessageContaining("Unknown action");
+                new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, " ", 3, null, null))).hasMessageContaining("empty");
+        assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(doing.getId(), "DELETE_TASK", null, null, null, null, null))).hasMessageContaining("Unknown action");
         Board other = boardService.createBoard(ALICE, "Other");
         int foreignColumn = columnRepository.findByBoardOrderByPosition(other).get(0).getId();
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(foreignColumn, "SET_DUE_IN", null, 1, null))).hasMessageContaining("column of this board");
+                new RuleRequest(foreignColumn, "ADD_NOTE_REMINDER", null, "Text", 1, null, null))).hasMessageContaining("column of this board");
     }
 
     @Test

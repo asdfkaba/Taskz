@@ -10,6 +10,8 @@ import com.example.demo.task.Task;
 import com.example.demo.task.TaskController;
 import com.example.demo.task.TaskDto;
 import com.example.demo.task.TaskHistoryService;
+import com.example.demo.task.TaskNote;
+import com.example.demo.task.TaskNoteRepository;
 import com.example.demo.task.TaskRepository;
 import com.example.demo.task.RuleEngine;
 import com.example.demo.user.User;
@@ -20,7 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -62,6 +66,7 @@ public class BoardService {
     private final BoardMemberRepository memberRepository;
     private final BoardRuleRepository ruleRepository;
     private final RuleEngine ruleEngine;
+    private final TaskNoteRepository noteRepository;
     private final ApplicationEventPublisher events;
 
     public BoardService(BoardRepository boardRepository, BoardColumnRepository columnRepository,
@@ -69,7 +74,7 @@ public class BoardService {
                         BoardShareRepository shareRepository, BoardLabelRepository labelRepository,
                         TaskHistoryService historyService, BoardMemberRepository memberRepository,
                         BoardRuleRepository ruleRepository, RuleEngine ruleEngine,
-                        ApplicationEventPublisher events) {
+                        TaskNoteRepository noteRepository, ApplicationEventPublisher events) {
         this.boardRepository = boardRepository;
         this.columnRepository = columnRepository;
         this.taskRepository = taskRepository;
@@ -80,6 +85,7 @@ public class BoardService {
         this.memberRepository = memberRepository;
         this.ruleRepository = ruleRepository;
         this.ruleEngine = ruleEngine;
+        this.noteRepository = noteRepository;
         this.events = events;
     }
 
@@ -203,7 +209,7 @@ public class BoardService {
         return summaries;
     }
 
-    /** Tasks with a due date on all boards the user can open, soonest first, without done ones. */
+    /** Tasks with a due date and the user's note reminders on all boards they can open, soonest first, without done ones. */
     @Transactional(readOnly = true)
     public List<DueTask> dueTasksOf(String email) {
         Map<Integer, BoardSummary> summaries = new HashMap<>();
@@ -213,14 +219,25 @@ public class BoardService {
         if (summaries.isEmpty()) {
             return List.of();
         }
-        return taskRepository.findDue(boardRepository.findAllById(summaries.keySet())).stream()
-                .map(task -> {
-                    BoardColumn column = task.getBoardColumn();
-                    BoardSummary board = summaries.get(column.getBoard().getId());
-                    return new DueTask(task.getId(), task.getTitle(), task.getDue_date(), board.name(), board.slug(),
-                            column.getName(), column.getColor());
-                })
-                .toList();
+        List<Board> boards = boardRepository.findAllById(summaries.keySet());
+        List<DueTask> due = new ArrayList<>();
+        for (Task task : taskRepository.findDue(boards)) {
+            due.add(dueEntry(task, summaries, null, null));
+        }
+        for (TaskNote note : noteRepository.findReminders(email, boards)) {
+            due.add(dueEntry(note.getTask(), summaries, note, note.getRemindAt()));
+        }
+        // Stable: on the same date, tasks stay before notes.
+        due.sort(Comparator.comparing(DueTask::due_date));
+        return due;
+    }
+
+    private static DueTask dueEntry(Task task, Map<Integer, BoardSummary> summaries, TaskNote note, LocalDateTime remindAt) {
+        BoardColumn column = task.getBoardColumn();
+        BoardSummary board = summaries.get(column.getBoard().getId());
+        return new DueTask(task.getId(), task.getTitle(), note == null ? task.getDue_date() : remindAt,
+                board.name(), board.slug(), column.getName(), column.getColor(),
+                note == null ? null : note.getId(), note == null ? null : note.getText());
     }
 
     /** One board as {@link #summariesOf} lists it for the user. */
@@ -332,10 +349,11 @@ public class BoardService {
                 // Keep the order and append the tasks after the ones already in the target.
                 int next = taskRepository.countByBoardColumn(target);
                 for (Task task : tasks) {
+                    ruleEngine.taskLeft(task, column);
                     task.setBoardColumn(target);
                     task.setPosition(next++);
                     historyService.recordMove(task, column, target, email);
-                    ruleEngine.taskEntered(task);
+                    ruleEngine.taskEntered(task, email);
                 }
             } else if (deleteTasks) {
                 tasks.forEach(task -> historyService.recordDeleted(task, email));
@@ -357,7 +375,7 @@ public class BoardService {
 
     /**
      * Moves a task to {@code position} within a column of the same board.
-     * A position beyond the end of the column puts the task last. Entering another column runs its rules.
+     * A position beyond the end of the column puts the task last. Leaving a column and entering another runs their rules.
      */
     @Transactional
     public Task moveTask(int taskId, int columnId, int position, String email) {
@@ -382,7 +400,8 @@ public class BoardService {
         renumber(sourceTasks);
         if (!sameColumn) {
             renumber(targetTasks);
-            ruleEngine.taskEntered(task);
+            ruleEngine.taskLeft(task, source);
+            ruleEngine.taskEntered(task, email);
         }
         changed(target.getBoard());
         return task;
