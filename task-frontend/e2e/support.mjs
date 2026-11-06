@@ -16,6 +16,7 @@ export async function dialogOpened(page) {
   await dialog.waitFor()
   await dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true })
     .filter((a) => a.effect?.getTiming().iterations !== Infinity)
-    .map((a) => a.finished)))
+    // A cancelled animation rejects its promise (AbortError); it is over all the same.
+    .map((a) => a.finished.catch(() => {}))))
   await page.waitForFunction(() => document.querySelector('.p-dialog')?.contains(document.activeElement))
 }
