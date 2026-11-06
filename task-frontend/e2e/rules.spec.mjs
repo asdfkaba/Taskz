@@ -19,27 +19,48 @@ test('Board automations', async ({ browser }) => {
   await page.goto(`${BASE}/boards/my-board/settings`)
   await rules().getByText('No automations yet.').waitFor()
 
-  await test.step('a checklist and a due date rule are added', async () => {
+  await test.step('a checklist and a note reminder rule are added', async () => {
     await choose('Column', 'In progress')
     await rules().getByRole('textbox', { name: 'Checklist items' }).fill('Prepare\n\n  Thank-you mail ')
     await rules().getByRole('button', { name: 'Add automation' }).click()
     await rules().getByText('Add checklist items: Prepare, Thank-you mail').waitFor()
 
-    await choose('Action', 'Set the due date')
+    await choose('Action', 'Add a note with a reminder')
+    ensure(await rules().getByRole('button', { name: 'Add automation' }).isDisabled(), 'added without a note')
+    await rules().getByRole('textbox', { name: 'Note', exact: true }).fill('  Follow up ')
     await rules().getByRole('textbox', { name: 'Days from now' }).fill('14')
     await rules().getByRole('button', { name: 'Add automation' }).click()
-    await rules().getByText('Set the due date to 14 days from now').waitFor()
+    await rules().getByText('Add the note “Follow up” with a reminder in 14 days').waitFor()
     ensure((await rules().getByText('When a task enters In progress').count()) === 1, 'not grouped by column')
 
     const saved = (await state()).rules
     ensure(saved.length === 2 && saved.every((r) => r.columnId === 11), JSON.stringify(saved))
     ensure(JSON.stringify(saved[0].items) === '["Prepare","Thank-you mail"]', JSON.stringify(saved[0]))
+    ensure(saved[1].action === 'ADD_NOTE_REMINDER' && saved[1].text === 'Follow up' && saved[1].days === 14, JSON.stringify(saved[1]))
   })
 
-  await test.step('a rule can be switched off and deleted', async () => {
+  await test.step('a note rule is edited; switched off it does nothing; it can be deleted', async () => {
+    await rules().getByRole('button', { name: /^Edit automation: Add the note/ }).click()
+    await rules().getByRole('textbox', { name: 'Edit note' }).fill('Call back')
+    await rules().getByRole('textbox', { name: 'Edit days from now' }).fill('3')
+    await rules().getByTestId('rule').getByRole('checkbox', { name: 'Remove the note when the task leaves the column' }).click()
+    await rules().getByRole('button', { name: 'Save' }).click()
+    await rules().getByText('Add the note “Call back” with a reminder in 3 days, removed when the task leaves').waitFor()
+    ensure((await state()).rules[1].removeOnLeave === true, 'option not saved')
+
+    // On: entering the column adds Alice's note with a reminder in 3 days; leaving removes it again.
+    const move = (columnId) => fetch(`${BASE}/api/tasks/2/move`, { method: 'PATCH', body: JSON.stringify({ columnId, position: 0 }) })
+    await move(11)
+    const note = (await state()).notes.find((n) => n.taskId === 2)
+    ensure(note?.text === 'Call back', JSON.stringify((await state()).notes))
+    const days = (new Date(note.remindAt) - Date.now()) / 86400000
+    ensure(days > 2.9 && days <= 3, `reminder in ${days} days`)
+    await move(10)
+    ensure(!(await state()).notes.some((n) => n.taskId === 2), 'note not removed on leaving')
+
     await rules().getByRole('checkbox').nth(1).click()
     await page.waitForFunction(async (base) => (await (await fetch(`${base}/api/__state`)).json()).rules[1].enabled === false, BASE)
-    await rules().getByRole('button', { name: /^Delete automation: Set the due date/ }).click()
+    await rules().getByRole('button', { name: /^Delete automation: Add the note/ }).click()
     await rules().getByTestId('rule').nth(1).waitFor({ state: 'detached' })
     ensure((await state()).rules.length === 1, 'not deleted')
   })

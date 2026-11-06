@@ -164,16 +164,16 @@ class BoardMemberServiceTests {
     @Test
     void onlyAuthorsEditNotesAndOwnersDeleteThemToo() {
         join(BOB);
-        NoteDto alices = notes.addNote(task.getId(), ALICE, "From Alice");
-        NoteDto bobs = notes.addNote(task.getId(), BOB, "From Bob");
+        NoteDto alices = notes.addNote(task.getId(), ALICE, "From Alice", null);
+        NoteDto bobs = notes.addNote(task.getId(), BOB, "From Bob", null);
 
         assertThat(notes.notesOf(task.getId(), BOB)).extracting(NoteDto::text, NoteDto::canEdit, NoteDto::canDelete)
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple("From Alice", false, false),
                         org.assertj.core.groups.Tuple.tuple("From Bob", true, true));
-        assertStatus(catchThrowable(() -> notes.updateNote(alices.id(), BOB, "Changed")), HttpStatus.FORBIDDEN);
+        assertStatus(catchThrowable(() -> notes.updateNote(alices.id(), BOB, "Changed", null)), HttpStatus.FORBIDDEN);
         assertStatus(catchThrowable(() -> notes.deleteNote(alices.id(), BOB)), HttpStatus.FORBIDDEN);
-        assertStatus(catchThrowable(() -> notes.updateNote(bobs.id(), ALICE, "Changed")), HttpStatus.FORBIDDEN);
+        assertStatus(catchThrowable(() -> notes.updateNote(bobs.id(), ALICE, "Changed", null)), HttpStatus.FORBIDDEN);
 
         notes.deleteNote(bobs.id(), ALICE);
         assertThat(notes.notesOf(task.getId(), ALICE)).extracting(NoteDto::text).containsExactly("From Alice");

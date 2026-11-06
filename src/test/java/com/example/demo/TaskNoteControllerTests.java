@@ -17,6 +17,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.Mockito.*;
@@ -42,7 +43,7 @@ class TaskNoteControllerTests {
     TokenService tokenService;
 
     private static NoteDto note(String text) {
-        return new NoteDto(5, text, "Alice", 1, Instant.parse("2026-10-28T10:00:00Z"), null, true, true);
+        return new NoteDto(5, text, "Alice", 1, Instant.parse("2026-10-28T10:00:00Z"), null, null, true, true);
     }
 
     @Test
@@ -58,7 +59,7 @@ class TaskNoteControllerTests {
 
     @Test
     void createReturns201() throws Exception {
-        when(noteService.addNote(1, ALICE, "Called")).thenReturn(note("Called"));
+        when(noteService.addNote(1, ALICE, "Called", null)).thenReturn(note("Called"));
         mockMvc.perform(post("/tasks/1/notes").contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Called\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(5));
@@ -66,12 +67,23 @@ class TaskNoteControllerTests {
 
     @Test
     void patchAndDelete() throws Exception {
-        when(noteService.updateNote(5, ALICE, "Changed")).thenReturn(note("Changed"));
+        when(noteService.updateNote(5, ALICE, "Changed", null)).thenReturn(note("Changed"));
         mockMvc.perform(patch("/notes/5").contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Changed\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.text").value("Changed"));
         mockMvc.perform(delete("/notes/5")).andExpect(status().isNoContent());
         verify(noteService).deleteNote(5, ALICE);
+    }
+
+    @Test
+    void theReminderIsWallClockTimeBothWays() throws Exception {
+        LocalDateTime at = LocalDateTime.of(2026, 11, 20, 9, 30);
+        when(noteService.addNote(1, ALICE, "Call back", at)).thenReturn(
+                new NoteDto(6, "Call back", "Alice", 1, Instant.parse("2026-10-28T10:00:00Z"), null, at, true, true));
+        mockMvc.perform(post("/tasks/1/notes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"Call back\",\"remindAt\":\"2026-11-20T09:30:00\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.remindAt").value("2026-11-20T09:30:00"));
     }
 
     @Test

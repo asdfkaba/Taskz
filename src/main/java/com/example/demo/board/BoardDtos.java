@@ -16,9 +16,10 @@ public final class BoardDtos {
     public record BoardSummary(Integer id, String name, String slug, boolean own, String ownerName, Integer ownerId) {
     }
 
-    // A task of GET /due, with where it is. boardSlug is the slug in the user's board list.
+    // An entry of GET /due: a task by its due date, or a note of the user by its reminder (noteId and
+    // noteText set, due_date is the reminder). id is the task's; boardSlug the slug in the user's board list.
     public record DueTask(Integer id, String title, LocalDateTime due_date, String boardName, String boardSlug,
-                          String columnName, String columnColor) {
+                          String columnName, String columnColor, Integer noteId, String noteText) {
     }
 
     // Columns are sorted by position, tasks by column position and then by their own position.
@@ -87,16 +88,18 @@ public final class BoardDtos {
     public record MoveTaskRequest(Integer columnId, Integer position) {
     }
 
-    // An automation of a board; items for APPEND_CHECKLIST and REPLACE_CHECKLIST, days for SET_DUE_IN.
-    public record RuleDto(Integer id, Integer columnId, String action, List<String> items, Integer days, boolean enabled) {
+    // An automation of a board; items for APPEND_CHECKLIST and REPLACE_CHECKLIST, text and days for ADD_NOTE_REMINDER.
+    public record RuleDto(Integer id, Integer columnId, String action, List<String> items, String text, Integer days,
+                          boolean removeOnLeave, boolean enabled) {
         static RuleDto from(BoardRule rule) {
             RulePayload payload = RulePayload.parse(rule.getPayload());
-            return new RuleDto(rule.getId(), rule.getColumn().getId(), rule.getAction(), payload.items(), payload.days(),
+            return new RuleDto(rule.getId(), rule.getColumn().getId(), rule.getAction(), payload.items(), payload.text(), payload.days(), payload.removesOnLeave(),
                     rule.isEnabled());
         }
     }
 
     // columnId and action only count when adding a rule; absent enabled leaves it as it is (new: on).
-    public record RuleRequest(Integer columnId, String action, List<String> items, Integer days, Boolean enabled) {
+    public record RuleRequest(Integer columnId, String action, List<String> items, String text, Integer days,
+                              Boolean removeOnLeave, Boolean enabled) {
     }
 }

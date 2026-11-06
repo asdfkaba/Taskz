@@ -2,12 +2,15 @@ package com.example.demo.task;
 
 import com.example.demo.user.User;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 
 /** A plain-text note on a task (table task_note, see V3__task_notes.sql). */
 @Entity
@@ -39,6 +42,14 @@ public class TaskNote {
 
     // Set when the text was changed after writing.
     private Instant edited;
+
+    // Shows the note to its author in "What's due" from then on; null for none. Wall-clock time like due_date.
+    @Setter(AccessLevel.PACKAGE)
+    private LocalDateTime remindAt;
+
+    // The board rule that added the note (see RuleEngine), else null. Not a relation: see V12.
+    @Setter(AccessLevel.PACKAGE)
+    private Integer ruleId;
 
     TaskNote(Task task, User user, String text) {
         this.task = task;

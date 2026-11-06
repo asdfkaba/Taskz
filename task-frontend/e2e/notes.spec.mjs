@@ -104,6 +104,30 @@ test('Task notes', async ({ browser }) => {
     await closeDialog()
   })
 
+  await test.step('a note can remind; the first pick of a day means noon; done keeps the note', async () => {
+    await openView(1)
+    await section().getByRole('textbox', { name: 'New note' }).fill('Call back')
+    await section().locator('#note-remind').click()
+    await page.locator('.p-datepicker-panel').getByRole('button', { name: 'Today' }).click()
+    // With a time the panel stays open; a click elsewhere closes it.
+    await page.locator('.p-dialog-header').click({ position: { x: 5, y: 5 } })
+    await page.locator('.p-datepicker-panel').waitFor({ state: 'hidden' })
+    await section().getByRole('button', { name: 'Add note' }).click()
+    const reminder = section().getByTestId('note-reminder')
+    await reminder.getByText('Reminder Today, 12:00').waitFor()
+    const saved = (await state()).notes.find((n) => n.text === 'Call back')
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    ensure(saved.remindAt === `${today}T12:00:00`, saved.remindAt)
+
+    await page.screenshot({ path: test.info().outputPath('notes-reminder.png') })
+    await reminder.getByRole('button', { name: 'Done' }).click()
+    await reminder.waitFor({ state: 'detached' })
+    ensure((await state()).notes.find((n) => n.text === 'Call back').remindAt === null, 'reminder kept')
+    ensure((await noteTexts()).includes('Call back'), 'note gone')
+    await closeDialog()
+  })
+
   await test.step('notes are not in the editor and not on shared boards', async () => {
     await openView(1)
     await page.locator('.p-dialog').getByRole('button', { name: 'Edit', exact: true }).click()

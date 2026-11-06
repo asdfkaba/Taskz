@@ -72,7 +72,7 @@ public class TaskController {
         task.setPosition(repository.countByBoardColumn(column));
         repository.save(task);
         historyService.recordCreated(task, email);
-        ruleEngine.taskEntered(task);
+        ruleEngine.taskEntered(task, email);
         boardService.changed(column.getBoard());
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()

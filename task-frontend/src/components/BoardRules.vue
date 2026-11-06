@@ -8,17 +8,19 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 
-// Automations of the open board: when a task enters a column, add checklist items or set its due date.
+// Automations of the open board: when a task enters a column, change its checklist or add a note with a
+// reminder (written as whoever moved the task, so the reminder is theirs).
 // Part of the board settings, owner only. Column and action of a rule are fixed; its items or days can be edited.
 const props = defineProps({ boardId: { type: Number, required: true } })
 
-// Same limits as BoardRuleService.
+// Same limits as BoardRuleService and TaskNoteService.
 const MAX_ITEMS = 20
 const MAX_DAYS = 365
+const MAX_NOTE_LENGTH = 5000
 const ACTIONS = [
   { value: 'APPEND_CHECKLIST', label: 'Add checklist items' },
   { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist' },
-  { value: 'SET_DUE_IN', label: 'Set the due date' },
+  { value: 'ADD_NOTE_REMINDER', label: 'Add a note with a reminder' },
 ]
 
 const store = useBoardStore()
@@ -30,30 +32,33 @@ const busy = ref(false)
 
 const columnId = ref(store.columns[0]?.id ?? null)
 const action = ref('APPEND_CHECKLIST')
-const hasItems = (ruleAction) => ruleAction !== 'SET_DUE_IN'
+const hasItems = (ruleAction) => ruleAction !== 'ADD_NOTE_REMINDER'
 const itemsText = ref('')
+const noteText = ref('')
 const days = ref('14')
+const removeOnLeave = ref(false)
 
 const toItems = (text) => text.split('\n').map((line) => line.trim()).filter(Boolean)
 const toDays = (text) => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : null)
 // The settings the backend expects for the action, or null if they aren't valid yet.
-function settings(ruleAction, text, daysText) {
+function settings(ruleAction, text, note, daysText, remove) {
   if (hasItems(ruleAction)) {
     const list = toItems(text)
     return list.length > 0 && list.length <= MAX_ITEMS ? { items: list } : null
   }
   const n = toDays(daysText)
-  return n != null && n <= MAX_DAYS ? { days: n } : null
+  return note.trim() && n != null && n <= MAX_DAYS ? { text: note.trim(), days: n, removeOnLeave: remove } : null
 }
 
-const newSettings = computed(() => settings(action.value, itemsText.value, days.value))
+const newSettings = computed(() => settings(action.value, itemsText.value, noteText.value, days.value, removeOnLeave.value))
 const canAdd = computed(() => !busy.value && columnId.value != null && newSettings.value != null)
 
-// The rule being edited: { id, itemsText, days }, or null.
+// The rule being edited: { id, itemsText, noteText, days, removeOnLeave }, or null.
 const editing = ref(null)
 const editSettings = computed(() => {
-  const rule = editing.value && rules.value.find((r) => r.id === editing.value.id)
-  return rule ? settings(rule.action, editing.value.itemsText, editing.value.days) : null
+  const e = editing.value
+  const rule = e && rules.value.find((r) => r.id === e.id)
+  return rule ? settings(rule.action, e.itemsText, e.noteText, e.days, e.removeOnLeave) : null
 })
 
 // Rules grouped under their column, in the board's column order.
@@ -66,7 +71,8 @@ const byColumn = computed(() =>
 function describe(rule) {
   if (rule.action === 'APPEND_CHECKLIST') return `Add checklist items: ${rule.items.join(', ')}`
   if (rule.action === 'REPLACE_CHECKLIST') return `Replace the checklist with: ${rule.items.join(', ')}`
-  return `Set the due date to ${rule.days} ${rule.days === 1 ? 'day' : 'days'} from now`
+  const removed = rule.removeOnLeave ? ', removed when the task leaves' : ''
+  return `Add the note “${rule.text}” with a reminder in ${rule.days} ${rule.days === 1 ? 'day' : 'days'}${removed}`
 }
 
 function showError(summary, err) {
@@ -89,6 +95,8 @@ async function add() {
   try {
     rules.value.push(await store.addRule(props.boardId, { columnId: columnId.value, action: action.value, ...newSettings.value }))
     itemsText.value = ''
+    noteText.value = ''
+    removeOnLeave.value = false
   } catch (err) {
     showError('Could not add the automation', err)
   } finally {
@@ -106,7 +114,13 @@ async function setEnabled(rule, enabled) {
 }
 
 function startEdit(rule) {
-  editing.value = { id: rule.id, itemsText: (rule.items ?? []).join('\n'), days: String(rule.days ?? '') }
+  editing.value = {
+    id: rule.id,
+    itemsText: (rule.items ?? []).join('\n'),
+    noteText: rule.text ?? '',
+    days: String(rule.days ?? ''),
+    removeOnLeave: rule.removeOnLeave,
+  }
 }
 
 async function saveEdit(rule) {
@@ -137,7 +151,9 @@ async function remove(rule) {
   <div class="flex flex-col gap-4" data-testid="board-rules">
     <p class="text-sm text-slate-600 dark:text-slate-400">
       Run when a task is moved into a column or created in it. Adding skips items the checklist already has.
-      Replacing makes the list the task's checklist; items in both stay ticked.
+      Replacing makes the list the task's checklist; items in both stay ticked. A note with a reminder is
+      written as whoever moved the task, and shows in their “What's due”; it can be removed again when the
+      task leaves the column.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>
@@ -154,10 +170,15 @@ async function remove(rule) {
               autoResize
               aria-label="Edit checklist items"
             />
-            <div v-else class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-              <span>Set the due date to</span>
+            <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <InputText v-model="editing.noteText" :maxlength="MAX_NOTE_LENGTH" class="min-w-0 flex-1" size="small" aria-label="Edit note" />
+              <span>remind in</span>
               <InputText v-model="editing.days" inputmode="numeric" class="w-20" size="small" aria-label="Edit days from now" />
-              <span>days from now</span>
+              <span>days</span>
+              <label class="flex w-full items-center gap-2">
+                <Checkbox v-model="editing.removeOnLeave" binary />
+                Remove the note when the task leaves the column
+              </label>
             </div>
             <div class="flex gap-2">
               <Button type="submit" label="Save" size="small" :disabled="!editSettings || busy" :loading="busy" />
@@ -213,10 +234,22 @@ async function remove(rule) {
         placeholder="One item per line, e.g. Update CV"
         aria-label="Checklist items"
       />
-      <div v-else class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-        <span>to</span>
+      <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <InputText
+          v-model="noteText"
+          :maxlength="MAX_NOTE_LENGTH"
+          placeholder="Note, e.g. Follow up"
+          class="min-w-0 flex-1"
+          size="small"
+          aria-label="Note"
+        />
+        <span>remind in</span>
         <InputText v-model="days" inputmode="numeric" class="w-20" size="small" aria-label="Days from now" />
-        <span>days from now, at the current time</span>
+        <span>days, at the current time</span>
+        <label class="flex w-full items-center gap-2">
+          <Checkbox v-model="removeOnLeave" binary />
+          Remove the note when the task leaves the column
+        </label>
       </div>
       <div>
         <Button type="submit" label="Add automation" icon="pi pi-plus" size="small" :disabled="!canAdd" :loading="busy" />

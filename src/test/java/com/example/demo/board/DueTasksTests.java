@@ -4,6 +4,7 @@ import com.example.demo.board.BoardDtos.DueTask;
 import com.example.demo.task.RuleEngine;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskHistoryService;
+import com.example.demo.task.TaskNoteService;
 import com.example.demo.task.TaskRepository;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
@@ -19,7 +20,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@Import({BoardService.class, RuleEngine.class, TaskHistoryService.class})
+@Import({BoardService.class, RuleEngine.class, TaskHistoryService.class, TaskNoteService.class})
 class DueTasksTests {
 
     static final String ALICE = "alice@example.com";
@@ -36,6 +37,8 @@ class DueTasksTests {
     BoardMemberRepository memberRepository;
     @Autowired
     TaskRepository taskRepository;
+    @Autowired
+    TaskNoteService noteService;
 
     User alice;
     User bob;
@@ -100,5 +103,29 @@ class DueTasksTests {
         }
         assertThat(columns(aliceBoard)).hasSize(1);
         assertThat(titles(ALICE)).containsExactly(task.getTitle());
+    }
+
+    @Test
+    void notesWithAReminderShowToTheirAuthorBetweenTheTasks() {
+        memberRepository.save(new BoardMember(aliceBoard, bob));
+        List<BoardColumn> columns = columns(aliceBoard);
+        Task task = addTask(columns.get(0), "Apply", NOW.plusDays(2));
+        Task done = addTask(columns.get(columns.size() - 1), "Sent", null);
+        int noteId = noteService.addNote(task.getId(), ALICE, "Call back", NOW.plusDays(1)).id();
+        noteService.addNote(task.getId(), ALICE, "No reminder", null);
+        noteService.addNote(task.getId(), BOB, "Bob's reminder", NOW);
+        noteService.addNote(done.getId(), ALICE, "On a done task", NOW);
+
+        List<DueTask> due = boardService.dueTasksOf(ALICE);
+        assertThat(due).extracting(DueTask::noteText).containsExactly("Call back", null);
+        assertThat(due.get(0).id()).isEqualTo(task.getId());
+        assertThat(due.get(0).title()).isEqualTo("Apply");
+        assertThat(due.get(0).due_date()).isEqualTo(NOW.plusDays(1));
+        assertThat(boardService.dueTasksOf(BOB)).extracting(DueTask::noteText).containsExactly("Bob's reminder", null);
+
+        // Done: the reminder goes, the note stays.
+        noteService.updateNote(noteId, ALICE, "Call back", null);
+        assertThat(boardService.dueTasksOf(ALICE)).extracting(DueTask::noteText).containsExactly((String) null);
+        assertThat(noteService.notesOf(task.getId(), ALICE)).extracting(n -> n.text()).contains("Call back");
     }
 }

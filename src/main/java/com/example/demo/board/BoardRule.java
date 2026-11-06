@@ -18,7 +18,7 @@ public class BoardRule {
 
     public enum Trigger { ENTERED_COLUMN }
 
-    public enum Action { APPEND_CHECKLIST, REPLACE_CHECKLIST, SET_DUE_IN }
+    public enum Action { APPEND_CHECKLIST, REPLACE_CHECKLIST, ADD_NOTE_REMINDER }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,7 +35,7 @@ public class BoardRule {
     @Column(nullable = false, length = 32)
     private String action;
 
-    // JSON: {"items":["Prepare"]} for APPEND_CHECKLIST and REPLACE_CHECKLIST, {"days":14} for SET_DUE_IN.
+    // JSON: {"items":["Prepare"]} for APPEND_CHECKLIST and REPLACE_CHECKLIST, {"text":"Follow up","days":14} for ADD_NOTE_REMINDER.
     @Column(nullable = false, columnDefinition = "text")
     private String payload;
 

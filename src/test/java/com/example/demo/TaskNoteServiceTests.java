@@ -68,8 +68,8 @@ class TaskNoteServiceTests {
 
     @Test
     void notesAreListedNewestFirstWithAuthor() {
-        notes.addNote(task.getId(), ALICE, "First call");
-        notes.addNote(task.getId(), ALICE, "Second call");
+        notes.addNote(task.getId(), ALICE, "First call", null);
+        notes.addNote(task.getId(), ALICE, "Second call", null);
         flushAndClear();
 
         List<NoteDto> list = notes.notesOf(task.getId(), ALICE);
@@ -80,34 +80,34 @@ class TaskNoteServiceTests {
 
     @Test
     void textIsTrimmedAtTheEndsButKeepsLineBreaks() {
-        NoteDto note = notes.addNote(task.getId(), ALICE, "  Line one\nLine two \n ");
+        NoteDto note = notes.addNote(task.getId(), ALICE, "  Line one\nLine two \n ", null);
         assertThat(note.text()).isEqualTo("Line one\nLine two");
     }
 
     @Test
     void emptyOrTooLongNotesAreRejected() {
-        assertThatThrownBy(() -> notes.addNote(task.getId(), ALICE, "  \n "))
+        assertThatThrownBy(() -> notes.addNote(task.getId(), ALICE, "  \n ", null))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
-        assertThatThrownBy(() -> notes.addNote(task.getId(), ALICE, null))
+        assertThatThrownBy(() -> notes.addNote(task.getId(), ALICE, null, null))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
-        assertThatThrownBy(() -> notes.addNote(task.getId(), ALICE, "x".repeat(5_001)))
+        assertThatThrownBy(() -> notes.addNote(task.getId(), ALICE, "x".repeat(5_001), null))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
-        assertThat(notes.addNote(task.getId(), ALICE, "x".repeat(5_000)).text()).hasSize(5_000);
+        assertThat(notes.addNote(task.getId(), ALICE, "x".repeat(5_000), null).text()).hasSize(5_000);
     }
 
     @Test
     void editingMarksTheNoteAsEditedOnlyWhenTheTextChanged() {
-        NoteDto note = notes.addNote(task.getId(), ALICE, "Call at 10");
-        assertThat(notes.updateNote(note.id(), ALICE, " Call at 10 ").edited()).isNull();
+        NoteDto note = notes.addNote(task.getId(), ALICE, "Call at 10", null);
+        assertThat(notes.updateNote(note.id(), ALICE, " Call at 10 ", null).edited()).isNull();
 
-        NoteDto changed = notes.updateNote(note.id(), ALICE, "Call at 11");
+        NoteDto changed = notes.updateNote(note.id(), ALICE, "Call at 11", null);
         assertThat(changed.text()).isEqualTo("Call at 11");
         assertThat(changed.edited()).isNotNull();
     }
 
     @Test
     void deletingANoteRemovesIt() {
-        NoteDto note = notes.addNote(task.getId(), ALICE, "Temporary");
+        NoteDto note = notes.addNote(task.getId(), ALICE, "Temporary", null);
         notes.deleteNote(note.id(), ALICE);
         flushAndClear();
         assertThat(notes.notesOf(task.getId(), ALICE)).isEmpty();
@@ -115,16 +115,16 @@ class TaskNoteServiceTests {
 
     @Test
     void otherUsersCannotSeeOrChangeNotes() {
-        NoteDto note = notes.addNote(task.getId(), ALICE, "Private");
+        NoteDto note = notes.addNote(task.getId(), ALICE, "Private", null);
         assertThatThrownBy(() -> notes.notesOf(task.getId(), BOB)).satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
-        assertThatThrownBy(() -> notes.addNote(task.getId(), BOB, "Hi")).satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
-        assertThatThrownBy(() -> notes.updateNote(note.id(), BOB, "Hijacked")).satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> notes.addNote(task.getId(), BOB, "Hi", null)).satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> notes.updateNote(note.id(), BOB, "Hijacked", null)).satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
         assertThatThrownBy(() -> notes.deleteNote(note.id(), BOB)).satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
     }
 
     @Test
     void deletingTheTaskDeletesItsNotes() {
-        notes.addNote(task.getId(), ALICE, "Goes with the task");
+        notes.addNote(task.getId(), ALICE, "Goes with the task", null);
         flushAndClear();
         taskRepository.delete(taskRepository.findById(task.getId()).orElseThrow());
         flushAndClear();
@@ -133,7 +133,7 @@ class TaskNoteServiceTests {
 
     @Test
     void deletingAColumnOrBoardWithNotesWorks() {
-        notes.addNote(task.getId(), ALICE, "In the column");
+        notes.addNote(task.getId(), ALICE, "In the column", null);
         flushAndClear();
         boardService.deleteColumn(todo.getId(), ALICE, null, true);
         flushAndClear();
@@ -144,7 +144,7 @@ class TaskNoteServiceTests {
         other.setUser(board.getUser());
         other.setBoardColumn(columnRepository.findByBoardOrderByPosition(board).get(0));
         taskRepository.save(other);
-        notes.addNote(other.getId(), ALICE, "On the board");
+        notes.addNote(other.getId(), ALICE, "On the board", null);
         flushAndClear();
         boardService.deleteBoard(board.getId(), ALICE);
         flushAndClear();

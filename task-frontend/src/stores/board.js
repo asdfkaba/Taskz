@@ -311,18 +311,20 @@ export const useBoardStore = defineStore('board', {
       return (await expectOk(await authFetch(`/api/tasks/${id}/history`), 'Loading history')).json()
     },
 
-    // ---- Notes (plain text, newest first: [{ id, text, user, created, edited }]) ----
+    // ---- Notes (plain text, newest first: [{ id, text, user, created, edited, remindAt }]) ----
+    // remindAt: wall-clock time (toApi) the note shows in "What's due" for its author; null for none.
 
     async fetchNotes(taskId) {
       return (await expectOk(await authFetch(`/api/tasks/${taskId}/notes`), 'Loading notes')).json()
     },
 
-    async addNote(taskId, text) {
-      return (await expectOk(await sendJson(`/api/tasks/${taskId}/notes`, 'POST', { text }), 'Adding note')).json()
+    async addNote(taskId, text, remindAt = null) {
+      return (await expectOk(await sendJson(`/api/tasks/${taskId}/notes`, 'POST', { text, remindAt }), 'Adding note')).json()
     },
 
-    async updateNote(id, text) {
-      return (await expectOk(await sendJson(`/api/notes/${id}`, 'PATCH', { text }), 'Saving note')).json()
+    // Sets text and reminder; remindAt null removes the reminder.
+    async updateNote(id, text, remindAt) {
+      return (await expectOk(await sendJson(`/api/notes/${id}`, 'PATCH', { text, remindAt }), 'Saving note')).json()
     },
 
     async deleteNote(id) {

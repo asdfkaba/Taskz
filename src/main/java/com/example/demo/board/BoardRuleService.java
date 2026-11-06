@@ -3,6 +3,7 @@ package com.example.demo.board;
 import com.example.demo.board.BoardDtos.RuleDto;
 import com.example.demo.board.BoardDtos.RuleRequest;
 import com.example.demo.task.Checklists;
+import com.example.demo.task.TaskNoteService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,12 +84,13 @@ public class BoardRuleService {
 
     private static RulePayload validPayload(BoardRule.Action action, RuleRequest request) {
         return switch (action) {
-            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null);
-            case SET_DUE_IN -> {
+            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null, null, null);
+            case ADD_NOTE_REMINDER -> {
                 if (request.days() == null || request.days() < 0 || request.days() > MAX_DAYS) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 0 and " + MAX_DAYS);
                 }
-                yield new RulePayload(null, request.days());
+                yield new RulePayload(null, TaskNoteService.validText(request.text()), request.days(),
+                        Boolean.TRUE.equals(request.removeOnLeave()) ? true : null);
             }
         };
     }

@@ -45,9 +45,9 @@ const newRevision = () => `rev${++revisions}`
 const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
 let itemId // ids of checklist items
-// Automations of board 1 ([{ id, columnId, action, items, days, enabled }]), applied like RuleEngine.
+// Automations of board 1 ([{ id, columnId, action, items, text, days, removeOnLeave, enabled }]), applied like RuleEngine.
 let rules
-let notes // [{ id, taskId, text, user, created, edited }]
+let notes // [{ id, taskId, text, user, created, edited, remindAt, ruleId }]; all of them Alice's
 let attachments // [{ id, taskId, name, contentType, size, image, user, created, data }]
 let log
 
@@ -94,7 +94,21 @@ const cleanItem = (text) => (text ?? '').trim().replace(/^(?:(?:[-*+]|\d{1,9}[.)
 const newItem = (text, checked = false) => ({ id: itemId++, text, checked })
 const itemTexts = (t) => (t.checklist ?? []).map((i) => i.text)
 
-// Rules like RuleEngine: checklist items added or replaced (ticks kept), due date N days from now.
+// Wall-clock time without a zone, like LocalDateTime.
+const pad = (n) => String(n).padStart(2, '0')
+const localTime = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+const addNote = (taskId, text, remindAt, ruleId = null) => {
+  const note = { id: nextId++, taskId, text, user: 'Alice', userId: 1, created: now(), edited: null, remindAt: remindAt ?? null, canEdit: true, canDelete: true, ruleId }
+  notes.push(note)
+  return note
+}
+// Like RuleEngine.taskLeft: notes of the column's enabled rules with removeOnLeave go.
+function leaveRules(t, columnId) {
+  const ids = rules.filter((r) => r.columnId === columnId && r.enabled && r.removeOnLeave).map((r) => r.id)
+  notes = notes.filter((n) => !(n.taskId === t.id && ids.includes(n.ruleId)))
+}
+
+// Rules like RuleEngine: checklist items added or replaced (ticks kept), a note reminding in N days.
 function runRules(t) {
   const before = { checklist: itemTexts(t), due_date: t.due_date }
   for (const r of rules.filter((x) => x.columnId === t.columnId && x.enabled)) {
@@ -103,8 +117,7 @@ function runRules(t) {
     } else if (r.action === 'APPEND_CHECKLIST') {
       t.checklist = [...t.checklist, ...r.items.filter((text) => !itemTexts(t).includes(text)).map((text) => newItem(text))]
     } else {
-      const d = new Date(Date.now() + r.days * 86400000)
-      t.due_date = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()]
+      addNote(t.id, r.text, localTime(new Date(Date.now() + r.days * 86400000)), r.id)
     }
   }
   const changes = { automation: true }
@@ -133,18 +146,21 @@ function api(method, url, body) {
     const own = boardDeleted ? [] : [{ id: 1, name: board.name, slug: board.slug, own: true, ownerName: null }]
     return [200, teamJoined ? [...own, TEAM_BOARD] : own]
   }
-  // Like BoardService.dueTasksOf for board 1: with a due date, not in the last column, soonest first.
+  // Like BoardService.dueTasksOf for board 1: tasks with a due date and notes with a reminder, not in
+  // the last column, soonest first (tasks before notes on the same time).
   if (method === 'GET' && p === '/due') {
     const cols = sortedColumns()
+    const open = (t) => cols.length === 1 || t.columnId !== cols.at(-1).id
     const time = (d) => (Array.isArray(d) ? new Date(d[0], d[1] - 1, d[2], d[3] ?? 0, d[4] ?? 0) : new Date(d)).getTime()
-    const due = tasks
-      .filter((t) => t.due_date && (cols.length === 1 || t.columnId !== cols.at(-1).id))
-      .sort((a, b) => time(a.due_date) - time(b.due_date))
-      .map((t) => {
-        const c = columns.find((x) => x.id === t.columnId)
-        return { id: t.id, title: t.title, due_date: t.due_date, boardName: board.name, boardSlug: board.slug, columnName: c.name, columnColor: c.color }
-      })
-    return [200, due]
+    const entry = (t, due_date, note) => {
+      const c = columns.find((x) => x.id === t.columnId)
+      return { id: t.id, title: t.title, due_date, boardName: board.name, boardSlug: board.slug, columnName: c.name, columnColor: c.color, noteId: note?.id ?? null, noteText: note?.text ?? null }
+    }
+    const due = [
+      ...tasks.filter((t) => t.due_date && open(t)).map((t) => entry(t, t.due_date, null)),
+      ...notes.filter((n) => n.remindAt).map((n) => [tasks.find((t) => t.id === n.taskId), n]).filter(([t]) => t && open(t)).map(([t, n]) => entry(t, n.remindAt, n)),
+    ]
+    return [200, due.sort((a, b) => time(a.due_date) - time(b.due_date))]
   }
   if (method === 'GET' && p === '/boards/1/members') {
     return [200, [{ userId: 1, name: 'Alice', owner: true, joined: null }, ...members.map((m) => ({ ...m, owner: false }))]]
@@ -260,6 +276,7 @@ function api(method, url, body) {
     const target = body.columnId === t.columnId ? source : inColumn(body.columnId)
     target.splice(Math.min(body.position, target.length), 0, t)
     const entered = t.columnId !== body.columnId
+    if (entered) leaveRules(t, t.columnId)
     t.columnId = body.columnId
     renumber(source)
     renumber(target)
@@ -270,14 +287,13 @@ function api(method, url, body) {
     const taskId = +m[1]
     if (!tasks.some((t) => t.id === taskId)) return [404, {}]
     if (method === 'GET') {
-      return [200, notes.filter((n) => n.taskId === taskId).sort((a, b) => b.id - a.id).map(({ taskId, ...n }) => n)]
+      return [200, notes.filter((n) => n.taskId === taskId).sort((a, b) => b.id - a.id).map(({ taskId, ruleId, ...n }) => n)]
     }
     if (method === 'POST') {
       const text = (body.text ?? '').trim()
       if (!text || text.length > 5000) return [400, {}]
-      const note = { id: nextId++, taskId, text, user: 'Alice', userId: 1, created: now(), edited: null, canEdit: true, canDelete: true }
-      notes.push(note)
-      const { taskId: _, ...out } = note
+      const note = addNote(taskId, text, body.remindAt)
+      const { taskId: _, ruleId: __, ...out } = note
       return [201, out]
     }
   }
@@ -288,7 +304,8 @@ function api(method, url, body) {
       const text = (body.text ?? '').trim()
       if (!text || text.length > 5000) return [400, {}]
       if (text !== note.text) Object.assign(note, { text, edited: now() })
-      const { taskId: _, ...out } = note
+      note.remindAt = body.remindAt ?? null
+      const { taskId: _, ruleId: __, ...out } = note
       return [200, out]
     }
     if (method === 'DELETE') {
@@ -301,14 +318,14 @@ function api(method, url, body) {
   }
   if (method === 'GET' && p === '/boards/1/rules') return [200, rules]
   if (method === 'POST' && p === '/boards/1/rules') {
-    const r = { id: nextId++, columnId: body.columnId, action: body.action, items: body.items ?? null, days: body.days ?? null, enabled: true }
+    const r = { id: nextId++, columnId: body.columnId, action: body.action, items: body.items ?? null, text: body.text ?? null, days: body.days ?? null, removeOnLeave: body.removeOnLeave ?? false, enabled: true }
     rules.push(r)
     return [201, r]
   }
   if ((m = p.match(/^\/rules\/(\d+)$/))) {
     const r = rules.find((x) => x.id === +m[1])
     if (!r) return [404, {}]
-    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, days: body.days ?? r.days, enabled: body.enabled ?? r.enabled }); return [200, r] }
+    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, text: body.text ?? r.text, days: body.days ?? r.days, removeOnLeave: body.removeOnLeave ?? r.removeOnLeave, enabled: body.enabled ?? r.enabled }); return [200, r] }
     if (method === 'DELETE') { rules = rules.filter((x) => x !== r); return [204, null] }
   }
   if (method === 'GET' && p === '/boards/1/share') return share ? [200, { path: `${board.slug}-${share.key}`, created: share.created }] : [204, null]
