@@ -15,6 +15,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
 
     long countByUserAndSeenAtIsNull(User user);
 
+    // For a summary mail: still unread and new since the last one.
+    List<Notification> findByUserAndReadAtIsNullAndCreatedAfterOrderByCreatedDescIdDesc(User user, Instant after);
+
     @Modifying
     @Query("update Notification n set n.seenAt = :now where n.user = :user and n.seenAt is null")
     int markAllSeen(User user, Instant now);

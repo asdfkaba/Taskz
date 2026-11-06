@@ -80,15 +80,17 @@ onMounted(async () => {
 
         <div class="flex min-w-0 items-center gap-2">
           <NotificationBell v-if="authStore.isAuthenticated" />
-          <!-- Your icon, the same one others see on a board; name and email on hover. -->
-          <UserIcon
-            v-if="authStore.isAuthenticated"
-            :seed="authStore.user?.id"
-            :name="[authStore.user?.name, authStore.user?.email].filter(Boolean).join(' · ')"
-            size="lg"
-            class="ring-2 ring-emerald-500 dark:ring-emerald-400"
-            data-testid="header-user"
-          />
+          <!-- Your icon, the same one others see on a board; name and email on hover. It opens your
+               account settings. -->
+          <RouterLink v-if="authStore.isAuthenticated" :to="{ name: 'account' }" aria-label="Account settings" class="rounded-full">
+            <UserIcon
+              :seed="authStore.user?.id"
+              :name="[authStore.user?.name, authStore.user?.email].filter(Boolean).join(' · ')"
+              size="lg"
+              class="ring-2 ring-emerald-500 dark:ring-emerald-400"
+              data-testid="header-user"
+            />
+          </RouterLink>
           <Button
             :icon="themeButton.icon"
             :aria-label="themeButton.label"

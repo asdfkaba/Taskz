@@ -115,6 +115,8 @@ public class WebSecurityConfig {
                         .requestMatchers("/login**", "/auth/**", "/error", "/health", "/").permitAll()
                         // Read-only share links work without login.
                         .requestMatchers(HttpMethod.GET, "/share/*", "/share/*/events").permitAll()
+                        // The unsubscribe link in notification mails.
+                        .requestMatchers(HttpMethod.POST, "/mail/unsubscribe/*").permitAll()
                         .anyRequest().authenticated()
                 ).addFilterBefore(new JwtCookieAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
         return http.build();

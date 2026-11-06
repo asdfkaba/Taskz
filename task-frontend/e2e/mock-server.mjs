@@ -35,6 +35,8 @@ let members
 // sent to others ([{ userId, text, taskId }]).
 let notifications
 let sentToOthers
+// Alice's mail setting; her unsubscribe link is /unsubscribe/mail-token.
+let mail
 let invites
 let teamJoined
 const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
@@ -62,6 +64,7 @@ function reset() {
   members = []
   notifications = []
   sentToOthers = []
+  mail = { available: true, address: 'alice@example.com', delivery: 'OFF' }
   invites = []
   teamJoined = false
   nextId = 100
@@ -174,6 +177,19 @@ function api(method, url, body) {
   if (method === 'GET' && p === '/notifications') {
     const items = [...notifications].reverse().map(({ seen, ...n }) => n)
     return [200, { items, unseen: notifications.filter((n) => !n.seen).length }]
+  }
+  if (p === '/account/notifications/mail') {
+    if (method === 'PUT') {
+      if (!['OFF', 'IMMEDIATE', 'DAILY', 'WEEKLY'].includes(body.delivery)) return [400, {}]
+      if (body.delivery !== 'OFF' && !mail.available) return [409, {}]
+      mail.delivery = body.delivery
+    }
+    return [200, mail]
+  }
+  if (method === 'POST' && (m = p.match(/^\/mail\/unsubscribe\/([^/]+)$/))) {
+    if (m[1] !== 'mail-token') return [404, {}]
+    mail.delivery = 'OFF'
+    return [204, null]
   }
   if (method === 'POST' && p === '/notifications/seen') {
     notifications.forEach((n) => (n.seen = true))
@@ -501,6 +517,12 @@ http.createServer((req, res) => {
         res.end()
         return
       }
+      if (req.url === '/api/__mail' && req.method === 'POST') {
+        Object.assign(mail, JSON.parse(Buffer.concat(chunks).toString()))
+        res.writeHead(204)
+        res.end()
+        return
+      }
       if (req.url === '/api/__members' && req.method === 'POST') {
         members = JSON.parse(Buffer.concat(chunks).toString())
         res.writeHead(204)
@@ -556,7 +578,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, rules, notifications, sentToOthers, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })
