@@ -103,7 +103,7 @@ public class BoardService {
     }
 
     /**
-     * Deletes the board with all its columns, rules, tasks and labels (members and invites go with it in the
+     * Deletes the board with all its members, columns, rules, tasks and labels (invites go with it in the
      * database). Only its owner can; a user may delete their last board.
      */
     @Transactional
@@ -113,6 +113,7 @@ public class BoardService {
         events.publishEvent(new BoardShareEnded(boardId));
         events.publishEvent(new BoardAccessEnded(boardId, null));
         historyService.forgetBoard(board);
+        memberRepository.deleteByBoard(board);
         // Deleting the tasks also clears their rows in task_label.
         taskRepository.deleteAll(taskRepository.findByBoardInOrder(board));
         labelRepository.deleteAll(labelRepository.findByBoardOrderById(board));
