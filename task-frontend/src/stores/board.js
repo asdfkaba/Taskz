@@ -193,6 +193,21 @@ export const useBoardStore = defineStore('board', {
       return response.json()
     },
 
+    // The user's own API tokens: [{ id, name, boardId, boardName, read, write, created }].
+    async fetchApiTokens() {
+      return (await expectOk(await authFetch('/api/account/tokens'), 'Loading API tokens')).json()
+    },
+
+    // { info, token }. The token is shown once; the server keeps only its hash.
+    async createApiToken({ boardId, name, read, write }) {
+      const response = await expectOk(await sendJson('/api/account/tokens', 'POST', { boardId, name, read, write }), 'Creating API token')
+      return response.json()
+    },
+
+    async revokeApiToken(id) {
+      await expectOk(await authFetch(`/api/account/tokens/${id}`, { method: 'DELETE' }), 'Revoking API token')
+    },
+
     async removeMember(boardId, userId) {
       await expectOk(await authFetch(`/api/boards/${boardId}/members/${userId}`, { method: 'DELETE' }), 'Removing member')
     },

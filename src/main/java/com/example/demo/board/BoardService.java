@@ -418,9 +418,13 @@ public class BoardService {
         events.publishEvent(new BoardChanged(board.getId()));
     }
 
-    /** True if the user owns the board or is one of its members. The one place that decides this. */
+    /**
+     * True if the user owns the board or is one of its members. The one place that decides this.
+     * A request made with an API token may only touch the token's board.
+     */
     public boolean canAccess(Board board, String email) {
-        return isOwner(board, email) || memberRepository.existsByBoardAndUserEmail(board, email);
+        return ApiTokenAuthentication.currentRequestMayUse(board)
+                && (isOwner(board, email) || memberRepository.existsByBoardAndUserEmail(board, email));
     }
 
     public boolean isOwner(Board board, String email) {
@@ -439,7 +443,8 @@ public class BoardService {
     @Transactional(readOnly = true)
     public Board findOwnBoard(int boardId, String email) {
         return boardRepository.findById(boardId)
-                .filter(board -> isOwner(board, email))
+                // Tokens can't reach owner endpoints (ApiTokenFilter); checked here too, to be safe.
+                .filter(board -> isOwner(board, email) && ApiTokenAuthentication.currentRequestMayUse(board))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board not found"));
     }
 

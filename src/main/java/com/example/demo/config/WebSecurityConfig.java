@@ -1,6 +1,8 @@
 package com.example.demo.config;
 
 import com.example.demo.auth.jwt.TokenService;
+import com.example.demo.board.ApiTokenService;
+import org.springframework.beans.factory.ObjectProvider;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -42,10 +44,13 @@ public class WebSecurityConfig {
 
     private final RsaKeyProperties rsaKeys;
     private final TokenService tokenService;
+    private final ObjectProvider<ApiTokenService> apiTokenService;
 
-    public WebSecurityConfig(RsaKeyProperties rsaKeys, @Lazy TokenService tokenService) {
+    public WebSecurityConfig(RsaKeyProperties rsaKeys, @Lazy TokenService tokenService,
+                             ObjectProvider<ApiTokenService> apiTokenService) {
         this.rsaKeys = rsaKeys;
         this.tokenService = tokenService;
+        this.apiTokenService = apiTokenService;
     }
 
     /**
@@ -118,7 +123,9 @@ public class WebSecurityConfig {
                         // The unsubscribe link in notification mails.
                         .requestMatchers(HttpMethod.POST, "/mail/unsubscribe/*").permitAll()
                         .anyRequest().authenticated()
-                ).addFilterBefore(new JwtCookieAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
+                ).addFilterBefore(new JwtCookieAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class)
+                // An API token in the request wins over cookies (the cookie filter skips logged-in requests).
+                .addFilterBefore(new ApiTokenFilter(apiTokenService), JwtCookieAuthenticationFilter.class);
         return http.build();
     }
 
