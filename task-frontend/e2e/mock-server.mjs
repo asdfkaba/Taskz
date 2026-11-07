@@ -39,6 +39,8 @@ let sentToOthers
 let mail
 let invites
 let teamJoined
+// Alice's API tokens ([{ id, name, boardId, boardName, read, write, created }]).
+let apiTokens
 const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
 const streams = new Set()
@@ -67,6 +69,7 @@ function reset() {
   mail = { available: true, address: 'alice@example.com', delivery: 'OFF' }
   invites = []
   teamJoined = false
+  apiTokens = []
   nextId = 100
   columns = [
     { id: 10, name: 'To do', color: '#64748b', position: 0 },
@@ -204,6 +207,19 @@ function api(method, url, body) {
   if (method === 'POST' && p === '/notifications/read-all') {
     notifications.forEach((n) => Object.assign(n, { seen: true, read: true }))
     return [204, null]
+  }
+  if (method === 'GET' && p === '/account/tokens') return [200, apiTokens]
+  if (method === 'POST' && p === '/account/tokens') {
+    const name = body.name?.trim()
+    if (body.boardId !== 1 || !name || (!body.read && !body.write)) return [400, { message: 'Bad token request' }]
+    const info = { id: nextId++, name, boardId: 1, boardName: board.name, read: !!body.read, write: !!body.write, created: now() }
+    apiTokens.push(info)
+    return [201, { info, token: `taskz_${newKey()}${newKey()}` }]
+  }
+  if (method === 'DELETE' && (m = p.match(/^\/account\/tokens\/(\d+)$/))) {
+    const before = apiTokens.length
+    apiTokens = apiTokens.filter((t) => t.id !== +m[1])
+    return apiTokens.length < before ? [204, null] : [404, {}]
   }
   if (method === 'GET' && p === '/boards/1/members') {
     return [200, [{ userId: 1, name: 'Alice', owner: true, joined: null }, ...members.map((m) => ({ ...m, owner: false }))]]
@@ -578,7 +594,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, apiTokens, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })

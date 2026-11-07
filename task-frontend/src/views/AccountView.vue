@@ -3,8 +3,9 @@ import { onMounted, ref } from 'vue'
 import RadioButton from 'primevue/radiobutton'
 import { useToast } from 'primevue/usetoast'
 import { useNotificationStore } from '@/stores/notifications'
+import ApiTokens from '@/components/ApiTokens.vue'
 
-// The user's own settings; for now how notifications reach them besides the bell.
+// The user's own settings: how notifications reach them besides the bell, and their API tokens.
 const store = useNotificationStore()
 const toast = useToast()
 
@@ -77,6 +78,11 @@ async function choose(delivery) {
           </div>
         </fieldset>
       </template>
+    </section>
+
+    <section class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+      <h2 class="font-semibold text-slate-900 dark:text-slate-100">API tokens</h2>
+      <ApiTokens />
     </section>
   </div>
 </template>
