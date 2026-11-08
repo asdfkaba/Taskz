@@ -1,4 +1,5 @@
-// Account settings: how notifications come by mail; the unsubscribe link from a mail.
+// Account settings: the menu behind your icon, how notifications come by mail, the unsubscribe
+// link from a mail, logging out.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
@@ -12,9 +13,15 @@ test('Mail notification settings', async ({ browser }) => {
   const account = () => page.getByTestId('account')
   const option = (name) => account().getByRole('radio', { name })
 
-  await test.step('your icon opens the account; mail starts off', async () => {
+  await test.step('your icon opens a menu with the account settings; mail starts off', async () => {
     await page.goto(`${BASE}/boards`)
-    await page.getByRole('link', { name: 'Account settings' }).click()
+    await page.getByRole('button', { name: 'Account menu' }).click()
+    const menu = page.locator('#user-menu')
+    await menu.getByText('Alice · alice@example.com').waitFor()
+    await menu.getByRole('menuitem', { name: 'Log out' }).waitFor()
+    await page.waitForFunction(() => !document.querySelector('#user-menu').getAnimations().length)
+    await page.screenshot({ path: `${test.info().outputDir}/user-menu.png` })
+    await menu.getByRole('menuitem', { name: 'Account settings' }).click()
     await account().waitFor()
     await account().getByText('alice@example.com').waitFor()
     ensure(await option(/^Off/).isChecked(), 'not off')
@@ -49,6 +56,13 @@ test('Mail notification settings', async ({ browser }) => {
     await page.goto(`${BASE}/account`)
     await account().getByTestId('mail-unavailable').waitFor()
     ensure(await option(/^Right away/).isDisabled(), 'enabled without mail')
+  })
+
+  await test.step('the menu logs out', async () => {
+    await page.getByRole('button', { name: 'Account menu' }).click()
+    await page.locator('#user-menu').getByRole('menuitem', { name: 'Log out' }).click()
+    await page.waitForURL(`${BASE}/`)
+    await page.getByRole('button', { name: 'Account menu' }).waitFor({ state: 'detached' })
   })
 
   ensure(errors.length === 0, errors.join('\n'))

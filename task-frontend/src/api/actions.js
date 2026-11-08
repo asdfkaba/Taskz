@@ -56,9 +56,8 @@ export async function getCurrentUser() {
 export async function logoutBackend() {
   const response = await authFetch('/api/auth/logout', {method: 'POST'});
 
+  // 204 without a body.
   if (!response.ok) {
-    throw new Error(`Error fetching auth status: ${response.status}`);
+    throw new Error(`Logout failed: ${response.status}`);
   }
-
-  return await response.json();
 }

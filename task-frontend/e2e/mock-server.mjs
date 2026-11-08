@@ -153,6 +153,7 @@ function api(method, url, body) {
   let m
   if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice', id: 1 }]
   // Like the backend: the code "unverified" stands for an account without a confirmed email.
+  if (method === 'POST' && p === '/auth/logout') return [204, null]
   if (method === 'POST' && p === '/auth/login') {
     if (body?.code === 'unverified') return [401, { message: 'Your account there has no confirmed email address. Confirm one and try again.' }]
     return [200, 'Login successful']
