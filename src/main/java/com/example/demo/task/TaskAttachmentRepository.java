@@ -18,6 +18,8 @@ public interface TaskAttachmentRepository extends JpaRepository<TaskAttachment, 
     @Query("select coalesce(sum(a.size), 0) from TaskAttachment a where a.task.boardColumn.board.user = :owner")
     long totalSizeOfBoardsOf(User owner);
 
+    Optional<TaskAttachment> findByStorageKey(String storageKey);
+
     @Query("select a.storageKey from TaskAttachment a")
     List<String> findAllStorageKeys();
 }

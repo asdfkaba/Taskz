@@ -46,7 +46,7 @@ public class ApiTokenFilter extends OncePerRequestFilter {
             new Endpoint("PATCH", "/tasks/\\d+/move", ApiScope.TASKS_MOVE),
             new Endpoint("PATCH", "/tasks/\\d+/checklist/\\d+", ApiScope.CHECKLIST_CHECK),
             new Endpoint("GET", "/tasks/\\d+/attachments", ApiScope.ATTACHMENTS_READ),
-            new Endpoint("GET", "/attachments/\\d+", ApiScope.ATTACHMENTS_READ),
+            new Endpoint("GET", "/attachments/[0-9a-f-]{36}", ApiScope.ATTACHMENTS_READ),
             new Endpoint("POST", "/tasks/\\d+/attachments", ApiScope.ATTACHMENTS_WRITE),
             new Endpoint("GET", "/tasks/\\d+/notes", ApiScope.NOTES_READ),
             new Endpoint("POST", "/tasks/\\d+/notes", ApiScope.NOTES_WRITE),

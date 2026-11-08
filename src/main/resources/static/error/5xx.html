@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- Shown by Spring Boot for browser requests that fail with a 5xx status (e.g. a file link
+     opened without login). API clients get JSON instead. Kept in step with 4xx.html. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Something went wrong · Taskz</title>
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root { color-scheme: light dark; --bg: #f8fafc; --card: #fff; --text: #0f172a; --muted: #475569; --border: #e2e8f0; --accent: #047857; --accent-text: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #020617; --card: #0f172a; --text: #f1f5f9; --muted: #94a3b8; --border: #1e293b; --accent: #10b981; --accent-text: #022c22; }
+  }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+         background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 26rem; width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 32px; text-align: center; }
+  svg { width: 48px; height: 48px; }
+  h1 { font-size: 1.25rem; margin: 16px 0 8px; }
+  p { color: var(--muted); line-height: 1.5; margin: 0 0 24px; }
+  a { display: inline-block; background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600; padding: 10px 18px; border-radius: 8px; }
+  a:hover, a:focus-visible { filter: brightness(1.1); }
+</style>
+</head>
+<body>
+<main>
+  <svg viewBox="0 0 64 64" aria-hidden="true">
+    <rect width="64" height="64" rx="14" fill="#10b981"/>
+    <rect x="20" y="9" width="35" height="28" rx="6" fill="#fff" fill-opacity="0.45" transform="rotate(8 37.5 23)"/>
+    <rect x="9" y="22" width="40" height="32" rx="6" fill="#fff"/>
+    <path d="M18 38.5l7 7 14-14" fill="none" stroke="#10b981" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <h1>Something went wrong</h1>
+  <p>Taskz couldn't handle this request. Please try again in a moment.</p>
+  <a href="/">Open Taskz</a>
+</main>
+</body>
+</html>

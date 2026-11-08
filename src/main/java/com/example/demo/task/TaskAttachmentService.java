@@ -50,11 +50,12 @@ public class TaskAttachmentService {
         this.properties = properties;
     }
 
-    // user, userId: who uploaded it, for their name and icon; null if they are gone.
-    public record AttachmentDto(Integer id, String name, String contentType, long size, boolean image,
+    // id: the storage key, a UUID, so links don't count up. user, userId: who uploaded it, for their
+    // name and icon; null if they are gone.
+    public record AttachmentDto(String id, String name, String contentType, long size, boolean image,
                                 String user, Integer userId, Instant created) {
         static AttachmentDto from(TaskAttachment attachment) {
-            return new AttachmentDto(attachment.getId(), attachment.getFileName(), attachment.getContentType(),
+            return new AttachmentDto(attachment.getStorageKey(), attachment.getFileName(), attachment.getContentType(),
                     attachment.getSize(), attachment.getContentType().startsWith("image/"),
                     attachment.getUser() == null ? null : attachment.getUser().getName(),
                     attachment.getUser() == null ? null : attachment.getUser().getId(), attachment.getCreated());
@@ -128,8 +129,8 @@ public class TaskAttachmentService {
     }
 
     @Transactional(readOnly = true)
-    public Download download(int attachmentId, String email) {
-        TaskAttachment attachment = findAttachment(attachmentId, email);
+    public Download download(String key, String email) {
+        TaskAttachment attachment = findAttachment(key, email);
         Path file = storage.file(attachment.getStorageKey());
         if (!Files.isRegularFile(file)) {
             log.warn("Attachment {} has no file {}", attachment.getId(), attachment.getStorageKey());
@@ -139,8 +140,8 @@ public class TaskAttachmentService {
     }
 
     @Transactional
-    public void delete(int attachmentId, String email) {
-        TaskAttachment attachment = findAttachment(attachmentId, email);
+    public void delete(String key, String email) {
+        TaskAttachment attachment = findAttachment(key, email);
         attachmentRepository.delete(attachment);
         historyService.recordAttachment(attachment.getTask(), attachment.getFileName(), false, email);
         boardService.changed(attachment.getTask().getBoardColumn().getBoard());
@@ -199,8 +200,8 @@ public class TaskAttachmentService {
         return boardService.findTask(taskId, email);
     }
 
-    private TaskAttachment findAttachment(int attachmentId, String email) {
-        return attachmentRepository.findById(attachmentId)
+    private TaskAttachment findAttachment(String key, String email) {
+        return attachmentRepository.findByStorageKey(key)
                 .filter(a -> boardService.canAccess(a.getTask().getBoardColumn().getBoard(), email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
     }
