@@ -199,8 +199,9 @@ export const useBoardStore = defineStore('board', {
     },
 
     // { info, token }. The token is shown once; the server keeps only its hash.
-    async createApiToken({ boardId, name, read, write }) {
-      const response = await expectOk(await sendJson('/api/account/tokens', 'POST', { boardId, name, read, write }), 'Creating API token')
+    // scopes: e.g. ['tasks:read']; expiresInDays: null for a token that doesn't expire.
+    async createApiToken({ boardId, name, scopes, expiresInDays }) {
+      const response = await expectOk(await sendJson('/api/account/tokens', 'POST', { boardId, name, scopes, expiresInDays }), 'Creating API token')
       return response.json()
     },
 

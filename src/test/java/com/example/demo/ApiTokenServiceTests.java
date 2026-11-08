@@ -17,7 +17,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import java.time.Instant;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Creating, listing and revoking API tokens, and the one-board limit (against H2, with real queries). */
@@ -29,6 +35,8 @@ class ApiTokenServiceTests {
     static final String ALICE = "alice@example.com"; // owner
     static final String BOB = "bob@example.com";     // member
     static final String EVE = "eve@example.com";     // neither
+    static final List<String> READ = List.of("tasks:read");
+    static final List<String> WRITE = List.of("tasks:update", "tasks:create");
 
     @Autowired ApiTokenService tokens;
     @Autowired BoardMemberService members;
@@ -62,7 +70,7 @@ class ApiTokenServiceTests {
 
     @Test
     void aTokenIsShownOnceAndStoredAsHash() {
-        NewToken created = tokens.create(board.getId(), ALICE, "  Bewerbungen  ", false, true);
+        NewToken created = tokens.create(board.getId(), ALICE, "  Bewerbungen  ", WRITE, null);
 
         assertThat(created.token()).startsWith("taskz_");
         assertThat(created.info().name()).isEqualTo("Bewerbungen");
@@ -70,8 +78,9 @@ class ApiTokenServiceTests {
                 .satisfies(t -> {
                     assertThat(t.boardId()).isEqualTo(board.getId());
                     assertThat(t.boardName()).isEqualTo("My board");
-                    assertThat(t.read()).isFalse();
-                    assertThat(t.write()).isTrue();
+                    assertThat(t.scopes()).containsExactly("tasks:create", "tasks:update");
+                    assertThat(t.expiresAt()).isNull();
+                    assertThat(t.lastUsedAt()).isNull();
                 });
         em.flush();
         Object stored = em.createNativeQuery("select token_hash from api_token").getSingleResult();
@@ -80,13 +89,12 @@ class ApiTokenServiceTests {
         ApiTokenAuthentication auth = tokens.authenticate(created.token()).orElseThrow();
         assertThat(auth.getName()).isEqualTo(ALICE);
         assertThat(auth.boardId()).isEqualTo(board.getId());
-        assertThat(auth.canRead()).isFalse();
-        assertThat(auth.canWrite()).isTrue();
+        assertThat(auth.scopes()).containsExactlyInAnyOrder(ApiScope.TASKS_CREATE, ApiScope.TASKS_UPDATE);
     }
 
     @Test
     void aTokenTellsItsBoardColumnsAndLabels() {
-        NewToken created = tokens.create(board.getId(), ALICE, "write only", false, true);
+        NewToken created = tokens.create(board.getId(), ALICE, "write only", WRITE, null);
         ApiTokenAuthentication auth = tokens.authenticate(created.token()).orElseThrow();
         SecurityContextHolder.getContext().setAuthentication(auth);
 
@@ -94,8 +102,8 @@ class ApiTokenServiceTests {
 
         assertThat(access.boardId()).isEqualTo(board.getId());
         assertThat(access.boardName()).isEqualTo("My board");
-        assertThat(access.read()).isFalse();
-        assertThat(access.write()).isTrue();
+        assertThat(access.scopes()).containsExactly("tasks:create", "tasks:update");
+        assertThat(access.expiresAt()).isNull();
         assertThat(access.columns()).extracting(BoardDtos.ColumnDto::name).containsExactly("To do", "In progress", "Done");
         assertThat(access.labels()).isNotNull();
     }
@@ -109,28 +117,59 @@ class ApiTokenServiceTests {
 
     @Test
     void namesAndRightsAreChecked() {
-        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, " ", true, true))
+        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, " ", READ, null))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
-        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "x".repeat(51), true, true))
+        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "x".repeat(51), READ, null))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
-        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "none", false, false))
+        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "none", List.of(), null))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
-        assertThatThrownBy(() -> tokens.create(null, ALICE, "no board", true, true))
+        assertThatThrownBy(() -> tokens.create(null, ALICE, "no board", READ, null))
+                .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "unknown", List.of("tasks:read", "boards:delete"), null))
+                .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "too short", READ, 0))
+                .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> tokens.create(board.getId(), ALICE, "too long", READ, 366))
                 .satisfies(e -> assertStatus(e, HttpStatus.BAD_REQUEST));
     }
 
     @Test
+    void anExpiredTokenStopsWorking() {
+        NewToken created = tokens.create(board.getId(), ALICE, "a month", READ, 30);
+        assertThat(created.info().expiresAt()).isBetween(Instant.now().plusSeconds(29 * 86400), Instant.now().plusSeconds(31 * 86400));
+        assertThat(tokens.authenticate(created.token())).isPresent();
+
+        em.flush();
+        em.createNativeQuery("update api_token set expires_at = ?").setParameter(1, Instant.now().minusSeconds(1)).executeUpdate();
+        em.clear();
+
+        assertThat(tokens.authenticate(created.token())).isEmpty();
+    }
+
+    @Test
+    void usingATokenIsNoted() {
+        NewToken created = tokens.create(board.getId(), ALICE, "script", READ, null);
+
+        tokens.authenticate(created.token());
+        em.flush();
+        em.clear();
+
+        assertThat(tokens.list(ALICE)).singleElement()
+                .satisfies(t -> assertThat(t.lastUsedAt()).isBetween(Instant.now().minusSeconds(60), Instant.now()));
+    }
+
+    @Test
     void everyoneHasTheirOwnTokensOnlyForTheirBoards() {
-        tokens.create(board.getId(), ALICE, "alice", true, true);
-        tokens.create(otherBoard.getId(), ALICE, "alice other", true, false);
-        NewToken bobs = tokens.create(board.getId(), BOB, "bob", true, false);
+        tokens.create(board.getId(), ALICE, "alice", READ, null);
+        tokens.create(otherBoard.getId(), ALICE, "alice other", READ, null);
+        NewToken bobs = tokens.create(board.getId(), BOB, "bob", READ, null);
 
         assertThat(tokens.list(ALICE)).extracting(ApiTokenService.TokenDto::name).containsExactly("alice", "alice other");
         assertThat(tokens.list(BOB)).extracting(ApiTokenService.TokenDto::name).containsExactly("bob");
         assertThat(tokens.list(EVE)).isEmpty();
-        assertThatThrownBy(() -> tokens.create(board.getId(), EVE, "eve", true, true))
+        assertThatThrownBy(() -> tokens.create(board.getId(), EVE, "eve", READ, null))
                 .satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
-        assertThatThrownBy(() -> tokens.create(otherBoard.getId(), BOB, "not bob's", true, true))
+        assertThatThrownBy(() -> tokens.create(otherBoard.getId(), BOB, "not bob's", READ, null))
                 .satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
         // Only the creator revokes.
         assertThatThrownBy(() -> tokens.revoke(bobs.info().id(), ALICE))
@@ -143,7 +182,7 @@ class ApiTokenServiceTests {
 
     @Test
     void aTokenOnlyReachesItsBoard() {
-        NewToken created = tokens.create(board.getId(), ALICE, "only this board", true, true);
+        NewToken created = tokens.create(board.getId(), ALICE, "only this board", READ, null);
         SecurityContextHolder.getContext().setAuthentication(tokens.authenticate(created.token()).orElseThrow());
 
         assertThat(boardService.canAccess(board, ALICE)).isTrue();
@@ -156,7 +195,7 @@ class ApiTokenServiceTests {
 
     @Test
     void aTokenStopsWorkingWhenItsCreatorLeaves() {
-        NewToken created = tokens.create(board.getId(), BOB, "bob", true, true);
+        NewToken created = tokens.create(board.getId(), BOB, "bob", READ, null);
         members.leave(board.getId(), BOB);
         em.flush();
         SecurityContextHolder.getContext().setAuthentication(tokens.authenticate(created.token()).orElseThrow());

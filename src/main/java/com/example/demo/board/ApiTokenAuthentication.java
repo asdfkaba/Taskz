@@ -4,7 +4,9 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A request made with an API token: it acts as the token's user, but only on one board
@@ -14,15 +16,15 @@ public class ApiTokenAuthentication extends AbstractAuthenticationToken {
 
     private final String email;
     private final int boardId;
-    private final boolean canRead;
-    private final boolean canWrite;
+    private final Set<ApiScope> scopes;
+    private final Instant expiresAt;
 
-    public ApiTokenAuthentication(String email, int boardId, boolean canRead, boolean canWrite) {
+    public ApiTokenAuthentication(String email, int boardId, Set<ApiScope> scopes, Instant expiresAt) {
         super(List.of(new SimpleGrantedAuthority("ROLE_API_TOKEN")));
         this.email = email;
         this.boardId = boardId;
-        this.canRead = canRead;
-        this.canWrite = canWrite;
+        this.scopes = Set.copyOf(scopes);
+        this.expiresAt = expiresAt;
         setAuthenticated(true);
     }
 
@@ -40,12 +42,13 @@ public class ApiTokenAuthentication extends AbstractAuthenticationToken {
         return boardId;
     }
 
-    public boolean canRead() {
-        return canRead;
+    public Set<ApiScope> scopes() {
+        return scopes;
     }
 
-    public boolean canWrite() {
-        return canWrite;
+    /** Null if the token never expires. */
+    public Instant expiresAt() {
+        return expiresAt;
     }
 
     /** False only while the current request runs with a token for another board. */

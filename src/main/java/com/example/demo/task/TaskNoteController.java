@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// Notes need a login; they are not part of shared boards.
+// Notes need a login (or an API token with a notes scope); they are not part of shared boards.
 @RestController
 public class TaskNoteController {
 

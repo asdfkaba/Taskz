@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import com.example.demo.auth.jwt.TokenService;
+import com.example.demo.board.ApiScope;
 import com.example.demo.board.ApiTokenAuthentication;
 import com.example.demo.board.ApiTokenService;
 import com.example.demo.board.BoardService;
@@ -25,6 +26,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -41,6 +43,8 @@ class ApiTokenFilterTests {
 
     static final String READ = "taskz_read";
     static final String WRITE = "taskz_write";
+    static final String FILES = "taskz_files";
+    static final String NOTES = "taskz_notes";
 
     @Autowired MockMvc mockMvc;
 
@@ -56,11 +60,18 @@ class ApiTokenFilterTests {
     @BeforeEach
     void setUp() {
         when(apiTokenService.authenticate(anyString())).thenReturn(Optional.empty());
-        when(apiTokenService.authenticate(READ)).thenReturn(Optional.of(new ApiTokenAuthentication("alice@example.com", 1, true, false)));
-        when(apiTokenService.authenticate(WRITE)).thenReturn(Optional.of(new ApiTokenAuthentication("alice@example.com", 1, false, true)));
+        when(apiTokenService.authenticate(READ)).thenReturn(token(ApiScope.TASKS_READ));
+        when(apiTokenService.authenticate(WRITE)).thenReturn(
+                token(ApiScope.TASKS_CREATE, ApiScope.TASKS_UPDATE, ApiScope.TASKS_MOVE, ApiScope.CHECKLIST_CHECK));
+        when(apiTokenService.authenticate(FILES)).thenReturn(token(ApiScope.ATTACHMENTS_READ, ApiScope.ATTACHMENTS_WRITE));
+        when(apiTokenService.authenticate(NOTES)).thenReturn(token(ApiScope.NOTES_READ, ApiScope.NOTES_WRITE));
         // Requests that pass the chain arrive as the token's user, and the mocked lookups say 404.
         when(boardService.findTask(anyInt(), eq("alice@example.com"))).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
         when(boardService.findColumn(anyInt(), eq("alice@example.com"))).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    private static Optional<ApiTokenAuthentication> token(ApiScope... scopes) {
+        return Optional.of(new ApiTokenAuthentication("alice@example.com", 1, Set.of(scopes), null));
     }
 
     private int statusOf(MockHttpServletRequestBuilder request, String token) throws Exception {
@@ -92,6 +103,27 @@ class ApiTokenFilterTests {
         assertThat(statusOf(delete("/tasks/1/delete"), WRITE)).isEqualTo(403);
     }
 
+    // Only the scopes' endpoints pass; their controllers aren't in this slice, so passing ends in 404.
+    @Test
+    void attachmentAndNoteScopesOpenTheirEndpoints() throws Exception {
+        assertThat(statusOf(get("/tasks/1/attachments"), FILES)).isEqualTo(404);
+        assertThat(statusOf(get("/attachments/1"), FILES)).isEqualTo(404);
+        assertThat(statusOf(post("/tasks/1/attachments"), FILES)).isEqualTo(404);
+        assertThat(statusOf(delete("/attachments/1"), FILES)).isEqualTo(403);
+        assertThat(statusOf(get("/tasks/1"), FILES)).isEqualTo(403);
+
+        assertThat(statusOf(get("/tasks/1/notes"), NOTES)).isEqualTo(404);
+        assertThat(statusOf(post("/tasks/1/notes"), NOTES)).isEqualTo(404);
+        assertThat(statusOf(patch("/notes/1"), NOTES)).isEqualTo(404);
+        assertThat(statusOf(delete("/notes/1"), NOTES)).isEqualTo(403);
+
+        for (String token : new String[]{READ, WRITE}) {
+            assertThat(statusOf(get("/tasks/1/attachments"), token)).as(token).isEqualTo(403);
+            assertThat(statusOf(post("/tasks/1/notes"), token)).as(token).isEqualTo(403);
+        }
+        assertThat(statusOf(get("/attachments/settings"), READ)).isEqualTo(404);
+    }
+
     // ApiTokenController isn't part of this slice, so a request that passes ends in 404.
     @Test
     void everyTokenMayAskWhatItCanDo() throws Exception {
@@ -102,7 +134,7 @@ class ApiTokenFilterTests {
 
     @Test
     void tokensNeverReachTheRest() throws Exception {
-        for (String token : new String[]{READ, WRITE}) {
+        for (String token : new String[]{READ, WRITE, FILES, NOTES}) {
             assertThat(statusOf(get("/boards"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(delete("/boards/1"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(post("/account/tokens"), token)).as(token).isEqualTo(403);

@@ -124,6 +124,31 @@ class FreshDatabaseMigrationTests {
         assertThat(jdbc.queryForObject("select count(*) from notification", Integer.class)).isZero();
     }
 
+    // V16 turns read/write tokens into the scopes they covered; run on a database stopped at V15.
+    @Test
+    void oldApiTokensKeepWhatTheyCouldDo() {
+        PostgresTestDatabase.execute(PostgresTestDatabase.urlOf("fresh"), "CREATE DATABASE tokens_v15");
+        String url = PostgresTestDatabase.urlOf("tokens_v15");
+        PostgresTestDatabase.flyway(url, "15").migrate();
+        JdbcTemplate old = PostgresTestDatabase.jdbc(url);
+        old.update("insert into \"user\" (id, name, email) values (1, 'A', 'a@example.com')");
+        old.update("insert into board (id, name, user_id, slug) values (1, 'B', 1, 'b')");
+        String insert = "insert into api_token (user_id, board_id, name, token_hash, can_read, can_write, created) values (1, 1, ?, ?, ?, ?, now())";
+        old.update(insert, "read", "h1", true, false);
+        old.update(insert, "write", "h2", false, true);
+        old.update(insert, "both", "h3", true, true);
+
+        PostgresTestDatabase.flyway(url, null).migrate();
+
+        assertThat(old.queryForMap("select scopes from api_token where name = 'read'").get("scopes")).isEqualTo("tasks:read");
+        assertThat(old.queryForMap("select scopes from api_token where name = 'write'").get("scopes"))
+                .isEqualTo("tasks:create,tasks:update,tasks:move,checklist:check");
+        assertThat(old.queryForMap("select scopes from api_token where name = 'both'").get("scopes"))
+                .isEqualTo("tasks:read,tasks:create,tasks:update,tasks:move,checklist:check");
+        assertThat(old.queryForObject("select count(*) from api_token where expires_at is null and last_used_at is null", Integer.class))
+                .isEqualTo(3);
+    }
+
     // V7: one account per email, as logins find accounts by it. Several without an email stay possible.
     @Test
     void emailsAreUnique() {
