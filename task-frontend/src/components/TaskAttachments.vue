@@ -3,15 +3,17 @@ import UserIcon from '@/components/UserIcon.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { format, formatDistanceToNow } from 'date-fns'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 import { fromApi } from '@/utils/date'
+import { renderMarkdown } from '@/utils/markdown'
 
 // Files attached to a task, newest first. Only for the owner; shared boards don't show them.
 // The backend checks type and size (TaskAttachmentService) and says why it refuses a file. Its
 // size limit and accepted types come from /attachments/settings, so a too large file is refused
-// here before it is sent.
+// here before it is sent. Text and Markdown files open in a preview; everything else in a new tab.
 
 const props = defineProps({ taskId: { type: Number, required: true } })
 
@@ -120,6 +122,32 @@ function askDelete(attachment) {
   })
 }
 
+// Larger text files open in a new tab instead: rendering megabytes of Markdown would freeze the page.
+const MAX_PREVIEW_SIZE = 1024 * 1024
+const markdown = (attachment) => attachment.contentType.startsWith('text/markdown')
+const previewable = (attachment) =>
+  (markdown(attachment) || attachment.contentType.startsWith('text/plain')) && attachment.size <= MAX_PREVIEW_SIZE
+
+const preview = ref(null) // { attachment, text }; text is null while loading
+let previewRequest = 0 // answers for an earlier preview are dropped
+const previewBody = ref(null)
+const previewHtml = computed(() => (preview.value && markdown(preview.value.attachment) ? renderMarkdown(preview.value.text) : ''))
+
+async function open(event, attachment) {
+  // Ctrl/Cmd or middle click keep the browser's own "open in new tab".
+  if (!previewable(attachment) || event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return
+  event.preventDefault()
+  const request = ++previewRequest
+  preview.value = { attachment, text: null }
+  try {
+    const text = await store.fetchAttachmentText(attachment.id)
+    if (request === previewRequest && preview.value) preview.value = { attachment, text }
+  } catch (err) {
+    if (request === previewRequest) preview.value = null
+    showError(`Could not open ${attachment.name}`, err)
+  }
+}
+
 const url = (attachment) => `/api/attachments/${attachment.id}`
 const icon = (attachment) => (attachment.contentType === 'application/pdf' ? 'pi-file-pdf' : 'pi-file')
 const relative = (at) => formatDistanceToNow(fromApi(at), { addSuffix: true })
@@ -196,6 +224,7 @@ function size(bytes) {
           class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
           tabindex="-1"
           aria-hidden="true"
+          @click="open($event, attachment)"
         >
           <img v-if="attachment.image" :src="url(attachment)" alt="" loading="lazy" class="h-full w-full object-cover" />
           <i v-else class="pi text-lg text-slate-400" :class="icon(attachment)" />
@@ -207,6 +236,7 @@ function size(bytes) {
             rel="noopener"
             class="truncate text-sm text-slate-700 hover:underline dark:text-slate-200"
             :title="attachment.name"
+            @click="open($event, attachment)"
           >{{ attachment.name }}</a>
           <span class="text-xs text-slate-400 dark:text-slate-500">
             <span v-if="attachment.user" data-testid="attachment-user"><UserIcon :seed="attachment.userId" size="xs" class="-mt-0.5 mr-1" />{{ attachment.user }} · </span>
@@ -226,5 +256,36 @@ function size(bytes) {
         />
       </li>
     </ul>
+
+    <Dialog
+      :visible="!!preview"
+      modal
+      dismissableMask
+      :closeOnEscape="false"
+      :header="preview?.attachment.name"
+      class="w-[48rem] max-w-[calc(100vw-2rem)]"
+      data-testid="attachment-preview"
+      @update:visible="(v) => !v && (preview = null)"
+      @keydown.esc.stop="preview = null"
+      @show="previewBody?.focus()"
+    >
+      <!-- Escape is handled here and kept from the document, where the task dialog would close too.
+           For that, focus has to be in here; PrimeVue leaves it on the link that opened the preview. -->
+      <div ref="previewBody" tabindex="-1" class="outline-none">
+        <p v-if="preview?.text == null" class="text-sm text-slate-400">Loading…</p>
+        <!-- Sanitized in renderMarkdown. -->
+        <div v-else-if="previewHtml" class="markdown markdown-large" v-html="previewHtml" />
+        <pre v-else class="font-mono text-sm break-words whitespace-pre-wrap text-slate-800 dark:text-slate-200">{{ preview.text }}</pre>
+      </div>
+      <template #footer>
+        <a
+          v-if="preview"
+          :href="url(preview.attachment)"
+          target="_blank"
+          rel="noopener"
+          class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+        >Open in new tab</a>
+      </template>
+    </Dialog>
   </section>
 </template>

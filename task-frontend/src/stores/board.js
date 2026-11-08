@@ -358,6 +358,11 @@ export const useBoardStore = defineStore('board', {
       return this.attachmentSettings
     },
 
+    // The content of a text attachment (TXT, MD), for the preview.
+    async fetchAttachmentText(id) {
+      return (await expectOk(await authFetch(`/api/attachments/${id}`), 'Loading attachment')).text()
+    },
+
     async fetchAttachments(taskId) {
       return (await expectOk(await authFetch(`/api/tasks/${taskId}/attachments`), 'Loading attachments')).json()
     },
