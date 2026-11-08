@@ -53,8 +53,8 @@ public class TaskAttachmentController {
      * whatever it is; the PDF viewers of Chrome and Firefox work under it.
      */
     @GetMapping("/attachments/{id}")
-    public ResponseEntity<Resource> download(@PathVariable("id") int attachmentId) {
-        Download download = attachmentService.download(attachmentId, currentUserEmail());
+    public ResponseEntity<Resource> download(@PathVariable("id") String key) {
+        Download download = attachmentService.download(key, currentUserEmail());
         TaskAttachment attachment = download.attachment();
         String type = attachment.getContentType();
         boolean shown = type.startsWith("image/") || type.equals("application/pdf")
@@ -73,8 +73,8 @@ public class TaskAttachmentController {
 
     @DeleteMapping("/attachments/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable("id") int attachmentId) {
-        attachmentService.delete(attachmentId, currentUserEmail());
+    public void delete(@PathVariable("id") String key) {
+        attachmentService.delete(key, currentUserEmail());
     }
 
     // The reason goes into the body, so the page can say why an upload was refused.

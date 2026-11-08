@@ -101,6 +101,8 @@ test('Task attachments', async ({ browser }) => {
 
   await test.step('the link serves the file', async () => {
     const href = await section().getByRole('link', { name: 'Lebenslauf.pdf' }).getAttribute('href')
+    // A UUID, so links don't give away how many files there are.
+    ensure(/^\/api\/attachments\/[0-9a-f-]{36}$/.test(href), href)
     const response = await page.request.get(`${BASE}${href}`)
     ensure(response.ok(), `HTTP ${response.status()}`)
     ensure((await response.body()).equals(PDF), 'wrong content')

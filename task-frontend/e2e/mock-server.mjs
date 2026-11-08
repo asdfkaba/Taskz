@@ -5,6 +5,7 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 const [distDir, port] = process.argv.slice(2)
 
@@ -490,15 +491,16 @@ async function attachmentApi(method, url, raw, headers) {
       if (!contentType || (magic && !data.toString('latin1').startsWith(magic)) || (!magic && data.includes(0))) {
         return [415, { message: 'Only PNG, JPEG, GIF, WebP, PDF, TXT, MD, CSV files can be attached, with an extension that fits the content' }]
       }
-      const a = { id: nextId++, taskId: task.id, name: file.name, contentType, size: data.length, image: contentType.startsWith('image/'), user: 'Alice', userId: 1, created: now(), data }
+      const a = { id: randomUUID(), taskId: task.id, name: file.name, contentType, size: data.length, image: contentType.startsWith('image/'), user: 'Alice', userId: 1, created: now(), data }
       attachments.push(a)
       task.attachments = (task.attachments ?? 0) + 1
       record(task, 'attached', { file: a.name })
       return [201, attachmentOut(a)]
     }
   }
-  if ((m = url.match(/^\/api\/attachments\/(\d+)$/))) {
-    const a = attachments.find((x) => x.id === +m[1])
+  // Like the backend: attachments are found by their UUID (storage key).
+  if ((m = url.match(/^\/api\/attachments\/([0-9a-f-]{36})$/))) {
+    const a = attachments.find((x) => x.id === m[1])
     if (!a) return [404, { message: 'Attachment not found' }]
     if (method === 'GET') return [200, a]
     if (method === 'DELETE') {

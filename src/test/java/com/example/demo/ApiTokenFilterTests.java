@@ -107,9 +107,10 @@ class ApiTokenFilterTests {
     @Test
     void attachmentAndNoteScopesOpenTheirEndpoints() throws Exception {
         assertThat(statusOf(get("/tasks/1/attachments"), FILES)).isEqualTo(404);
-        assertThat(statusOf(get("/attachments/1"), FILES)).isEqualTo(404);
+        assertThat(statusOf(get("/attachments/0b7a0f1e-6c3d-4f5a-9e2b-7d1c8a4e5f60"), FILES)).isEqualTo(404);
+        assertThat(statusOf(get("/attachments/1"), FILES)).isEqualTo(403); // old numeric ids are gone
         assertThat(statusOf(post("/tasks/1/attachments"), FILES)).isEqualTo(404);
-        assertThat(statusOf(delete("/attachments/1"), FILES)).isEqualTo(403);
+        assertThat(statusOf(delete("/attachments/0b7a0f1e-6c3d-4f5a-9e2b-7d1c8a4e5f60"), FILES)).isEqualTo(403);
         assertThat(statusOf(get("/tasks/1"), FILES)).isEqualTo(403);
 
         assertThat(statusOf(get("/tasks/1/notes"), NOTES)).isEqualTo(404);

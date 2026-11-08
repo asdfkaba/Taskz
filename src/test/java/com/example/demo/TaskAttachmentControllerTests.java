@@ -39,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TaskAttachmentControllerTests {
 
     static final String ALICE = "alice@example.com";
+    static final String KEY = "0b7a0f1e-6c3d-4f5a-9e2b-7d1c8a4e5f60";
+    static final String OTHER_KEY = "8e2d4c6b-1a3f-4b5d-8c7e-9f0a1b2c3d4e";
 
     @Autowired
     MockMvc mockMvc;
@@ -54,7 +56,7 @@ class TaskAttachmentControllerTests {
     Path dir;
 
     private static AttachmentDto dto(String name, String type) {
-        return new AttachmentDto(7, name, type, 3, type.startsWith("image/"), "Alice", 1, Instant.parse("2026-11-02T10:00:00Z"));
+        return new AttachmentDto(KEY, name, type, 3, type.startsWith("image/"), "Alice", 1, Instant.parse("2026-11-02T10:00:00Z"));
     }
 
     private Download download(String name, String type) throws Exception {
@@ -78,7 +80,7 @@ class TaskAttachmentControllerTests {
         when(attachmentService.upload(eq(1), eq(ALICE), any())).thenReturn(dto("cv.pdf", "application/pdf"));
         mockMvc.perform(multipart("/tasks/1/attachments").file(file))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(7));
+                .andExpect(jsonPath("$.id").value(KEY));
     }
 
     @Test
@@ -104,8 +106,8 @@ class TaskAttachmentControllerTests {
     @Test
     void pdfsOpenInTheBrowserWithASandbox() throws Exception {
         Download pdf = download("Lebenslauf März.pdf", "application/pdf");
-        when(attachmentService.download(7, ALICE)).thenReturn(pdf);
-        mockMvc.perform(get("/attachments/7"))
+        when(attachmentService.download(KEY, ALICE)).thenReturn(pdf);
+        mockMvc.perform(get("/attachments/" + KEY))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("application/pdf"))
                 .andExpect(content().string("abc"))
@@ -119,17 +121,17 @@ class TaskAttachmentControllerTests {
     @Test
     void textOpensInTheBrowserAndCsvIsADownload() throws Exception {
         Download md = download("notes.md", "text/markdown; charset=utf-8");
-        when(attachmentService.download(7, ALICE)).thenReturn(md);
-        mockMvc.perform(get("/attachments/7"))
+        when(attachmentService.download(KEY, ALICE)).thenReturn(md);
+        mockMvc.perform(get("/attachments/" + KEY))
                 .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline;")));
         Download txt = download("notes.txt", "text/plain; charset=utf-8");
-        when(attachmentService.download(8, ALICE)).thenReturn(txt);
-        mockMvc.perform(get("/attachments/8"))
+        when(attachmentService.download(KEY, ALICE)).thenReturn(txt);
+        mockMvc.perform(get("/attachments/" + KEY))
                 .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline;")));
 
         Download csv = download("jobs.csv", "text/csv; charset=utf-8");
-        when(attachmentService.download(9, ALICE)).thenReturn(csv);
-        mockMvc.perform(get("/attachments/9"))
+        when(attachmentService.download(KEY, ALICE)).thenReturn(csv);
+        mockMvc.perform(get("/attachments/" + KEY))
                 .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("attachment;")))
                 .andExpect(header().string("Content-Security-Policy", "default-src 'none'; sandbox"));
     }
@@ -137,8 +139,8 @@ class TaskAttachmentControllerTests {
     @Test
     void imagesAreShownInline() throws Exception {
         Download png = download("screen.png", "image/png");
-        when(attachmentService.download(7, ALICE)).thenReturn(png);
-        mockMvc.perform(get("/attachments/7"))
+        when(attachmentService.download(KEY, ALICE)).thenReturn(png);
+        mockMvc.perform(get("/attachments/" + KEY))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("image/png"))
                 .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline;")));
@@ -146,18 +148,18 @@ class TaskAttachmentControllerTests {
 
     @Test
     void deleteAndNotFound() throws Exception {
-        mockMvc.perform(delete("/attachments/7")).andExpect(status().isNoContent());
-        verify(attachmentService).delete(7, ALICE);
+        mockMvc.perform(delete("/attachments/" + KEY)).andExpect(status().isNoContent());
+        verify(attachmentService).delete(KEY, ALICE);
 
-        when(attachmentService.download(8, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
-        mockMvc.perform(get("/attachments/8")).andExpect(status().isNotFound());
+        when(attachmentService.download(OTHER_KEY, ALICE)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
+        mockMvc.perform(get("/attachments/" + OTHER_KEY)).andExpect(status().isNotFound());
     }
 
     @Test
     @WithAnonymousUser
     void attachmentsNeedALogin() throws Exception {
         mockMvc.perform(get("/tasks/1/attachments")).andExpect(status().isForbidden());
-        mockMvc.perform(get("/attachments/7")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/attachments/" + KEY)).andExpect(status().isForbidden());
         verifyNoInteractions(attachmentService);
     }
 }
