@@ -102,7 +102,7 @@ class TaskAttachmentControllerTests {
     }
 
     @Test
-    void documentsAreDownloadsWithASandbox() throws Exception {
+    void pdfsOpenInTheBrowserWithASandbox() throws Exception {
         Download pdf = download("Lebenslauf März.pdf", "application/pdf");
         when(attachmentService.download(7, ALICE)).thenReturn(pdf);
         mockMvc.perform(get("/attachments/7"))
@@ -111,8 +111,26 @@ class TaskAttachmentControllerTests {
                 .andExpect(content().string("abc"))
                 // Browsers take filename*; filename is an ASCII stand-in for old clients (Spring 7).
                 .andExpect(header().string("Content-Disposition",
-                        "attachment; filename=\"Lebenslauf Maerz.pdf\"; filename*=UTF-8''Lebenslauf%20M%C3%A4rz.pdf"))
+                        "inline; filename=\"Lebenslauf Maerz.pdf\"; filename*=UTF-8''Lebenslauf%20M%C3%A4rz.pdf"))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Content-Security-Policy", "default-src 'none'; sandbox"));
+    }
+
+    @Test
+    void textOpensInTheBrowserAndCsvIsADownload() throws Exception {
+        Download md = download("notes.md", "text/markdown; charset=utf-8");
+        when(attachmentService.download(7, ALICE)).thenReturn(md);
+        mockMvc.perform(get("/attachments/7"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline;")));
+        Download txt = download("notes.txt", "text/plain; charset=utf-8");
+        when(attachmentService.download(8, ALICE)).thenReturn(txt);
+        mockMvc.perform(get("/attachments/8"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline;")));
+
+        Download csv = download("jobs.csv", "text/csv; charset=utf-8");
+        when(attachmentService.download(9, ALICE)).thenReturn(csv);
+        mockMvc.perform(get("/attachments/9"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("attachment;")))
                 .andExpect(header().string("Content-Security-Policy", "default-src 'none'; sandbox"));
     }
 

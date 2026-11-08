@@ -48,15 +48,18 @@ public class TaskAttachmentController {
     }
 
     /**
-     * The file. Images are shown inline (previews in the task view); everything else is a download.
-     * The sandbox policy keeps any script in a file from running on this site, whatever it is.
+     * The file. Images, PDFs and text (TXT, MD) open in the browser; CSV is a download, as browsers
+     * download it anyway. The sandbox policy keeps any script in a file from running on this site,
+     * whatever it is; the PDF viewers of Chrome and Firefox work under it.
      */
     @GetMapping("/attachments/{id}")
     public ResponseEntity<Resource> download(@PathVariable("id") int attachmentId) {
         Download download = attachmentService.download(attachmentId, currentUserEmail());
         TaskAttachment attachment = download.attachment();
-        boolean image = attachment.getContentType().startsWith("image/");
-        ContentDisposition disposition = (image ? ContentDisposition.inline() : ContentDisposition.attachment())
+        String type = attachment.getContentType();
+        boolean shown = type.startsWith("image/") || type.equals("application/pdf")
+                || type.startsWith("text/plain") || type.startsWith("text/markdown");
+        ContentDisposition disposition = (shown ? ContentDisposition.inline() : ContentDisposition.attachment())
                 .filename(attachment.getFileName(), StandardCharsets.UTF_8)
                 .build();
         return ResponseEntity.ok()

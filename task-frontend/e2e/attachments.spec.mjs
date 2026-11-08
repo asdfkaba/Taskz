@@ -1,5 +1,5 @@
-// Attachments on a task: upload by picker and drag & drop, refused types, download, delete,
-// history, the paperclip on the card, not on shared boards.
+// Attachments on a task: upload by picker and drag & drop, refused types, download, the Markdown
+// preview, delete, history, the paperclip on the card, not on shared boards.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
@@ -104,6 +104,27 @@ test('Task attachments', async ({ browser }) => {
     const response = await page.request.get(`${BASE}${href}`)
     ensure(response.ok(), `HTTP ${response.status()}`)
     ensure((await response.body()).equals(PDF), 'wrong content')
+  })
+
+  await test.step('a Markdown file opens formatted in a preview, over the task', async () => {
+    await section().getByRole('link', { name: 'prep.md' }).click()
+    const preview = page.getByTestId('attachment-preview')
+    await preview.getByRole('heading', { name: 'Interview' }).waitFor()
+    ensure((await preview.locator('.markdown').innerText()).includes('[ ] Questions'), await preview.innerText())
+    ensure((await preview.getByRole('link', { name: 'Open in new tab' }).getAttribute('href')).startsWith('/api/attachments/'), 'no tab link')
+    await page.waitForFunction(() => !document.querySelector('[data-testid="attachment-preview"]').getAnimations().length)
+    await page.screenshot({ path: out('att-preview.png') })
+    await page.keyboard.press('Escape')
+    await preview.waitFor({ state: 'detached' })
+    await page.getByTestId('task-view').waitFor()
+    ensure((await page.getByTestId('task-view').isVisible()), 'task closed with the preview')
+  })
+
+  await test.step('a PDF still opens in a new tab', async () => {
+    const [tab] = await Promise.all([page.context().waitForEvent('page'), section().getByRole('link', { name: 'Lebenslauf.pdf' }).click()])
+    // The headless browser has no PDF viewer and downloads it there; the tab itself is the point.
+    await tab.close()
+    ensure((await page.getByTestId('attachment-preview').count()) === 0, 'preview for a PDF')
   })
 
   await test.step('the history lists the attachments', async () => {

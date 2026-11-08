@@ -570,7 +570,9 @@ http.createServer((req, res) => {
       if (handled) {
         const [status, out] = handled
         if (req.method === 'GET' && status === 200 && out.data) {
-          res.writeHead(200, { 'Content-Type': out.contentType, 'Content-Disposition': `${out.image ? 'inline' : 'attachment'}; filename="${out.name}"` })
+          // Like TaskAttachmentController: only CSV is a download.
+          const inline = !out.contentType.startsWith('text/csv')
+          res.writeHead(200, { 'Content-Type': out.contentType, 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${out.name}"` })
           res.end(out.data)
         } else {
           res.writeHead(status, { 'Content-Type': 'application/json' })
