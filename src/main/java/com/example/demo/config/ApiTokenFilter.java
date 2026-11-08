@@ -1,5 +1,6 @@
 package com.example.demo.config;
 
+import com.example.demo.board.ApiScope;
 import com.example.demo.board.ApiTokenAuthentication;
 import com.example.demo.board.ApiTokenService;
 import jakarta.servlet.FilterChain;
@@ -18,16 +19,16 @@ import java.util.regex.Pattern;
 
 /**
  * Logs a request in with an API token ("Authorization: Bearer taskz_..."). Tokens only reach the
- * endpoints listed here: what the token may do (any token), reading the board and its tasks, and
- * creating and changing tasks, giving them labels included. Everything else (deleting, columns,
- * managing labels, members, sharing, tokens) needs a real login. Which board a token may touch is
- * checked in BoardService.canAccess.
+ * endpoints listed here, each needing one scope of the token. Any token may ask what it may do and
+ * read the upload limits. Everything else (deleting, columns, managing labels, members, sharing,
+ * tokens) needs a real login. Which board a token may touch is checked in BoardService.canAccess.
  */
 public class ApiTokenFilter extends OncePerRequestFilter {
 
-    private record Endpoint(String method, Pattern path) {
-        Endpoint(String method, String path) {
-            this(method, Pattern.compile(path));
+    // scope null: any token.
+    private record Endpoint(String method, Pattern path, ApiScope scope) {
+        Endpoint(String method, String path, ApiScope scope) {
+            this(method, Pattern.compile(path), scope);
         }
 
         boolean matches(String method, String path) {
@@ -35,18 +36,21 @@ public class ApiTokenFilter extends OncePerRequestFilter {
         }
     }
 
-    private static final List<Endpoint> ANY = List.of(
-            new Endpoint("GET", "/token"));
-
-    private static final List<Endpoint> READ = List.of(
-            new Endpoint("GET", "/boards/\\d+"),
-            new Endpoint("GET", "/tasks/\\d+"));
-
-    private static final List<Endpoint> WRITE = List.of(
-            new Endpoint("POST", "/tasks"),
-            new Endpoint("PUT", "/tasks/\\d+"),
-            new Endpoint("PATCH", "/tasks/\\d+/move"),
-            new Endpoint("PATCH", "/tasks/\\d+/checklist/\\d+"));
+    private static final List<Endpoint> ENDPOINTS = List.of(
+            new Endpoint("GET", "/token", null),
+            new Endpoint("GET", "/attachments/settings", null),
+            new Endpoint("GET", "/boards/\\d+", ApiScope.TASKS_READ),
+            new Endpoint("GET", "/tasks/\\d+", ApiScope.TASKS_READ),
+            new Endpoint("POST", "/tasks", ApiScope.TASKS_CREATE),
+            new Endpoint("PUT", "/tasks/\\d+", ApiScope.TASKS_UPDATE),
+            new Endpoint("PATCH", "/tasks/\\d+/move", ApiScope.TASKS_MOVE),
+            new Endpoint("PATCH", "/tasks/\\d+/checklist/\\d+", ApiScope.CHECKLIST_CHECK),
+            new Endpoint("GET", "/tasks/\\d+/attachments", ApiScope.ATTACHMENTS_READ),
+            new Endpoint("GET", "/attachments/\\d+", ApiScope.ATTACHMENTS_READ),
+            new Endpoint("POST", "/tasks/\\d+/attachments", ApiScope.ATTACHMENTS_WRITE),
+            new Endpoint("GET", "/tasks/\\d+/notes", ApiScope.NOTES_READ),
+            new Endpoint("POST", "/tasks/\\d+/notes", ApiScope.NOTES_WRITE),
+            new Endpoint("PATCH", "/notes/\\d+", ApiScope.NOTES_WRITE));
 
     // A provider, so test slices without the token service still start; there, tokens are refused.
     private final ObjectProvider<ApiTokenService> tokenService;
@@ -81,8 +85,6 @@ public class ApiTokenFilter extends OncePerRequestFilter {
     }
 
     static boolean allows(ApiTokenAuthentication token, String method, String path) {
-        return ANY.stream().anyMatch(e -> e.matches(method, path))
-                || (token.canRead() && READ.stream().anyMatch(e -> e.matches(method, path)))
-                || (token.canWrite() && WRITE.stream().anyMatch(e -> e.matches(method, path)));
+        return ENDPOINTS.stream().anyMatch(e -> e.matches(method, path) && (e.scope() == null || token.scopes().contains(e.scope())));
     }
 }

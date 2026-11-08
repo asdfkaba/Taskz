@@ -1,5 +1,8 @@
 package com.example.demo.migration;
 
+import org.flywaydb.core.Flyway;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -40,6 +43,16 @@ final class PostgresTestDatabase {
         registry.add("spring.flyway.baseline-on-migrate", () -> "true");
         registry.add("spring.flyway.baseline-version", () -> "1");
         return url;
+    }
+
+    /** Flyway on an empty database of its own, migrating up to target (null: all migrations). */
+    static Flyway flyway(String url, String target) {
+        var config = Flyway.configure().dataSource(url, CONTAINER.getUsername(), CONTAINER.getPassword());
+        return (target == null ? config : config.target(target)).load();
+    }
+
+    static JdbcTemplate jdbc(String url) {
+        return new JdbcTemplate(new DriverManagerDataSource(url, CONTAINER.getUsername(), CONTAINER.getPassword()));
     }
 
     static String urlOf(String database) {

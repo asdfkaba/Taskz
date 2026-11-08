@@ -23,7 +23,8 @@ public class ApiTokenController {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NewTokenRequest(Integer boardId, String name, boolean read, boolean write) {
+    // scopes: ApiScope values; expiresInDays: null for a token that doesn't expire.
+    public record NewTokenRequest(Integer boardId, String name, List<String> scopes, Integer expiresInDays) {
     }
 
     @GetMapping("/account/tokens")
@@ -34,7 +35,7 @@ public class ApiTokenController {
     @PostMapping("/account/tokens")
     @ResponseStatus(HttpStatus.CREATED)
     public NewToken create(@RequestBody NewTokenRequest request) {
-        return tokenService.create(request.boardId(), currentUserEmail(), request.name(), request.read(), request.write());
+        return tokenService.create(request.boardId(), currentUserEmail(), request.name(), request.scopes(), request.expiresInDays());
     }
 
     @DeleteMapping("/account/tokens/{id}")

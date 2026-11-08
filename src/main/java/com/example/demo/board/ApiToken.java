@@ -8,8 +8,12 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-/** A token for scripts, limited to one board (table api_token, see V15__api_tokens.sql). */
+/** A token for scripts, limited to one board (table api_token, see V15__api_tokens.sql and V16). */
 @Entity
 @Table(name = "api_token")
 @Getter
@@ -37,22 +41,41 @@ public class ApiToken {
     @Column(name = "token_hash", nullable = false, unique = true, length = 64)
     private String tokenHash;
 
-    @Column(name = "can_read", nullable = false)
-    private boolean canRead;
-
-    @Column(name = "can_write", nullable = false)
-    private boolean canWrite;
+    // ApiScope values, comma-separated, e.g. "tasks:read,notes:write".
+    @Column(nullable = false, length = 500)
+    private String scopes;
 
     @Column(nullable = false)
     private Instant created;
 
-    ApiToken(User user, Board board, String name, String tokenHash, boolean canRead, boolean canWrite, Instant created) {
+    // Null: never expires.
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    @Column(name = "last_used_at")
+    private Instant lastUsedAt;
+
+    ApiToken(User user, Board board, String name, String tokenHash, Set<ApiScope> scopes, Instant created, Instant expiresAt) {
         this.user = user;
         this.board = board;
         this.name = name;
         this.tokenHash = tokenHash;
-        this.canRead = canRead;
-        this.canWrite = canWrite;
+        this.scopes = scopes.stream().sorted().map(ApiScope::value).collect(Collectors.joining(","));
         this.created = created;
+        this.expiresAt = expiresAt;
+    }
+
+    public Set<ApiScope> scopeSet() {
+        Set<ApiScope> result = EnumSet.noneOf(ApiScope.class);
+        Arrays.stream(scopes.split(",")).map(ApiScope::of).forEach(s -> s.ifPresent(result::add));
+        return result;
+    }
+
+    boolean expired(Instant now) {
+        return expiresAt != null && !now.isBefore(expiresAt);
+    }
+
+    void used(Instant now) {
+        lastUsedAt = now;
     }
 }

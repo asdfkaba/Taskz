@@ -39,7 +39,7 @@ let sentToOthers
 let mail
 let invites
 let teamJoined
-// Alice's API tokens ([{ id, name, boardId, boardName, read, write, created }]).
+// Alice's API tokens ([{ id, name, boardId, boardName, scopes, created, expiresAt, lastUsedAt }]).
 let apiTokens
 const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
@@ -211,8 +211,9 @@ function api(method, url, body) {
   if (method === 'GET' && p === '/account/tokens') return [200, apiTokens]
   if (method === 'POST' && p === '/account/tokens') {
     const name = body.name?.trim()
-    if (body.boardId !== 1 || !name || (!body.read && !body.write)) return [400, { message: 'Bad token request' }]
-    const info = { id: nextId++, name, boardId: 1, boardName: board.name, read: !!body.read, write: !!body.write, created: now() }
+    if (body.boardId !== 1 || !name || !body.scopes?.length) return [400, { message: 'Bad token request' }]
+    const expiresAt = body.expiresInDays ? new Date(Date.now() + body.expiresInDays * 86400000).toISOString() : null
+    const info = { id: nextId++, name, boardId: 1, boardName: board.name, scopes: body.scopes, created: now(), expiresAt, lastUsedAt: null }
     apiTokens.push(info)
     return [201, { info, token: `taskz_${newKey()}${newKey()}` }]
   }

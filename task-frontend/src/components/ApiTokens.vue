@@ -10,10 +10,47 @@ import { useBoardStore } from '@/stores/board'
 import { fromApi, formatShort } from '@/utils/date'
 
 // The user's personal API tokens, part of the account settings. Each works for one board, acts as
-// the user and can read, write or both. A new token is shown once; tokens can be revoked any time.
+// the user and only within its scopes, and may expire. A new token is shown once; tokens can be
+// revoked any time.
 
 // Same limit as ApiTokenService.MAX_NAME_LENGTH.
 const MAX_NAME_LENGTH = 50
+
+// The values of ApiScope, grouped as in the form.
+const SCOPE_GROUPS = [
+  {
+    name: 'Tasks',
+    scopes: [
+      { value: 'tasks:read', label: 'Read' },
+      { value: 'tasks:create', label: 'Create' },
+      { value: 'tasks:update', label: 'Edit' },
+      { value: 'tasks:move', label: 'Move' },
+      { value: 'checklist:check', label: 'Tick checklists' },
+    ],
+  },
+  {
+    name: 'Attachments',
+    scopes: [
+      { value: 'attachments:read', label: 'Download' },
+      { value: 'attachments:write', label: 'Upload' },
+    ],
+  },
+  {
+    name: 'Notes',
+    scopes: [
+      { value: 'notes:read', label: 'Read' },
+      { value: 'notes:write', label: 'Write' },
+    ],
+  },
+]
+
+// Up to ApiTokenService.MAX_EXPIRY_DAYS.
+const EXPIRY_OPTIONS = [
+  { label: 'Expires in 30 days', value: 30 },
+  { label: 'Expires in 90 days', value: 90 },
+  { label: 'Expires in a year', value: 365 },
+  { label: 'Never expires', value: null },
+]
 
 const store = useBoardStore()
 const confirm = useConfirm()
@@ -22,14 +59,21 @@ const toast = useToast()
 const tokens = ref([])
 const loading = ref(true)
 const busy = ref(false)
-const form = ref({ boardId: null, name: '', read: true, write: false })
+const form = ref({ boardId: null, name: '', scopes: ['tasks:read'], expiresInDays: 90 })
 const created = ref(null) // { info, token }, only until the page is left
 const tokenInput = ref()
 
 const canCreate = computed(
-  () => form.value.boardId != null && form.value.name.trim().length > 0 && (form.value.read || form.value.write) && !busy.value,
+  () => form.value.boardId != null && form.value.name.trim().length > 0 && form.value.scopes.length > 0 && !busy.value,
 )
-const rights = (t) => [t.read && 'read', t.write && 'write'].filter(Boolean).join(' + ')
+const scopeId = (value) => `token-scope-${value.replace(':', '-')}`
+
+function lifetime(token) {
+  const expires = fromApi(token.expiresAt)
+  const until = !expires ? 'never expires' : expires <= new Date() ? 'expired' : `expires ${formatShort(expires)}`
+  const used = token.lastUsedAt ? `last used ${formatShort(fromApi(token.lastUsedAt))}` : 'never used'
+  return `Created ${formatShort(fromApi(token.created))} · ${until} · ${used}`
+}
 
 function showError(summary, err) {
   toast.add({ severity: 'error', summary, detail: err.message, life: 5000 })
@@ -94,17 +138,20 @@ function askRevoke(token) {
 <template>
   <div class="flex flex-col gap-4" data-testid="api-tokens">
     <p class="text-sm text-slate-600 dark:text-slate-400">
-      For scripts and tools. A token acts as you, on one board only. Read: the board and its tasks.
-      Write: create and change tasks, labels included. Deleting and all settings need a login.
+      For scripts and tools. A token acts as you, on one board only, and can do only what you tick
+      below. Deleting and all settings need a login.
     </p>
 
     <i v-if="loading" class="pi pi-spin pi-spinner text-slate-400" />
     <ul v-else-if="tokens.length" class="flex flex-col divide-y divide-slate-100 dark:divide-slate-700">
       <li v-for="token in tokens" :key="token.id" class="flex items-center gap-3 py-2" data-testid="api-token">
-        <span class="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-300">
-          {{ token.name }} <span class="text-slate-400 dark:text-slate-500">· {{ token.boardName }} · {{ rights(token) }}</span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm text-slate-700 dark:text-slate-300">
+            {{ token.name }} <span class="text-slate-400 dark:text-slate-500">· {{ token.boardName }}</span>
+          </span>
+          <span class="block text-xs break-words text-slate-500 dark:text-slate-400">{{ token.scopes.join(', ') }}</span>
+          <span class="block text-xs text-slate-400 dark:text-slate-500">{{ lifetime(token) }}</span>
         </span>
-        <span class="text-xs text-slate-400 dark:text-slate-500">{{ formatShort(fromApi(token.created)) }}</span>
         <Button
           icon="pi pi-ban"
           text
@@ -132,7 +179,7 @@ function askRevoke(token) {
       </div>
       <p class="text-xs text-slate-500 dark:text-slate-400">
         Copy it now: it is shown only once. Send it as <code>Authorization: Bearer &lt;token&gt;</code>;
-        <code>GET /api/token</code> tells its board, rights, columns and labels.
+        <code>GET /api/token</code> tells its board, scopes, columns and labels.
       </p>
     </template>
 
@@ -149,15 +196,22 @@ function askRevoke(token) {
         />
         <InputText v-model="form.name" :maxlength="MAX_NAME_LENGTH" placeholder="Name, e.g. job search script" aria-label="Token name" class="min-w-0 flex-1" />
       </div>
-      <div class="flex flex-wrap items-center gap-4">
-        <div class="flex items-center gap-2">
-          <Checkbox v-model="form.read" inputId="token-read" binary />
-          <label for="token-read" class="text-sm text-slate-700 dark:text-slate-300">Read</label>
+      <fieldset v-for="group in SCOPE_GROUPS" :key="group.name" class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <legend class="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{{ group.name }}</legend>
+        <div v-for="scope in group.scopes" :key="scope.value" class="flex items-center gap-2">
+          <Checkbox v-model="form.scopes" :inputId="scopeId(scope.value)" :value="scope.value" />
+          <label :for="scopeId(scope.value)" class="text-sm text-slate-700 dark:text-slate-300">{{ scope.label }}</label>
         </div>
-        <div class="flex items-center gap-2">
-          <Checkbox v-model="form.write" inputId="token-write" binary />
-          <label for="token-write" class="text-sm text-slate-700 dark:text-slate-300">Write</label>
-        </div>
+      </fieldset>
+      <div class="flex flex-wrap items-center gap-2">
+        <Select
+          v-model="form.expiresInDays"
+          :options="EXPIRY_OPTIONS"
+          optionLabel="label"
+          optionValue="value"
+          aria-label="Expiry"
+          class="min-w-40"
+        />
         <Button type="submit" label="Create token" icon="pi pi-key" :disabled="!canCreate" :loading="busy" class="ml-auto" />
       </div>
     </form>
