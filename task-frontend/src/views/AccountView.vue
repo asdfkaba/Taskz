@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import ApiTokens from '@/components/ApiTokens.vue'
 import AccountSessions from '@/components/AccountSessions.vue'
 import AccountDeleteDialog from '@/components/AccountDeleteDialog.vue'
+import SidebarLayout from '@/components/SidebarLayout.vue'
 
 // The user's own settings: logins, API tokens, their data. Mail notifications stay out of here until
 // mail is set up on the server; the backend for them (NotificationPreferenceController) is there.
@@ -11,8 +12,20 @@ const deleting = ref(false)
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-2xl flex-col gap-6" data-testid="account">
-    <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Account</h1>
+  <SidebarLayout v-slot="{ openBoards }">
+  <div class="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-4 md:py-8" data-testid="account">
+    <div class="flex items-center gap-1">
+        <Button
+          icon="pi pi-bars"
+          text
+          rounded
+          severity="secondary"
+          aria-label="Show boards"
+          class="-ml-2 shrink-0 md:!hidden"
+          @click="openBoards()"
+        />
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Account</h1>
+    </div>
 
     <section class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
       <h2 class="font-semibold text-slate-900 dark:text-slate-100">Logged in on</h2>
@@ -49,4 +62,5 @@ const deleting = ref(false)
 
     <AccountDeleteDialog v-model:visible="deleting" />
   </div>
+  </SidebarLayout>
 </template>

@@ -3,7 +3,6 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch }
 import { useRoute, useRouter } from 'vue-router'
 import { VueDraggable } from 'vue-draggable-plus'
 import Button from 'primevue/button'
-import Drawer from 'primevue/drawer'
 import Skeleton from 'primevue/skeleton'
 import Menu from 'primevue/menu'
 import { useConfirm } from 'primevue/useconfirm'
@@ -16,9 +15,7 @@ import { useBoardFilter } from '@/composables/useBoardFilter'
 import TaskDialog from '@/components/TaskDialog.vue'
 import ColumnDialog from '@/components/ColumnDialog.vue'
 import ColumnDeleteDialog from '@/components/ColumnDeleteDialog.vue'
-import BoardList from '@/components/BoardList.vue'
-import BoardDialog from '@/components/BoardDialog.vue'
-import BoardDeleteDialog from '@/components/BoardDeleteDialog.vue'
+import SidebarLayout from '@/components/SidebarLayout.vue'
 import BoardSettings from '@/components/BoardSettings.vue'
 import UserIcon from '@/components/UserIcon.vue'
 import { usePageTitle } from '@/utils/title'
@@ -133,29 +130,6 @@ async function load() {
   }
 }
 
-// ---- Sidebar ----
-const SIDEBAR_KEY = 'boardSidebarCollapsed'
-const sidebarCollapsed = ref(readStorage(SIDEBAR_KEY) === '1')
-watch(sidebarCollapsed, (collapsed) => writeStorage(SIDEBAR_KEY, collapsed ? '1' : '0'))
-
-// On small screens the board list opens as a drawer instead.
-const drawerVisible = ref(false)
-
-const boardDialogVisible = ref(false)
-const deleteBoardVisible = ref(false)
-const deletingBoard = ref(null)
-
-function openCreateBoard() {
-  drawerVisible.value = false
-  boardDialogVisible.value = true
-}
-
-function askDeleteBoard(board) {
-  drawerVisible.value = false
-  deletingBoard.value = board
-  deleteBoardVisible.value = true
-}
-
 // ---- Board or table view, compact cards ----
 const { view, compact, mode, setMode } = useBoardViewPrefs(() => store.board?.id ?? null)
 // All tasks that pass the filter, in board order (column by column).
@@ -248,10 +222,6 @@ watch(
 
 function neighbours(index) {
   return { left: store.columns[index - 1] ?? null, right: store.columns[index + 1] ?? null }
-}
-
-function onBoardDeleted(board) {
-  if (route.params.slug === board.slug) router.replace({ name: 'board' })
 }
 
 // ---- Live updates and who else is here (see useBoardEvents) ----
@@ -508,43 +478,7 @@ function askDeleteColumn(column) {
 </script>
 
 <template>
-  <div class="flex min-h-[calc(100vh-3.5rem)]">
-    <aside
-      class="sticky top-14 hidden h-[calc(100vh-3.5rem)] shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 md:flex"
-      :class="sidebarCollapsed ? 'w-12 items-center py-3' : 'w-64 p-3'"
-    >
-      <Button
-        v-if="sidebarCollapsed"
-        icon="pi pi-angle-double-right"
-        text
-        rounded
-        severity="secondary"
-        aria-label="Show boards"
-        title="Show boards"
-        @click="sidebarCollapsed = false"
-      />
-      <template v-else>
-        <div class="mb-2 flex items-center justify-between pl-3">
-          <span class="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Boards</span>
-          <Button
-            icon="pi pi-angle-double-left"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            aria-label="Hide boards"
-            title="Hide boards"
-            @click="sidebarCollapsed = true"
-          />
-        </div>
-        <BoardList @create="openCreateBoard" @delete="askDeleteBoard" />
-      </template>
-    </aside>
-
-    <Drawer v-model:visible="drawerVisible" header="Boards" class="!w-72">
-      <BoardList @create="openCreateBoard" @delete="askDeleteBoard" @navigate="drawerVisible = false" />
-    </Drawer>
-
+  <SidebarLayout v-slot="{ openBoards, createBoard, deleteBoard }">
     <section class="flex min-w-0 flex-1 flex-col gap-4 px-4 py-4 md:gap-6 md:py-8">
       <!-- The toolbar moves to its own line when it doesn't fit next to the title (phones, tablets,
            narrow windows), so the title and who is online keep their room. -->
@@ -557,7 +491,7 @@ function askDeleteColumn(column) {
             severity="secondary"
             aria-label="Show boards"
             class="-ml-2 shrink-0 md:!hidden"
-            @click="drawerVisible = true"
+            @click="openBoards()"
           />
           <div class="min-w-0">
             <h1 class="truncate text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 md:text-2xl">
@@ -676,14 +610,14 @@ function askDeleteColumn(column) {
         <i class="pi pi-th-large text-4xl text-slate-300 dark:text-slate-600" />
         <p class="font-medium text-slate-700 dark:text-slate-300">No boards yet</p>
         <p class="text-sm text-slate-500 dark:text-slate-400">Create a board to start collecting tasks.</p>
-        <Button label="Create your first board" icon="pi pi-plus" class="mt-2" @click="openCreateBoard" />
+        <Button label="Create your first board" icon="pi pi-plus" class="mt-2" @click="createBoard" />
       </div>
 
       <div v-else-if="store.loading && !store.loaded" class="flex gap-4 overflow-hidden">
         <Skeleton v-for="n in 3" :key="n" width="18rem" height="20rem" borderRadius="0.75rem" class="shrink-0" />
       </div>
 
-      <BoardSettings v-else-if="store.loaded && settingsOpen" @delete="askDeleteBoard" />
+      <BoardSettings v-else-if="store.loaded && settingsOpen" @delete="deleteBoard" />
 
       <TaskTable
         v-else-if="store.loaded && view === 'table'"
@@ -853,8 +787,6 @@ function askDeleteColumn(column) {
       />
       <ColumnDialog v-model:visible="columnDialogVisible" :column="editingColumn" @created="showNewColumn" />
       <ColumnDeleteDialog v-model:visible="deleteDialogVisible" :column="deletingColumn" />
-      <BoardDialog v-model:visible="boardDialogVisible" />
-      <BoardDeleteDialog v-model:visible="deleteBoardVisible" :board="deletingBoard" @deleted="onBoardDeleted" />
     </section>
-  </div>
+  </SidebarLayout>
 </template>

@@ -28,6 +28,13 @@ test('Account', async ({ browser }) => {
     ensure((await page.title()).startsWith('Account'), await page.title())
   })
 
+  await test.step('the board list stays beside the settings', async () => {
+    await page.getByRole('navigation', { name: 'Boards' }).first().getByRole('link', { name: 'My board' }).click()
+    await page.waitForURL(/\/boards\/my-board/)
+    await page.goBack()
+    await account().waitFor()
+  })
+
   await test.step('the link in a mail asks, then stops the mails', async () => {
     await fetch(`${BASE}/api/__mail`, { method: 'POST', body: JSON.stringify({ delivery: 'DAILY' }) })
     await page.goto(`${BASE}/unsubscribe/mail-token`)
