@@ -56,7 +56,7 @@ function onBoardDeleted(board) {
 <template>
   <div class="flex min-h-[calc(100vh-3.5rem)]">
     <aside
-      class="sticky top-14 hidden h-[calc(100vh-3.5rem)] shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 md:flex"
+      class="relative sticky top-14 hidden h-[calc(100vh-3.5rem)] shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 md:flex"
       :class="collapsed ? 'w-12 items-center py-3' : 'w-64 p-3'"
     >
       <Button
@@ -70,24 +70,23 @@ function onBoardDeleted(board) {
         @click="collapsed = false"
       />
       <template v-else>
-        <div class="mb-2 flex items-center justify-between pl-3">
-          <span class="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Boards</span>
-          <Button
-            icon="pi pi-angle-double-left"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            aria-label="Hide boards"
-            title="Hide boards"
-            @click="collapsed = true"
-          />
-        </div>
+        <!-- In the row of What's due, the list's first entry (which leaves room for it). -->
+        <Button
+          icon="pi pi-angle-double-left"
+          text
+          rounded
+          severity="secondary"
+          size="small"
+          aria-label="Hide boards"
+          title="Hide boards"
+          class="!absolute top-3.5 right-3"
+          @click="collapsed = true"
+        />
         <BoardList @create="openCreateBoard" @delete="askDeleteBoard" />
       </template>
     </aside>
 
-    <Drawer v-model:visible="drawerVisible" header="Boards" class="!w-72">
+    <Drawer v-model:visible="drawerVisible" header="Menu" class="!w-72">
       <BoardList @create="openCreateBoard" @delete="askDeleteBoard" @navigate="drawerVisible = false" />
     </Drawer>
 

@@ -18,13 +18,14 @@ const isOpen = (board) => route.params.slug === board.slug
   <div class="flex min-h-0 flex-1 flex-col gap-1">
     <RouterLink
       :to="{ name: 'due' }"
-      class="flex items-center gap-2 rounded-lg py-2 pl-3 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+      class="flex items-center gap-2 rounded-lg py-2 pr-10 pl-3 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
       exact-active-class="bg-slate-100 dark:bg-slate-800 font-semibold !text-slate-900 dark:!text-slate-100"
       @click="emit('navigate')"
     >
       <i class="pi pi-calendar text-xs text-slate-400 dark:text-slate-500" aria-hidden="true" />
       What's due
     </RouterLink>
+    <h2 class="mt-3 mb-1 pl-3 text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">Boards</h2>
     <nav class="flex min-h-0 flex-1 flex-col gap-1" aria-label="Boards">
       <ul class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         <li v-for="board in store.boards" :key="board.id" class="group relative">
