@@ -25,11 +25,13 @@ const inDays = (days) => {
 
 test("What's due", async ({ browser }) => {
   await resetMock()
-  // Task A overdue, Task B (Jan 1) overdue but moved to Done, Task C in three days, a new one in a month.
+  // Task A overdue, Task B (Jan 1) overdue but moved to Done, Task C in three days, new ones in 5, 14 and 30 days.
   await api('PUT', '/tasks/1', { title: 'Task A', description: 'first', due_date: local(inDays(-1)) })
   await api('PATCH', '/tasks/2/move', { columnId: 12, position: 0 })
   await api('PUT', '/tasks/3', { title: 'Task C', description: null, due_date: local(inDays(3)) })
   await api('POST', '/tasks', { title: 'Task D', description: null, due_date: local(inDays(30)), columnId: 10 })
+  await api('POST', '/tasks', { title: 'Task E', description: null, due_date: local(inDays(5)), columnId: 10 })
+  await api('POST', '/tasks', { title: 'Task F', description: null, due_date: local(inDays(14)), columnId: 10 })
 
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   const errors = []
@@ -45,16 +47,18 @@ test("What's due", async ({ browser }) => {
 
   await test.step('grouped by when they are due, done ones left out', async () => {
     ensure(JSON.stringify(await titles('overdue')) === '["Task A"]', JSON.stringify(await titles('overdue')))
-    ensure(JSON.stringify(await titles('week')) === '["Task C"]', JSON.stringify(await titles('week')))
+    ensure(JSON.stringify(await titles('days3')) === '["Task C"]', JSON.stringify(await titles('days3')))
+    ensure(JSON.stringify(await titles('week')) === '["Task E"]', JSON.stringify(await titles('week')))
+    ensure(JSON.stringify(await titles('days14')) === '["Task F"]', JSON.stringify(await titles('days14')))
     ensure(JSON.stringify(await titles('later')) === '["Task D"]', JSON.stringify(await titles('later')))
     ensure((await page.getByText('Task B').count()) === 0, 'task in the last column listed')
-    ensure((await group('week').innerText()).includes('My board · In progress'), await group('week').innerText())
+    ensure((await group('days3').innerText()).includes('My board · In progress'), await group('days3').innerText())
     ensure((await page.title()).startsWith("What's due"), await page.title())
     await page.screenshot({ path: `${test.info().outputDir}/due-1.png` })
   })
 
   await test.step('a click opens the task on its board', async () => {
-    await group('week').getByTestId('due-task').click()
+    await group('days3').getByTestId('due-task').click()
     await dialogOpened(page)
     await page.getByTestId('task-view').getByText('Task C').first().waitFor()
     ensure(new URL(page.url()).pathname === '/boards/my-board', page.url())
@@ -75,14 +79,14 @@ test("What's due", async ({ browser }) => {
     await page.keyboard.press('Escape')
     await page.waitForFunction(() => !document.querySelector('.p-dialog'))
     await page.getByRole('link', { name: "What's due" }).click()
-    const note = group('week').getByTestId('due-note')
+    const note = group('days3').getByTestId('due-note')
     await note.waitFor()
     ensure((await note.innerText()).includes('Task C') && (await note.innerText()).includes('Ask about the salary'), await note.innerText())
     // Tomorrow's reminder comes before Task C's due date in three days.
-    const rows = await group('week').locator('li').allInnerTexts()
+    const rows = await group('days3').locator('li').allInnerTexts()
     ensure(rows[0].includes('Ask about the salary') && rows[1].includes('Task C') && !rows[1].includes('salary'), JSON.stringify(rows))
     await page.screenshot({ path: `${test.info().outputDir}/due-2-note.png` })
-    await group('week').getByRole('button', { name: 'Reminder done: Ask about the salary' }).click()
+    await group('days3').getByRole('button', { name: 'Reminder done: Ask about the salary' }).click()
     await note.waitFor({ state: 'detached' })
     const saved = (await (await fetch(`${BASE}/api/__state`)).json()).notes.find((n) => n.text === 'Ask about the salary')
     ensure(saved && saved.remindAt === null, JSON.stringify(saved))

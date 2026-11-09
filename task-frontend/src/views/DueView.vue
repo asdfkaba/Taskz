@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { addDays, isToday, startOfDay } from 'date-fns'
+import { addDays, startOfDay } from 'date-fns'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
@@ -38,16 +38,18 @@ async function reminderDone(entry) {
 
 const groups = computed(() => {
   const now = new Date()
-  const weekEnd = addDays(startOfDay(now), 8)
+  // Whole days from tomorrow on: "Next 3 days" ends with the third day after today.
+  const daysAhead = (days) => addDays(startOfDay(now), days + 1)
   const groups = [
-    { key: 'overdue', title: 'Overdue', tasks: [] },
-    { key: 'today', title: 'Today', tasks: [] },
-    { key: 'week', title: 'Next 7 days', tasks: [] },
-    { key: 'later', title: 'Later', tasks: [] },
+    { key: 'overdue', title: 'Overdue', tasks: [], before: now },
+    { key: 'today', title: 'Today', tasks: [], before: daysAhead(0) },
+    { key: 'days3', title: 'Next 3 days', tasks: [], before: daysAhead(3) },
+    { key: 'week', title: 'Next 7 days', tasks: [], before: daysAhead(7) },
+    { key: 'days14', title: 'Next 14 days', tasks: [], before: daysAhead(14) },
+    { key: 'later', title: 'Later', tasks: [], before: Infinity },
   ]
   for (const task of tasks.value) {
-    const index = task.due < now ? 0 : isToday(task.due) ? 1 : task.due < weekEnd ? 2 : 3
-    groups[index].tasks.push(task)
+    groups.find((g) => task.due < g.before).tasks.push(task)
   }
   return groups.filter((g) => g.tasks.length > 0)
 })
