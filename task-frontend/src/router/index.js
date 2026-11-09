@@ -32,7 +32,7 @@ const router = createRouter({
       path: '/account',
       name: 'account',
       component: () => import('../views/AccountView.vue'),
-      meta: { requiresAuth: true, title: 'Account' },
+      meta: { requiresAuth: true, title: 'Account', fullWidth: true },
     },
     {
       // The unsubscribe link in notification mails; no login needed.
@@ -45,7 +45,7 @@ const router = createRouter({
       path: '/due',
       name: 'due',
       component: () => import('../views/DueView.vue'),
-      meta: { requiresAuth: true, title: "What's due" },
+      meta: { requiresAuth: true, title: "What's due", fullWidth: true },
     },
     {
       // Read-only view of a board through its share link, no login needed.

@@ -19,6 +19,7 @@ const isOpen = (board) => route.params.slug === board.slug
     <RouterLink
       :to="{ name: 'due' }"
       class="flex items-center gap-2 rounded-lg py-2 pl-3 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+      exact-active-class="bg-slate-100 dark:bg-slate-800 font-semibold !text-slate-900 dark:!text-slate-100"
       @click="emit('navigate')"
     >
       <i class="pi pi-calendar text-xs text-slate-400 dark:text-slate-500" aria-hidden="true" />

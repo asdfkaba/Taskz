@@ -4,6 +4,7 @@ import { addDays, isToday, startOfDay } from 'date-fns'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
+import SidebarLayout from '@/components/SidebarLayout.vue'
 import { formatDue, fromApi } from '@/utils/date'
 import { DEFAULT_COLUMN_COLOR } from '@/utils/task'
 
@@ -53,12 +54,19 @@ const groups = computed(() => {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-3xl flex-col gap-6" data-testid="due">
-    <div class="flex items-center justify-between gap-3">
+  <SidebarLayout v-slot="{ openBoards }">
+  <div class="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-6 px-4 py-4 md:py-8" data-testid="due">
+    <div class="flex items-center gap-1">
+        <Button
+          icon="pi pi-bars"
+          text
+          rounded
+          severity="secondary"
+          aria-label="Show boards"
+          class="-ml-2 shrink-0 md:!hidden"
+          @click="openBoards()"
+        />
       <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">What's due</h1>
-      <RouterLink :to="{ name: 'board' }" custom v-slot="{ navigate }">
-        <Button label="Boards" icon="pi pi-th-large" severity="secondary" outlined size="small" @click="navigate" />
-      </RouterLink>
     </div>
 
     <i v-if="status === 'loading'" class="pi pi-spin pi-spinner text-2xl text-slate-400" />
@@ -117,4 +125,5 @@ const groups = computed(() => {
       </ul>
     </section>
   </div>
+  </SidebarLayout>
 </template>

@@ -21,11 +21,18 @@ test('Account', async ({ browser }) => {
     await menu.getByRole('menuitem', { name: 'Log out' }).waitFor()
     await page.waitForFunction(() => !document.querySelector('#user-menu').getAnimations().length)
     await page.screenshot({ path: `${test.info().outputDir}/user-menu.png` })
-    await menu.getByRole('menuitem', { name: 'Account settings' }).click()
+    await menu.getByRole('menuitem', { name: 'Settings' }).click()
     await account().getByRole('heading', { name: 'API tokens' }).waitFor()
     // Mail notifications aren't offered until mail is set up.
     ensure((await account().getByText(/mail/i).count()) === 0, 'mail settings shown')
     ensure((await page.title()).startsWith('Account'), await page.title())
+  })
+
+  await test.step('the board list stays beside the settings', async () => {
+    await page.getByRole('navigation', { name: 'Boards' }).first().getByRole('link', { name: 'My board' }).click()
+    await page.waitForURL(/\/boards\/my-board/)
+    await page.goBack()
+    await account().waitFor()
   })
 
   await test.step('the link in a mail asks, then stops the mails', async () => {
