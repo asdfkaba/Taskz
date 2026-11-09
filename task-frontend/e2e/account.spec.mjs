@@ -21,7 +21,7 @@ test('Account', async ({ browser }) => {
     await menu.getByRole('menuitem', { name: 'Log out' }).waitFor()
     await page.waitForFunction(() => !document.querySelector('#user-menu').getAnimations().length)
     await page.screenshot({ path: `${test.info().outputDir}/user-menu.png` })
-    await menu.getByRole('menuitem', { name: 'Account settings' }).click()
+    await menu.getByRole('menuitem', { name: 'Settings' }).click()
     await account().getByRole('heading', { name: 'API tokens' }).waitFor()
     // Mail notifications aren't offered until mail is set up.
     ensure((await account().getByText(/mail/i).count()) === 0, 'mail settings shown')
