@@ -54,25 +54,40 @@ async function seed() {
   const startup = await label('Startup', '#f59e0b')
   const topPick = await label('Top pick', '#ef4444')
 
-  const template = '## Steps\n- [ ] Research the company\n- [ ] Tailor CV\n- [ ] Cover letter\n- [ ] Send application'
-  await api('PUT', '/boards/1/task-template', { template })
+  // A task moved to Interview gets the preparation steps (BoardRules / RuleEngine).
+  await api('POST', '/boards/1/rules', { columnId: columns.interview, action: 'APPEND_CHECKLIST', items: ['Prepare questions', 'Research the interviewers'] })
+  await api('POST', '/__members', [
+    { userId: 2, name: 'Bob Builder', joined: '2026-11-01T09:00:00Z' },
+    { userId: 3, name: 'Carla', joined: '2026-11-02T09:00:00Z' },
+  ])
 
-  const task = (column, title, description, due, labelIds) =>
-    api('POST', '/tasks', { columnId: columns[column], title, description, due_date: due, labelIds })
+  const steps = ['Research the company', 'Tailor CV', 'Cover letter', 'Send application']
+  const task = (column, title, description, due, labelIds, checklist = []) =>
+    api('POST', '/tasks', { columnId: columns[column], title, description, due_date: due, labelIds, checklist: checklist.map((text) => ({ text })) })
+  const tick = async (t, ...indexes) => {
+    for (const i of indexes) await api('PATCH', `/tasks/${t.id}/checklist/${t.checklist[i].id}`, { checked: true })
+  }
 
-  await task('wishlist', 'Acme Corp – Backend Engineer',
-    'Kotlin and Spring, payments team.\n\n- [x] Research the company\n- [ ] Tailor CV\n- [ ] Cover letter\n- [ ] Send application',
-    dueIn(3, 18), [remote, topPick])
+  const acme = await task('wishlist', 'Acme Corp – Backend Engineer', 'Kotlin and Spring, payments team.', dueIn(3, 18), [remote, topPick], steps)
+  await tick(acme, 0)
+  await attach(acme.id, 'Job ad.pdf', '%PDF-1.4\n%demo\n')
+  await api('POST', `/tasks/${acme.id}/notes`, { text: 'Recruiter: Dana, answers within a week.' })
   await task('wishlist', 'Nimbus Labs – Platform Engineer', 'Kubernetes, small team, Series A.', null, [startup, remote])
   await task('wishlist', 'Globex – Java Developer', 'Referral from Sam.', dueIn(9, 12), [hybrid])
-  await task('applied', 'Initech – Senior Developer',
-    'Applied via the careers page.\n\n- [x] Research the company\n- [x] Tailor CV\n- [x] Cover letter\n- [x] Send application',
-    dueIn(6, 9), [hybrid])
+  const initech = await task('applied', 'Initech – Senior Developer', 'Applied via the careers page.', dueIn(6, 9), [hybrid], steps)
+  await tick(initech, 0, 1, 2, 3)
   await task('applied', 'Umbrella – DevOps Engineer', 'Waiting for an answer.', null, [remote])
-  await task('interview', 'Hooli – Software Engineer',
-    'Second round with the team lead.\n\n## Prepare\n- [x] System design recap\n- [ ] Questions for the team\n  - [ ] On-call\n  - [ ] Growth path',
-    dueIn(1, 10), [topPick, hybrid])
+  const hooli = await task('interview', 'Hooli – Software Engineer', 'Second round with the team lead.', dueIn(1, 10), [topPick, hybrid],
+    ['System design recap', 'Questions for the team'])
+  await tick(hooli, 0)
   await task('offer', 'Stark Industries – Tech Lead', 'Offer until Friday.', dueIn(4, 17), [startup])
+}
+
+async function attach(taskId, name, text) {
+  const form = new FormData()
+  form.append('file', new Blob([text], { type: 'application/pdf' }), name)
+  const response = await fetch(`${BASE}/api/tasks/${taskId}/attachments`, { method: 'POST', body: form })
+  if (!response.ok) throw new Error(`upload ${name}: HTTP ${response.status}`)
 }
 
 // ---- A visible cursor (videos don't show the real one) ----
@@ -141,35 +156,46 @@ try {
   await page.goto(`${BASE}/boards`)
   await page.getByText('Acme Corp – Backend Engineer').waitFor()
   await glide(640, 420, 1)
-  await sleep(1800)
+  await sleep(1200)
+  // Bob and Carla open the board too (live, server-sent events).
+  await api('POST', '/__presence', [{ id: 2, name: 'Bob Builder' }, { id: 3, name: 'Carla' }])
+  await sleep(1600)
 
-  // Open a task and tick a checklist item.
+  // Open a task: tick checklist items, see the attachment, add a note.
   await clickOn(page.locator('[data-task-id] h3', { hasText: 'Acme Corp' }))
   await page.getByTestId('task-view').waitFor()
   await sleep(1200)
-  await clickOn(page.getByTestId('task-description').locator('input[type="checkbox"]').nth(1))
-  await sleep(700)
-  await clickOn(page.getByTestId('task-description').locator('input[type="checkbox"]').nth(2))
-  await sleep(1000)
+  const boxes = page.getByTestId('task-checklist').getByRole('checkbox')
+  await clickOn(boxes.nth(1))
+  await sleep(500)
+  await clickOn(boxes.nth(2))
+  await sleep(800)
+  await page.getByTestId('task-attachments').scrollIntoViewIfNeeded()
+  await sleep(900)
+  await clickOn(page.getByTestId('task-notes').getByRole('textbox', { name: 'New note' }))
+  await type('Call back on Monday')
+  await sleep(300)
+  await clickOn(page.getByTestId('task-notes').getByRole('button', { name: 'Add note' }))
+  await sleep(1200)
   await clickOn(page.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }))
   await page.waitForFunction(() => !document.querySelector('.p-dialog'))
-  await sleep(800)
+  await sleep(700)
 
-  // New task: starts with the board's template.
+  // New task with a label.
   await clickOn(page.getByRole('button', { name: 'New task' }))
   await page.locator('#task-title').waitFor()
   await sleep(500)
   await type('Wayne Enterprises – Backend Developer')
-  await sleep(700)
+  await sleep(600)
   await clickOn(page.getByRole('button', { name: 'Edit labels' }))
   await clickOn(page.getByTestId('label-picker').getByText('Remote', { exact: true }))
   await clickOn(page.getByRole('button', { name: 'Done', exact: true }))
-  await sleep(500)
+  await sleep(400)
   await clickOn(page.getByRole('button', { name: 'Create task' }))
   await page.waitForFunction(() => !document.querySelector('.p-dialog'))
-  await sleep(1200)
+  await sleep(1000)
 
-  // Drag a task to the next column.
+  // Drag a task to Interview: the board's automation adds the preparation steps.
   const card = await page.locator('[data-task-id]', { hasText: 'Initech' }).boundingBox()
   const target = await page.locator('[data-task-id]', { hasText: 'Hooli' }).boundingBox()
   await glide(card.x + 80, card.y + 20)
@@ -183,46 +209,50 @@ try {
   }
   await sleep(250)
   await page.mouse.up()
-  await sleep(1300)
+  await sleep(1000)
+  await clickOn(page.locator('[data-task-id] h3', { hasText: 'Initech' }))
+  await page.getByTestId('task-checklist').getByText('Prepare questions').waitFor()
+  await sleep(2000)
+  await clickOn(page.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }))
+  await page.waitForFunction(() => !document.querySelector('.p-dialog'))
+  await sleep(600)
+
+  // A notification from a teammate.
+  await fetch(`${BASE}/api/__notify`, {
+    method: 'POST',
+    body: JSON.stringify({ text: 'Bob Builder added a note: "I know someone there"', boardName: 'Job hunt', boardSlug: 'job-hunt', taskId: 4, taskTitle: 'Nimbus Labs – Platform Engineer' }),
+  })
+  await page.getByTestId('notification-count').waitFor()
+  await sleep(900)
+  await clickOn(page.getByTestId('notification-bell'))
+  await page.getByTestId('notifications').waitFor()
+  await sleep(1800)
+  await page.keyboard.press('Escape')
+  await sleep(500)
 
   // Search.
   await clickOn(page.getByRole('textbox', { name: 'Search tasks' }))
   await type('remote')
-  await sleep(1800)
+  await sleep(1500)
   await page.keyboard.press('Control+a')
   await page.keyboard.press('Backspace')
-  await sleep(700)
+  await sleep(500)
 
-  // Compact cards.
-  await clickOn(page.getByRole('button', { name: 'Compact cards' }))
-  await sleep(1800)
-  await clickOn(page.getByRole('button', { name: 'Compact cards' }))
-  await sleep(600)
-
-  // Table view: sort by due date and change a status.
+  // Table view, sorted by due date.
   await clickOn(page.getByRole('button', { name: 'Table view' }))
   await page.getByTestId('task-table').waitFor()
-  await sleep(1300)
-  await clickOn(page.getByTestId('task-table').locator('thead th').filter({ hasText: 'Due' }))
-  await sleep(1300)
-  await clickOn(page.getByRole('combobox', { name: 'Status of Nimbus Labs – Platform Engineer' }))
-  await sleep(500)
-  await clickOn(page.getByRole('option', { name: 'Applied' }))
-  await sleep(1500)
-  await clickOn(page.getByRole('button', { name: 'Board view' }))
-  await sleep(1000)
-
-  // Board settings.
-  await clickOn(page.getByRole('button', { name: 'Board settings' }))
-  await page.getByTestId('board-settings').waitFor()
-  await sleep(1000)
-  for (let i = 0; i < 6; i++) {
-    await page.mouse.wheel(0, 120)
-    await sleep(120)
-  }
-  await sleep(1200)
-  await clickOn(page.getByRole('button', { name: 'Back to board' }))
   await sleep(900)
+  await clickOn(page.getByTestId('task-table').locator('thead th').filter({ hasText: 'Due' }))
+  await sleep(1500)
+  await clickOn(page.getByRole('button', { name: 'Board view', exact: true }))
+  await sleep(800)
+
+  // What's due across all boards, from the sidebar.
+  await clickOn(page.getByRole('button', { name: 'Show boards' }))
+  await sleep(700)
+  await clickOn(page.getByRole('link', { name: "What's due" }))
+  await page.getByTestId('due').waitFor()
+  await sleep(2000)
 
   // Dark mode: system (light here) -> light -> dark.
   const theme = page.getByRole('button', { name: /^Theme:/ })
