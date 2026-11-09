@@ -209,6 +209,24 @@ export const useBoardStore = defineStore('board', {
       await expectOk(await authFetch(`/api/account/tokens/${id}`, { method: 'DELETE' }), 'Revoking API token')
     },
 
+    // The user's logins, newest first; current marks this browser's.
+    async fetchSessions() {
+      return (await expectOk(await authFetch('/api/account/sessions'), 'Loading sessions')).json()
+    },
+
+    async endSession(id) {
+      await expectOk(await authFetch(`/api/account/sessions/${id}`, { method: 'DELETE' }), 'Logging out the device')
+    },
+
+    async endOtherSessions() {
+      await expectOk(await authFetch('/api/account/sessions', { method: 'DELETE' }), 'Logging out other devices')
+    },
+
+    // email: the account's address, as confirmation.
+    async deleteAccount(email) {
+      await expectOk(await sendJson('/api/account', 'DELETE', { email }), 'Deleting account')
+    },
+
     async removeMember(boardId, userId) {
       await expectOk(await authFetch(`/api/boards/${boardId}/members/${userId}`, { method: 'DELETE' }), 'Removing member')
     },

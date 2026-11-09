@@ -42,6 +42,9 @@ let invites
 let teamJoined
 // Alice's API tokens ([{ id, name, boardId, boardName, scopes, created, expiresAt, lastUsedAt }]).
 let apiTokens
+// Alice's logins ([{ id, userAgent, ipAddress, issuedAt, expiresAt, current }]), and whether she deleted her account.
+let sessions
+let accountDeleted
 const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
 const streams = new Set()
@@ -71,6 +74,13 @@ function reset() {
   invites = []
   teamJoined = false
   apiTokens = []
+  const session = (id, userAgent, current) => ({ id, userAgent, ipAddress: '203.0.113.7', issuedAt: '2026-11-01T09:00:00Z', expiresAt: '2026-11-08T09:00:00Z', current })
+  sessions = [
+    session(1, 'Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0', true),
+    session(2, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', false),
+    session(3, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', false),
+  ]
+  accountDeleted = false
   nextId = 100
   columns = [
     { id: 10, name: 'To do', color: '#64748b', position: 0 },
@@ -152,6 +162,7 @@ function api(method, url, body) {
   const u = new URL(url, 'http://x')
   const p = u.pathname.replace(/^\/api/, '')
   let m
+  if (method === 'GET' && p === '/auth/status' && accountDeleted) return [401, {}]
   if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice', id: 1 }]
   // Like the backend: the code "unverified" stands for an account without a confirmed email.
   if (method === 'POST' && p === '/auth/logout') return [204, null]
@@ -223,6 +234,25 @@ function api(method, url, body) {
     const before = apiTokens.length
     apiTokens = apiTokens.filter((t) => t.id !== +m[1])
     return apiTokens.length < before ? [204, null] : [404, {}]
+  }
+  if (method === 'GET' && p === '/account/sessions') return [200, sessions]
+  if (method === 'DELETE' && p === '/account/sessions') {
+    sessions = sessions.filter((s) => s.current)
+    return [204, null]
+  }
+  if (method === 'DELETE' && (m = p.match(/^\/account\/sessions\/(\d+)$/))) {
+    const before = sessions.length
+    sessions = sessions.filter((s) => s.id !== +m[1])
+    return sessions.length < before ? [204, null] : [404, {}]
+  }
+  // Like AccountService.export, but only the parts the page checks.
+  if (method === 'GET' && p === '/account/export') {
+    return [200, { user: { name: 'Alice', email: 'alice@example.com' }, boards: [{ board: { ...board, tasks } }] }]
+  }
+  if (method === 'DELETE' && p === '/account') {
+    if (body?.email?.trim().toLowerCase() !== 'alice@example.com') return [400, { message: 'Type your email address to confirm' }]
+    accountDeleted = true
+    return [204, null]
   }
   if (method === 'GET' && p === '/boards/1/members') {
     return [200, [{ userId: 1, name: 'Alice', owner: true, joined: null }, ...members.map((m) => ({ ...m, owner: false }))]]
@@ -600,7 +630,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, apiTokens, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, apiTokens, sessions, accountDeleted, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })

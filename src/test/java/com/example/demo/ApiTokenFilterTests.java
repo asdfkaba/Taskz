@@ -140,6 +140,9 @@ class ApiTokenFilterTests {
             assertThat(statusOf(delete("/boards/1"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(post("/account/tokens"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(get("/account/tokens"), token)).as(token).isEqualTo(403);
+            assertThat(statusOf(delete("/account"), token)).as(token).isEqualTo(403);
+            assertThat(statusOf(get("/account/export"), token)).as(token).isEqualTo(403);
+            assertThat(statusOf(delete("/account/sessions"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(post("/boards/1/invites"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(get("/tasks/1/history"), token)).as(token).isEqualTo(403);
             assertThat(statusOf(post("/boards/1/labels"), token)).as(token).isEqualTo(403);
