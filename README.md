@@ -2,7 +2,7 @@
 
 Kanban boards for tasks, with Spring Boot, Vue.js and third-party OAuth login.
 
-[demo.webm](https://github.com/user-attachments/assets/a11f1749-3f1b-47c8-a49f-b1b8cc9ba80e)
+[demo.webm](https://github.com/user-attachments/assets/3798e592-8a90-4fb2-b40b-69aebf5e66b0)
 
 ## Tests
 
