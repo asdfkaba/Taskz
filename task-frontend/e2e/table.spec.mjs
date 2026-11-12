@@ -109,6 +109,27 @@ test('Table view', async ({ browser }) => {
     ensure((await rows().count()) === 3, 'rows')
   })
 
+  await test.step('columns can be hidden; the choice survives a reload and a hidden column stops sorting', async () => {
+    await header('Due').click()
+    ensure((await titles())[0] === 'Task B', `due ${JSON.stringify(await titles())}`)
+    await table().locator('.p-multiselect').click() // its combobox is a visually hidden input
+    await page.getByRole('option', { name: 'Due' }).click()
+    await page.getByRole('option', { name: 'Created' }).click()
+    await page.keyboard.press('Escape')
+    ensure((await header('Due').count()) === 0, 'due column still shown')
+    ensure((await header('Created').count()) === 0, 'created column still shown')
+    ensure(await header('Status').isVisible(), 'status column hidden')
+    ensure(JSON.stringify(await titles()) === '["Task B","Task C","Task A"]', `still sorted ${JSON.stringify(await titles())}`)
+    await page.reload()
+    await table().waitFor()
+    ensure((await header('Due').count()) === 0, 'due column back after reload')
+    await table().locator('.p-multiselect').click() // its combobox is a visually hidden input
+    await page.getByRole('option', { name: 'Due' }).click()
+    await page.getByRole('option', { name: 'Created' }).click()
+    await page.keyboard.press('Escape')
+    ensure(await header('Due').isVisible(), 'due column not back')
+  })
+
   await test.step('dark mode', async () => {
     await page.evaluate(() => document.documentElement.classList.add('dark'))
     await page.waitForTimeout(200)

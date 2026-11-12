@@ -1,15 +1,18 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import { fromApi, formatDue, formatShort } from '@/utils/date'
 import { DEFAULT_COLUMN_COLOR } from '@/utils/task'
 import { highlight } from '@/utils/search'
+import { readStorage, writeStorage } from '@/utils/storage'
 
 // The board's tasks as a sortable table. Without a sort they are in board order (column by column).
 // A click on a row opens the task; the status select moves it to the end of another column
 // (shared boards are read-only and show the status as text).
+// Which columns show is the user's choice, remembered in this browser for all boards; the title always shows.
 const props = defineProps({
   // Tasks to show, already filtered, in board order.
   tasks: { type: Array, required: true },
@@ -57,6 +60,42 @@ const rows = computed(() =>
 
 const colorOf = (columnId) => props.columns.find((c) => c.id === columnId)?.color ?? DEFAULT_COLUMN_COLOR
 
+// The columns that can be hidden. The hidden ones are stored, so a column added later shows by default.
+const OPTIONAL_COLUMNS = [
+  { key: 'status', label: 'Status', sortField: 'statusOrder' },
+  { key: 'labels', label: 'Labels' },
+  { key: 'due', label: 'Due', sortField: 'dueSort' },
+  { key: 'checklist', label: 'Checklist', sortField: 'checklistSort' },
+  { key: 'created', label: 'Created', sortField: 'createdSort' },
+  { key: 'edited', label: 'Changed', sortField: 'editedSort' },
+]
+const HIDDEN_KEY = 'tableHiddenColumns'
+
+function readHidden() {
+  try {
+    const stored = JSON.parse(readStorage(HIDDEN_KEY))
+    return Array.isArray(stored) ? stored : []
+  } catch {
+    return []
+  }
+}
+
+const hidden = ref(readHidden())
+const shows = (key) => !hidden.value.includes(key)
+const shown = computed(() => OPTIONAL_COLUMNS.map((c) => c.key).filter(shows))
+const sortField = ref(null)
+const sortOrder = ref(null)
+
+function setShown(keys) {
+  hidden.value = OPTIONAL_COLUMNS.map((c) => c.key).filter((key) => !keys.includes(key))
+  writeStorage(HIDDEN_KEY, JSON.stringify(hidden.value))
+  // A hidden column must not keep sorting the table unseen.
+  if (OPTIONAL_COLUMNS.some((c) => c.sortField === sortField.value && !shows(c.key))) {
+    sortField.value = null
+    sortOrder.value = null
+  }
+}
+
 function onRowClick(event) {
   // Clicks in the status select or on a link don't open the task.
   if (event.originalEvent.target.closest('[data-no-open], a')) return
@@ -72,6 +111,8 @@ function onStatusChange(row, columnId) {
   <DataTable
     :value="rows"
     dataKey="id"
+    v-model:sortField="sortField"
+    v-model:sortOrder="sortOrder"
     removableSort
     size="small"
     rowHover
@@ -80,6 +121,23 @@ function onStatusChange(row, columnId) {
     data-testid="task-table"
     @row-click="onRowClick"
   >
+    <template #header>
+      <div class="flex justify-end">
+        <MultiSelect
+          :modelValue="shown"
+          :options="OPTIONAL_COLUMNS"
+          optionLabel="label"
+          optionValue="key"
+          size="small"
+          :showToggleAll="false"
+          aria-label="Columns"
+          @update:modelValue="setShown"
+        >
+          <template #value>Columns</template>
+        </MultiSelect>
+      </div>
+    </template>
+
     <template #empty>
       <p class="py-6 text-center text-slate-500 dark:text-slate-400">
         {{ filtered ? 'No tasks match the filter.' : 'No tasks yet.' }}
@@ -102,7 +160,7 @@ function onStatusChange(row, columnId) {
       </template>
     </Column>
 
-    <Column header="Status" sortable sortField="statusOrder" :style="{ width: '11rem' }">
+    <Column v-if="shows('status')" header="Status" sortable sortField="statusOrder" :style="{ width: '11rem' }">
       <template #body="{ data }">
         <span v-if="readonly" class="flex min-w-0 items-center gap-2">
           <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: colorOf(data.columnId) }" />
@@ -136,7 +194,7 @@ function onStatusChange(row, columnId) {
       </template>
     </Column>
 
-    <Column header="Labels" headerClass="hidden md:table-cell" bodyClass="hidden md:table-cell">
+    <Column v-if="shows('labels')" header="Labels" headerClass="hidden md:table-cell" bodyClass="hidden md:table-cell">
       <template #body="{ data }">
         <span class="flex flex-wrap items-center gap-1" data-testid="label-dots">
           <span
@@ -152,7 +210,7 @@ function onStatusChange(row, columnId) {
       </template>
     </Column>
 
-    <Column header="Due" sortable sortField="dueSort" bodyClass="whitespace-nowrap">
+    <Column v-if="shows('due')" header="Due" sortable sortField="dueSort" bodyClass="whitespace-nowrap">
       <template #body="{ data }">
         <span v-if="data.due" :class="data.overdue ? 'font-medium text-red-600 dark:text-red-400' : ''">
           {{ formatDue(data.due) }}
@@ -161,6 +219,7 @@ function onStatusChange(row, columnId) {
     </Column>
 
     <Column
+      v-if="shows('checklist')"
       header="Checklist"
       sortable
       sortField="checklistSort"
@@ -179,6 +238,7 @@ function onStatusChange(row, columnId) {
     </Column>
 
     <Column
+      v-if="shows('created')"
       header="Created"
       sortable
       sortField="createdSort"
@@ -189,6 +249,7 @@ function onStatusChange(row, columnId) {
     </Column>
 
     <Column
+      v-if="shows('edited')"
       header="Changed"
       sortable
       sortField="editedSort"
