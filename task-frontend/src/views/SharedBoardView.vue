@@ -238,8 +238,8 @@ watch(
       v-model:visible="detailsVisible"
       modal
       header="Task"
-      :style="{ width: '40rem' }"
-      :breakpoints="{ '640px': '95vw' }"
+      :style="{ width: '48rem' }"
+      :breakpoints="{ '820px': '95vw' }"
       :draggable="false"
     >
       <TaskDetails v-if="openTask" :task="openTask" :column="openColumn" :labels="labelsOf(openTask)" />

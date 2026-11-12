@@ -52,7 +52,7 @@ async function rename() {
 </script>
 
 <template>
-  <div class="flex max-w-2xl flex-col gap-4" data-testid="board-settings">
+  <div class="flex max-w-4xl flex-col gap-4" data-testid="board-settings">
     <section class="flex flex-col gap-3 rounded-xl border bg-white p-4 dark:bg-slate-900 border-slate-200 dark:border-slate-800" aria-labelledby="settings-name">
       <h2 id="settings-name" class="text-base font-semibold text-slate-900 dark:text-slate-100">Name</h2>
       <form class="flex gap-2" @submit.prevent="rename">

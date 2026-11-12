@@ -60,7 +60,7 @@ function askDelete(task) {
 </script>
 
 <template>
-  <div class="max-w-3xl" data-testid="board-archive">
+  <div class="max-w-4xl" data-testid="board-archive">
     <p v-if="status === 'loading'" class="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
     <p v-else-if="status === 'error'" class="text-sm text-red-600 dark:text-red-400">Could not load the archive.</p>
     <p
