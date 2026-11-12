@@ -49,7 +49,7 @@ test('Views on a shared board', async ({ browser }) => {
     await page.getByRole('button', { name: 'Table view' }).click()
     await table().waitFor()
     ensure((await table().locator('tbody tr').count()) === 3, 'rows')
-    ensure((await table().getByRole('combobox').count()) === 0, 'status can be changed')
+    ensure((await table().locator('tbody').getByRole('combobox').count()) === 0, 'status can be changed')
     ensure((await table().locator('tbody tr').first().innerText()).includes('To do'), 'status text')
     await table().locator('tbody tr').nth(2).locator('td').nth(3).click()
     await page.getByRole('dialog').getByText('Task C').waitFor()
