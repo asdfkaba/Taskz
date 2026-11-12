@@ -22,20 +22,21 @@ const MAX_ITEMS = 20
 const MAX_DAYS = 365
 const MAX_NOTE_LENGTH = 5000
 const MAX_NOTIFICATION_LENGTH = 500
+// hint: the fine print, shown under the form only while the action (or trigger) is chosen.
 const ACTIONS = [
-  { value: 'APPEND_CHECKLIST', label: 'Add checklist items' },
-  { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist' },
-  { value: 'ADD_NOTE_REMINDER', label: 'Add a note with a reminder' },
-  { value: 'NOTIFY', label: 'Notify people' },
-  { value: 'ARCHIVE', label: 'Archive it' },
-  { value: 'MOVE', label: 'Move it to another column' },
+  { value: 'APPEND_CHECKLIST', label: 'Add checklist items', hint: 'Items the checklist already has are skipped.' },
+  { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist', hint: 'Items that are in both lists stay ticked.' },
+  { value: 'ADD_NOTE_REMINDER', label: 'Add a note with a reminder', hint: "The note is written as whoever moved the task, and the reminder shows in their “What's due”." },
+  { value: 'NOTIFY', label: 'Notify people', hint: 'It shows under their bell; whoever moved the task is not told.' },
+  { value: 'ARCHIVE', label: 'Archive it', hint: "The task can be restored from the board's archive." },
+  { value: 'MOVE', label: 'Move it to another column', hint: 'The task goes to the end of that column, and its rules for entering run.' },
 ]
 // When a rule runs and which actions it can have then; same as BoardRule.Trigger. label continues
 // "When a task ...", heading is the same for the list of rules.
 const TRIGGERS = [
-  { value: 'ENTERED_COLUMN', label: 'enters', heading: 'enters', actions: ['APPEND_CHECKLIST', 'REPLACE_CHECKLIST', 'ADD_NOTE_REMINDER', 'NOTIFY'] },
-  { value: 'IN_COLUMN_FOR', label: 'stays in', heading: 'stays in', actions: ['ARCHIVE', 'NOTIFY', 'MOVE'] },
-  { value: 'CHECKLIST_DONE', label: 'completes its checklist in', heading: 'completes its checklist in', actions: ['MOVE', 'NOTIFY'] },
+  { value: 'ENTERED_COLUMN', label: 'enters', heading: 'enters', hint: 'Runs when a task is moved into the column or created in it.', actions: ['APPEND_CHECKLIST', 'REPLACE_CHECKLIST', 'ADD_NOTE_REMINDER', 'NOTIFY'] },
+  { value: 'IN_COLUMN_FOR', label: 'stays in', heading: 'stays in', hint: 'Checked every hour; a task that leaves the column earlier is left alone.', actions: ['ARCHIVE', 'NOTIFY', 'MOVE'] },
+  { value: 'CHECKLIST_DONE', label: 'completes its checklist in', heading: 'completes its checklist in', hint: 'Runs when someone ticks the last open item.', actions: ['MOVE', 'NOTIFY'] },
 ]
 // Which settings an action has: 'items', 'note', 'notify', 'move' or 'none'.
 const KINDS = { ADD_NOTE_REMINDER: 'note', NOTIFY: 'notify', MOVE: 'move', ARCHIVE: 'none' }
@@ -61,6 +62,9 @@ const actionOptions = computed(() => {
 watch(trigger, () => {
   if (!actionOptions.value.some((a) => a.value === action.value)) action.value = actionOptions.value[0].value
 })
+const hint = computed(() =>
+  [TRIGGERS.find((t) => t.value === trigger.value), ACTIONS.find((a) => a.value === action.value)].map((x) => x.hint).join(' '),
+)
 // Where a rule of the given column can move tasks: any other column.
 const targetsFor = (ownColumnId) => store.columns.filter((c) => c.id !== ownColumnId)
 // The fields of a rule's settings, for the new rule and the one being edited.
@@ -221,13 +225,7 @@ async function remove(rule) {
 <template>
   <div class="flex flex-col gap-4" data-testid="board-rules">
     <p class="text-sm text-slate-600 dark:text-slate-400">
-      Most run when a task is moved into a column or created in it. Adding skips items the checklist already has.
-      Replacing makes the list the task's checklist; items in both stay ticked. A note with a reminder is
-      written as whoever moved the task, and shows in their “What's due”; it can be removed again when the
-      task leaves the column. Notifying skips whoever moved the task; it shows under their bell for the others.
-      “Stays in” runs once the task has been in the column for the given days, checked every hour; a task
-      that leaves earlier is left alone. “Completes its checklist” runs when someone ticks the last open item.
-      A task moved by a rule goes to the end of the other column, and that column's rules for entering run.
+      Rules that run by themselves when something happens to a task in a column.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>
@@ -384,6 +382,7 @@ async function remove(rule) {
           Remove the note when the task leaves the column
         </label>
       </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400" data-testid="rule-hint">{{ hint }}</p>
       <div>
         <Button type="submit" label="Add automation" icon="pi pi-plus" size="small" :disabled="!canAdd" :loading="busy" />
       </div>
