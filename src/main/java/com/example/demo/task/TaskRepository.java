@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,13 @@ public interface TaskRepository extends JpaRepository<Task, Integer> {
     int countByBoardColumn(BoardColumn column);
 
     List<Task> findByBoardColumnAndArchivedAtIsNotNull(BoardColumn column);
+
+    // Tasks that entered the column after the first and not after the second time, in the column's order.
+    @Query("""
+            select t from Task t where t.boardColumn = :column and t.archivedAt is null
+              and t.columnEntered > :after and t.columnEntered <= :until
+            order by t.position""")
+    List<Task> findEnteredBetween(BoardColumn column, Instant after, Instant until);
 
     // With the archived ones, for deleting the board.
     List<Task> findByBoardColumnBoard(Board board);

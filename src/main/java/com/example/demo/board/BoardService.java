@@ -319,6 +319,8 @@ public class BoardService {
         if (task.getArchivedAt() != null) {
             task.setPosition(taskRepository.countByBoardColumn(task.getBoardColumn()));
             task.setArchivedAt(null);
+            // Or a rule that archives after some days in the column would take it right back.
+            task.setColumnEntered(Instant.now());
             historyService.recordArchived(task, false, email);
             changed(task.getBoardColumn().getBoard());
         }
@@ -421,6 +423,10 @@ public class BoardService {
             archived.forEach(task -> task.setBoardColumn(home));
         }
         ruleRepository.deleteByColumn(column);
+        // Rules of other columns that moved tasks here have nowhere to move them now.
+        ruleRepository.deleteAll(ruleRepository.findByColumnBoardOrderById(column.getBoard()).stream()
+                .filter(rule -> column.getId().equals(RulePayload.parse(rule.getPayload()).targetColumnId()))
+                .toList());
         columnRepository.delete(column);
         for (int i = 0; i < columns.size(); i++) {
             columns.get(i).setPosition(i);

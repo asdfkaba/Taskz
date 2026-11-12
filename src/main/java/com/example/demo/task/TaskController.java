@@ -116,6 +116,10 @@ public class TaskController {
         if (item.isChecked() != input.checked()) {
             item.setChecked(input.checked());
             historyService.recordCheckbox(task, item.getText(), input.checked(), currentUserEmail());
+            // This tick completed the checklist: the column's rules for that run, and may move the task.
+            if (task.getChecklist().stream().allMatch(ChecklistItem::isChecked)) {
+                ruleEngine.checklistDone(task, currentUserEmail());
+            }
         }
         Task saved = repository.save(task);
         boardService.changed(saved.getBoardColumn().getBoard());

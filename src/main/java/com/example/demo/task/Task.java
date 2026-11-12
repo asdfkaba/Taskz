@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -56,6 +57,19 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name="board_column_id")
     private BoardColumn boardColumn;
+
+    // Since when the task is in its column; restarts when it comes back from the archive.
+    // Rules with the trigger IN_COLUMN_FOR count their days from here (RuleEngine.runTimed).
+    @Column(name = "column_entered", nullable = false)
+    private Instant columnEntered;
+
+    // Entering another column restarts columnEntered.
+    public void setBoardColumn(BoardColumn column) {
+        if (boardColumn == null || !Objects.equals(boardColumn.getId(), column.getId())) {
+            columnEntered = Instant.now();
+        }
+        this.boardColumn = column;
+    }
 
     // Order of the task within its column, starting at 0.
     @Column(nullable = false)

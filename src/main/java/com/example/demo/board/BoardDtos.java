@@ -88,18 +88,20 @@ public final class BoardDtos {
     public record MoveTaskRequest(Integer columnId, Integer position) {
     }
 
-    // An automation of a board; items for APPEND_CHECKLIST and REPLACE_CHECKLIST, text and days for ADD_NOTE_REMINDER.
-    public record RuleDto(Integer id, Integer columnId, String action, List<String> items, String text, Integer days,
-                          boolean removeOnLeave, List<Integer> userIds, boolean enabled) {
+    // An automation of a board (see BoardRule.Trigger and RulePayload for which settings go with what).
+    public record RuleDto(Integer id, Integer columnId, String trigger, String action, List<String> items, String text, Integer days,
+                          boolean removeOnLeave, List<Integer> userIds, Integer targetColumnId, boolean enabled) {
         static RuleDto from(BoardRule rule) {
             RulePayload payload = RulePayload.parse(rule.getPayload());
-            return new RuleDto(rule.getId(), rule.getColumn().getId(), rule.getAction(), payload.items(), payload.text(), payload.days(), payload.removesOnLeave(),
-                    payload.userIds(), rule.isEnabled());
+            return new RuleDto(rule.getId(), rule.getColumn().getId(), rule.getTrigger(), rule.getAction(), payload.items(), payload.text(), payload.days(), payload.removesOnLeave(),
+                    payload.userIds(), payload.targetColumnId(), rule.isEnabled());
         }
     }
 
-    // columnId and action only count when adding a rule; absent enabled leaves it as it is (new: on).
+    // columnId, trigger and action only count when adding a rule; absent enabled leaves it as it is
+    // (new: on), absent trigger means ENTERED_COLUMN.
     public record RuleRequest(Integer columnId, String action, List<String> items, String text, Integer days,
-                              Boolean removeOnLeave, List<Integer> userIds, Boolean enabled) {
+                              Boolean removeOnLeave, List<Integer> userIds, Boolean enabled, String trigger,
+                              Integer targetColumnId) {
     }
 }

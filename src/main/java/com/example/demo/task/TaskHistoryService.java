@@ -103,10 +103,16 @@ public class TaskHistoryService {
         return changes;
     }
 
+    /** Without email: moved by a board rule, marked like {@link #recordAutomation}. */
     @Transactional
     public void recordMove(Task task, BoardColumn from, BoardColumn to, String email) {
         if (!Objects.equals(from.getId(), to.getId())) {
-            save(task, Type.MOVED, Map.of("column", List.of(from.getName(), to.getName())), email);
+            Map<String, Object> changes = new LinkedHashMap<>();
+            changes.put("column", List.of(from.getName(), to.getName()));
+            if (email == null) {
+                changes.put("automation", true);
+            }
+            save(task, Type.MOVED, changes, email);
         }
     }
 
@@ -122,10 +128,10 @@ public class TaskHistoryService {
         save(task, added ? Type.ATTACHED : Type.DETACHED, Map.of("file", fileName), email);
     }
 
-    /** The task went into the archive (archived) or came back from it. */
+    /** The task went into the archive (archived) or came back from it. Without email: by a board rule, marked like {@link #recordAutomation}. */
     @Transactional
     public void recordArchived(Task task, boolean archived, String email) {
-        save(task, archived ? Type.ARCHIVED : Type.RESTORED, Map.of(), email);
+        save(task, archived ? Type.ARCHIVED : Type.RESTORED, email == null ? Map.of("automation", true) : Map.of(), email);
     }
 
     @Transactional

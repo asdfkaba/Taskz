@@ -11,6 +11,8 @@ public interface BoardRuleRepository extends JpaRepository<BoardRule, Integer> {
 
     List<BoardRule> findByColumnAndTriggerAndEnabledTrueOrderById(BoardColumn column, String trigger);
 
+    List<BoardRule> findByTriggerAndEnabledTrueOrderById(String trigger);
+
     void deleteByColumn(BoardColumn column);
 
     void deleteByColumnBoard(Board board);

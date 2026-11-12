@@ -158,7 +158,7 @@ export const useBoardStore = defineStore('board', {
       await expectOk(await authFetch(`/api/boards/${boardId}/share`, { method: 'DELETE' }), 'Stopping sharing')
     },
 
-    // ---- Rules (automations, owner only): [{ id, columnId, action, items, days, enabled }] ----
+    // ---- Rules (automations, owner only): [{ id, columnId, trigger, action, items, days, targetColumnId, enabled }] ----
 
     async fetchRules(boardId) {
       return (await expectOk(await authFetch(`/api/boards/${boardId}/rules`), 'Loading automations')).json()
@@ -168,7 +168,7 @@ export const useBoardStore = defineStore('board', {
       return (await expectOk(await sendJson(`/api/boards/${boardId}/rules`, 'POST', rule), 'Adding automation')).json()
     },
 
-    // Sends items/days and enabled; column and action can't change.
+    // Sends the settings and enabled; column, trigger and action can't change.
     async updateRule(rule) {
       return (await expectOk(await sendJson(`/api/rules/${rule.id}`, 'PUT', rule), 'Updating automation')).json()
     },
@@ -300,7 +300,14 @@ export const useBoardStore = defineStore('board', {
       )
       const updated = await response.json()
       const found = this.findTask(taskId)
-      if (found) this.tasksByColumn[found.columnId].splice(found.index, 1, updated)
+      if (found && updated.columnId !== found.columnId) {
+        // Completing the checklist made a rule move the task to the end of another column.
+        this.tasksByColumn[found.columnId].splice(found.index, 1)
+        this.tasksByColumn[updated.columnId]?.push(updated)
+        this.renumberTasks()
+      } else if (found) {
+        this.tasksByColumn[found.columnId].splice(found.index, 1, updated)
+      }
       return updated
     },
 
