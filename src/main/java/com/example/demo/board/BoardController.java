@@ -10,6 +10,7 @@ import com.example.demo.board.BoardDtos.NewColumnRequest;
 import com.example.demo.board.BoardDtos.RenameBoardRequest;
 import com.example.demo.board.BoardDtos.TaskTemplate;
 import tools.jackson.databind.JsonNode;
+import com.example.demo.task.TaskDto;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
@@ -66,6 +67,12 @@ public class BoardController {
     @GetMapping("/boards/{id}")
     public BoardDetail getBoard(@PathVariable("id") int id) {
         return boardService.getBoard(id, currentUserEmail());
+    }
+
+    // Archived tasks of the board, last archived first.
+    @GetMapping("/boards/{id}/archive")
+    public List<TaskDto> getArchive(@PathVariable("id") int id) {
+        return boardService.archivedOf(id, currentUserEmail());
     }
 
     // Live view for the owner and members: "changed" after every change, "presence" with who else

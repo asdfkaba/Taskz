@@ -15,6 +15,7 @@ import { useBoardFilter } from '@/composables/useBoardFilter'
 import TaskDialog from '@/components/TaskDialog.vue'
 import ColumnDialog from '@/components/ColumnDialog.vue'
 import ColumnDeleteDialog from '@/components/ColumnDeleteDialog.vue'
+import BoardArchive from '@/components/BoardArchive.vue'
 import SidebarLayout from '@/components/SidebarLayout.vue'
 import BoardSettings from '@/components/BoardSettings.vue'
 import UserIcon from '@/components/UserIcon.vue'
@@ -50,7 +51,7 @@ function handleLoadError(summary, err) {
 // Opens the board from the URL slug. Without one, it opens the last used board, or else the first one.
 // The board list maps the slug to the id the API works with.
 async function openBoardFromRoute() {
-  if (route.name !== 'board' && route.name !== 'board-settings') return
+  if (!['board', 'board-settings', 'board-archive'].includes(route.name)) return
   try {
     if (!store.boardsLoaded) await store.fetchBoards()
   } catch (err) {
@@ -139,6 +140,10 @@ const tableTasks = computed(() =>
 
 // /boards/<slug>/settings shows the board's settings instead of its columns.
 const settingsOpen = computed(() => route.name === 'board-settings')
+// /boards/<slug>/archive shows the board's archived tasks.
+const archiveOpen = computed(() => route.name === 'board-archive')
+// Either of them: a page of the board without its tasks, with a way back.
+const subPage = computed(() => settingsOpen.value || archiveOpen.value)
 
 // ---- Small screens: one column at a time, with tabs ----
 // Matches Tailwind's md breakpoint (48rem).
@@ -309,6 +314,7 @@ usePageTitle(() => {
   if (store.boardsLoaded && store.boards.length === 0) return ['Boards']
   const boardName = store.board?.name
   if (settingsOpen.value) return ['Settings', boardName]
+  if (archiveOpen.value) return ['Archive', boardName]
   if (!taskDialogVisible.value) return [boardName]
   if (!editingTask.value) return ['New task', boardName]
   // The store replaces a task object when it is saved, so read the current title.
@@ -348,6 +354,7 @@ const taskMenuItems = computed(() => {
     { label: 'Edit', icon: 'pi pi-pencil', command: () => openTask(task, 'edit') },
     ...(targets.length ? [{ label: 'Move to', items: targets }] : []),
     { separator: true },
+    { label: 'Archive', icon: 'pi pi-inbox', command: () => archiveTask(task) },
     { label: 'Delete', icon: 'pi pi-trash', class: 'menu-danger', command: () => askDeleteTask(task) },
   ]
 })
@@ -364,6 +371,16 @@ async function moveTaskTo(task, columnId) {
   } catch (err) {
     showError('Could not move task', err)
     await load()
+  }
+}
+
+// No question first: the archive gives the task back.
+async function archiveTask(task) {
+  try {
+    await store.archiveTask(task.id)
+    toast.add({ severity: 'success', summary: 'Task archived', life: 2500 })
+  } catch (err) {
+    showError('Could not archive task', err)
   }
 }
 
@@ -498,6 +515,7 @@ function askDeleteColumn(column) {
               {{ store.board?.name ?? 'Boards' }}
             </h1>
             <p v-if="settingsOpen" class="text-sm text-slate-500 dark:text-slate-400">Board settings</p>
+            <p v-else-if="archiveOpen" class="text-sm text-slate-500 dark:text-slate-400">Archive</p>
             <p v-else-if="store.loaded" class="hidden text-sm text-slate-500 dark:text-slate-400 md:block">
               <template v-if="filterActive">{{ matchingCount }} of {{ store.taskCount }} tasks match</template>
               <template v-else>
@@ -509,7 +527,7 @@ function askDeleteColumn(column) {
           <!-- Who has the board open right now: you first, then the others. On phones only their
                number, as the icons would push the title and the toolbar aside. -->
           <div
-            v-if="others.length && !settingsOpen"
+            v-if="others.length && !subPage"
             class="ml-2 flex shrink-0 items-center self-center"
             data-testid="presence"
             role="img"
@@ -543,7 +561,7 @@ function askDeleteColumn(column) {
             </span>
           </div>
         </div>
-        <div v-if="store.board && settingsOpen" class="flex shrink-0 gap-2">
+        <div v-if="store.board && subPage" class="flex shrink-0 gap-2">
           <Button
             :label="isMobile ? undefined : 'Back to board'"
             aria-label="Back to board"
@@ -565,6 +583,15 @@ function askDeleteColumn(column) {
             @click="toggleFilterRow"
           />
           <ViewSwitch :mode="mode" @update:mode="setMode" />
+          <!-- Always an icon: the header is full as it is. -->
+          <Button
+            icon="pi pi-inbox"
+            aria-label="Archive"
+            title="Archive"
+            severity="secondary"
+            outlined
+            @click="router.push({ name: 'board-archive', params: { slug: route.params.slug } })"
+          />
           <Button
             :label="isMobile ? undefined : 'Settings'"
             aria-label="Board settings"
@@ -593,7 +620,7 @@ function askDeleteColumn(column) {
       </div>
 
       <BoardFilter
-        v-if="store.loaded && !settingsOpen && (!isMobile || filterOpen || filterActive)"
+        v-if="store.loaded && !subPage && (!isMobile || filterOpen || filterActive)"
         ref="filterBar"
         v-model:text="filterText"
         v-model:labelIds="filterLabelIds"
@@ -618,6 +645,8 @@ function askDeleteColumn(column) {
       </div>
 
       <BoardSettings v-else-if="store.loaded && settingsOpen" @delete="deleteBoard" />
+
+      <BoardArchive v-else-if="store.loaded && archiveOpen" />
 
       <TaskTable
         v-else-if="store.loaded && view === 'table'"

@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { formatTitle } from '@/utils/title'
 
-// Board and board settings share one view, so the sidebar and the loaded board stay when switching.
+// Board, board settings and board archive share one view, so the sidebar and the loaded board stay when switching.
 const BoardView = () => import('../views/BoardView.vue')
 
 const router = createRouter({
@@ -25,6 +25,13 @@ const router = createRouter({
     {
       path: '/boards/:slug/settings',
       name: 'board-settings',
+      component: BoardView,
+      meta: { requiresAuth: true, fullWidth: true },
+    },
+    {
+      // The board's archived tasks (BoardArchive).
+      path: '/boards/:slug/archive',
+      name: 'board-archive',
       component: BoardView,
       meta: { requiresAuth: true, fullWidth: true },
     },

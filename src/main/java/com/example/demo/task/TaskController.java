@@ -85,6 +85,7 @@ public class TaskController {
     @PutMapping("/{id}")
     public TaskDto updateTask(@PathVariable("id") int id, @RequestBody TaskRequest input) {
         Task task = findTask(id);
+        BoardService.requireNotArchived(task);
         // Someone else saved the task since this edit started: refuse rather than overwrite.
         if (input.revision() != null && !input.revision().equals(TaskDto.revisionOf(task))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Someone else changed this task in the meantime");
@@ -107,6 +108,7 @@ public class TaskController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "checked is required");
         }
         Task task = findTask(id);
+        BoardService.requireNotArchived(task);
         ChecklistItem item = task.getChecklist().stream()
                 .filter(i -> i.getId() == itemId)
                 .findFirst()
@@ -131,6 +133,19 @@ public class TaskController {
         return TaskDto.from(boardService.moveTask(id, input.columnId(), input.position(), currentUserEmail()));
     }
 
+    /** Takes the task off the board into the board's archive (GET /boards/{id}/archive). */
+    @PatchMapping("/{id}/archive")
+    public TaskDto archiveTask(@PathVariable("id") int id) {
+        return TaskDto.from(boardService.archiveTask(id, currentUserEmail()));
+    }
+
+    /** Puts an archived task back at the end of its column. */
+    @PatchMapping("/{id}/restore")
+    public TaskDto restoreTask(@PathVariable("id") int id) {
+        return TaskDto.from(boardService.restoreTask(id, currentUserEmail()));
+    }
+
+    // Also how an archived task is deleted for good.
     @DeleteMapping("/{id}/delete")
     public void deleteTask(@PathVariable("id") int id) {
         Task task = findTask(id);

@@ -563,4 +563,61 @@ class BoardServiceTests {
         em.clear();
         assertThat(taskRepository.findById(task.getId()).orElseThrow().getDescription()).isEqualTo(description);
     }
+
+    @Test
+    void archivedTaskLeavesTheBoardAndComesBackLast() {
+        Task a = addTask("A", todo);
+        addTask("B", todo);
+        addTask("C", todo);
+
+        boardService.archiveTask(a.getId(), ALICE);
+
+        assertThat(titlesIn(todo)).containsExactly("B", "C");
+        assertThat(boardService.getBoard(board.getId(), ALICE).tasks()).extracting("title").containsExactly("B", "C");
+        assertThat(boardService.archivedOf(board.getId(), ALICE)).extracting("title").containsExactly("A");
+        assertThat(boardService.archivedOf(board.getId(), ALICE).get(0).archived()).isNotNull();
+
+        boardService.restoreTask(a.getId(), ALICE);
+
+        assertThat(titlesIn(todo)).containsExactly("B", "C", "A");
+        assertThat(boardService.archivedOf(board.getId(), ALICE)).isEmpty();
+    }
+
+    @Test
+    void archivedTaskCannotBeMoved() {
+        Task a = addTask("A", todo);
+        boardService.archiveTask(a.getId(), ALICE);
+
+        assertThatThrownBy(() -> boardService.moveTask(a.getId(), doing.getId(), 0, ALICE))
+                .satisfies(e -> assertStatus(e, HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void archiveIsOnlyForPeopleOfTheBoard() {
+        userRepository.save(new User("Bob", BOB));
+        Task a = addTask("A", todo);
+
+        assertThatThrownBy(() -> boardService.archiveTask(a.getId(), BOB))
+                .satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> boardService.archivedOf(board.getId(), BOB))
+                .satisfies(e -> assertStatus(e, HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    void deletingAColumnKeepsItsArchivedTasksUnlessTasksAreDeleted() {
+        Task a = addTask("A", doing);
+        Task b = addTask("B", done);
+        boardService.archiveTask(a.getId(), ALICE);
+        boardService.archiveTask(b.getId(), ALICE);
+
+        // No visible tasks, so no choice is needed: the archived one moves to the first column left.
+        boardService.deleteColumn(doing.getId(), ALICE, null, false);
+        boardService.restoreTask(a.getId(), ALICE);
+        assertThat(titlesIn(todo)).containsExactly("A");
+
+        boardService.deleteColumn(done.getId(), ALICE, null, true);
+        em.flush();
+        em.clear();
+        assertThat(taskRepository.findById(b.getId())).isEmpty();
+    }
 }

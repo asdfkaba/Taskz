@@ -108,7 +108,7 @@ function reset() {
 }
 reset()
 
-const inColumn = (id) => tasks.filter((t) => t.columnId === id).sort((a, b) => a.position - b.position)
+const inColumn = (id) => tasks.filter((t) => t.columnId === id && !t.archived).sort((a, b) => a.position - b.position)
 const renumber = (list) => list.forEach((t, i) => (t.position = i))
 const sortedColumns = () => [...columns].sort((a, b) => a.position - b.position)
 
@@ -178,7 +178,7 @@ function api(method, url, body) {
   // the last column, soonest first (tasks before notes on the same time).
   if (method === 'GET' && p === '/due') {
     const cols = sortedColumns()
-    const open = (t) => cols.length === 1 || t.columnId !== cols.at(-1).id
+    const open = (t) => !t.archived && (cols.length === 1 || t.columnId !== cols.at(-1).id)
     const time = (d) => (Array.isArray(d) ? new Date(d[0], d[1] - 1, d[2], d[3] ?? 0, d[4] ?? 0) : new Date(d)).getTime()
     const entry = (t, due_date, note) => {
       const c = columns.find((x) => x.id === t.columnId)
@@ -360,6 +360,24 @@ function api(method, url, body) {
     record(t, 'created', { title: t.title, column: colName(t.columnId) })
     runRules(t)
     return [201, t]
+  }
+  // Like BoardService.archiveTask, restoreTask and archivedOf.
+  if (method === 'GET' && p === '/boards/1/archive') {
+    return [200, tasks.filter((t) => t.archived).sort((a, b) => b.archived.localeCompare(a.archived))]
+  }
+  if ((m = p.match(/^\/tasks\/(\d+)\/(archive|restore)$/)) && method === 'PATCH') {
+    const t = tasks.find((x) => x.id === +m[1])
+    if (!t) return [404, {}]
+    if (m[2] === 'archive' && !t.archived) {
+      t.archived = now()
+      renumber(inColumn(t.columnId))
+      record(t, 'archived', {})
+    } else if (m[2] === 'restore' && t.archived) {
+      t.position = inColumn(t.columnId).length
+      t.archived = null
+      record(t, 'restored', {})
+    }
+    return [200, t]
   }
   if ((m = p.match(/^\/tasks\/(\d+)\/move$/)) && method === 'PATCH') {
     const t = tasks.find((x) => x.id === +m[1])

@@ -59,6 +59,8 @@ function lines(event) {
   if (event.type === 'created') return [c.column ? `Created in ${c.column}` : 'Created']
   if (event.type === 'moved') return [`Moved from ${c.column[0]} to ${c.column[1]}`]
   if (event.type === 'deleted') return ['Deleted']
+  if (event.type === 'archived') return ['Archived']
+  if (event.type === 'restored') return ['Restored from the archive']
   if (event.type === 'checked' || event.type === 'unchecked') return [checkboxLine(event.type === 'checked', c)]
   if (event.type === 'attached') return [`Attached ${quoted(c.file)}`]
   if (event.type === 'detached') return [`Removed attachment ${quoted(c.file)}`]
@@ -104,6 +106,8 @@ const ICONS = {
   updated: 'pi-pencil',
   moved: 'pi-arrow-right',
   deleted: 'pi-trash',
+  archived: 'pi-inbox',
+  restored: 'pi-undo',
   checked: 'pi-check-square',
   unchecked: 'pi-stop',
   attached: 'pi-paperclip',
