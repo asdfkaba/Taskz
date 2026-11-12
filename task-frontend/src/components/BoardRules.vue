@@ -11,6 +11,7 @@ import { useBoardStore } from '@/stores/board'
 
 // Automations of the open board: when a task enters a column, change its checklist, add a note with a
 // reminder (written as whoever moved the task, so the reminder is theirs) or notify people of the board.
+// A task can also be archived once it was in the column for some days (done hourly by the backend).
 // Part of the board settings, owner only. Column and action of a rule are fixed; its settings can be edited.
 const props = defineProps({ boardId: { type: Number, required: true } })
 
@@ -24,10 +25,11 @@ const ACTIONS = [
   { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist' },
   { value: 'ADD_NOTE_REMINDER', label: 'Add a note with a reminder' },
   { value: 'NOTIFY', label: 'Notify people' },
+  { value: 'ARCHIVE_AFTER', label: 'Archive it after some days' },
 ]
-// Which settings an action has: 'items', 'note' or 'notify'.
-const kindOf = (ruleAction) =>
-  ruleAction === 'ADD_NOTE_REMINDER' ? 'note' : ruleAction === 'NOTIFY' ? 'notify' : 'items'
+// Which settings an action has: 'items', 'note', 'notify' or 'archive'.
+const KINDS = { ADD_NOTE_REMINDER: 'note', NOTIFY: 'notify', ARCHIVE_AFTER: 'archive' }
+const kindOf = (ruleAction) => KINDS[ruleAction] ?? 'items'
 
 const store = useBoardStore()
 const toast = useToast()
@@ -41,7 +43,7 @@ const busy = ref(false)
 const columnId = ref(store.columns[0]?.id ?? null)
 const action = ref('APPEND_CHECKLIST')
 // The fields of a rule's settings, for the new rule and the one being edited.
-const emptyFields = () => ({ itemsText: '', noteText: '', days: '14', removeOnLeave: false, notifyText: '', userIds: [] })
+const emptyFields = () => ({ itemsText: '', noteText: '', days: '14', removeOnLeave: false, notifyText: '', userIds: [], archiveDays: '30' })
 const fields = ref(emptyFields())
 
 const toItems = (text) => text.split('\n').map((line) => line.trim()).filter(Boolean)
@@ -56,6 +58,10 @@ function settings(ruleAction, f) {
   if (kind === 'notify') {
     const text = f.notifyText.trim()
     return text && f.userIds.length ? { text, userIds: f.userIds } : null
+  }
+  if (kind === 'archive') {
+    const days = toDays(f.archiveDays)
+    return days != null && days >= 1 && days <= MAX_DAYS ? { days } : null
   }
   const n = toDays(f.days)
   return f.noteText.trim() && n != null && n <= MAX_DAYS ? { text: f.noteText.trim(), days: n, removeOnLeave: f.removeOnLeave } : null
@@ -87,6 +93,7 @@ function names(userIds) {
 function describe(rule) {
   if (rule.action === 'APPEND_CHECKLIST') return `Add checklist items: ${rule.items.join(', ')}`
   if (rule.action === 'REPLACE_CHECKLIST') return `Replace the checklist with: ${rule.items.join(', ')}`
+  if (rule.action === 'ARCHIVE_AFTER') return `Archive it after ${rule.days} ${rule.days === 1 ? 'day' : 'days'} in the column`
   if (rule.action === 'NOTIFY') return `Notify ${names(rule.userIds)}: “${rule.text}”`
   const removed = rule.removeOnLeave ? ', removed when the task leaves' : ''
   return `Add the note “${rule.text}” with a reminder in ${rule.days} ${rule.days === 1 ? 'day' : 'days'}${removed}`
@@ -136,6 +143,7 @@ function startEdit(rule) {
     itemsText: (rule.items ?? []).join('\n'),
     noteText: rule.text ?? '',
     days: String(rule.days ?? ''),
+    archiveDays: String(rule.days ?? ''),
     removeOnLeave: rule.removeOnLeave,
     notifyText: rule.text ?? '',
     userIds: [...(rule.userIds ?? [])],
@@ -173,6 +181,8 @@ async function remove(rule) {
       Replacing makes the list the task's checklist; items in both stay ticked. A note with a reminder is
       written as whoever moved the task, and shows in their “What's due”; it can be removed again when the
       task leaves the column. Notifying skips whoever moved the task; it shows under their bell for the others.
+      Archiving happens once the task has been in the column for the given days, checked every hour; a task
+      that leaves the column earlier stays on the board.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>
@@ -201,6 +211,11 @@ async function remove(rule) {
                 aria-label="Edit whom to notify"
                 size="small"
               />
+            </div>
+            <div v-else-if="kindOf(rule.action) === 'archive'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <span>Archive it after</span>
+              <InputText v-model="editing.archiveDays" inputmode="numeric" class="w-20" size="small" aria-label="Edit days in the column" />
+              <span>days in the column</span>
             </div>
             <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <InputText v-model="editing.noteText" :maxlength="MAX_NOTE_LENGTH" class="min-w-0 flex-1" size="small" aria-label="Edit note" />
@@ -284,6 +299,11 @@ async function remove(rule) {
           aria-label="Whom to notify"
           size="small"
         />
+      </div>
+      <div v-else-if="kindOf(action) === 'archive'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <span>after</span>
+        <InputText v-model="fields.archiveDays" inputmode="numeric" class="w-20" size="small" aria-label="Days in the column" />
+        <span>days in the column</span>
       </div>
       <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
         <InputText

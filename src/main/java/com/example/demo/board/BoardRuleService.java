@@ -99,6 +99,12 @@ public class BoardRuleService {
                 yield new RulePayload(null, TaskNoteService.validText(request.text()), request.days(),
                         Boolean.TRUE.equals(request.removeOnLeave()) ? true : null, null);
             }
+            case ARCHIVE_AFTER -> {
+                if (request.days() == null || request.days() < 1 || request.days() > MAX_DAYS) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 1 and " + MAX_DAYS);
+                }
+                yield new RulePayload(null, null, request.days(), null, null);
+            }
             case NOTIFY -> {
                 String text = request.text() == null ? "" : request.text().strip();
                 if (text.isEmpty() || text.length() > MAX_NOTIFICATION_LENGTH) {

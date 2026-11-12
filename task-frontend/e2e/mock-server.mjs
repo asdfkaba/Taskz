@@ -139,6 +139,8 @@ function runRules(t) {
       t.checklist = r.items.map((text) => t.checklist.find((i) => i.text === text) ?? newItem(text))
     } else if (r.action === 'APPEND_CHECKLIST') {
       t.checklist = [...t.checklist, ...r.items.filter((text) => !itemTexts(t).includes(text)).map((text) => newItem(text))]
+    } else if (r.action === 'ARCHIVE_AFTER') {
+      // Done later by the backend's hourly job, which the mock doesn't have.
     } else if (r.action === 'NOTIFY') {
       // Alice moved it, so she isn't told; the others' bells aren't in the mock.
       for (const userId of r.userIds.filter((id) => id !== 1)) sentToOthers.push({ userId, text: r.text, taskId: t.id })

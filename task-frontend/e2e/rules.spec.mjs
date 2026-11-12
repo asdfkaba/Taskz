@@ -119,5 +119,26 @@ test('Board automations', async ({ browser }) => {
     ensure((await latest.getByTestId('event-user').innerText()).includes('Automation'), await latest.innerText())
   })
 
+  await test.step('an archive rule takes days and can be edited', async () => {
+    await page.goto(`${BASE}/boards/my-board/settings`)
+    await rules().getByTestId('rule').first().waitFor()
+    const before = (await state()).rules.length
+    await choose('Column', 'Done')
+    await choose('Action', 'Archive it after some days')
+    await rules().getByRole('textbox', { name: 'Days in the column' }).fill('0')
+    ensure(await rules().getByRole('button', { name: 'Add automation' }).isDisabled(), 'added with 0 days')
+    await rules().getByRole('textbox', { name: 'Days in the column' }).fill('30')
+    await rules().getByRole('button', { name: 'Add automation' }).click()
+    await rules().getByText('Archive it after 30 days in the column').waitFor()
+    const added = (await state()).rules.at(-1)
+    ensure((await state()).rules.length === before + 1 && added.action === 'ARCHIVE_AFTER' && added.days === 30 && added.columnId === 12, JSON.stringify(added))
+
+    await rules().getByRole('button', { name: 'Edit automation: Archive it after 30 days in the column' }).click()
+    await rules().getByRole('textbox', { name: 'Edit days in the column' }).fill('1')
+    await rules().getByRole('button', { name: 'Save' }).click()
+    await rules().getByText('Archive it after 1 day in the column').waitFor()
+    await page.screenshot({ path: `${test.info().outputDir}/ru-archive.png` })
+  })
+
   ensure(errors.length === 0, errors.join('\n'))
 })

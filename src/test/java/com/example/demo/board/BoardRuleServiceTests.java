@@ -23,6 +23,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -287,5 +288,47 @@ class BoardRuleServiceTests {
                 .containsExactly(doing.getId());
         boardService.deleteBoard(board.getId(), ALICE);
         assertThat(ruleRepository.count()).isZero();
+    }
+
+    @Test
+    void anArchiveRuleArchivesTasksOnceTheirDaysInTheColumnAreOver() {
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ARCHIVE_AFTER", null, null, 30, null, null, null));
+        Task old = addTask("old");
+        Task fresh = addTask("fresh");
+        Task elsewhere = addTask("elsewhere");
+        boardService.moveTask(old.getId(), doing.getId(), 0, ALICE);
+        boardService.moveTask(fresh.getId(), doing.getId(), 1, ALICE);
+        old.setColumnEntered(Instant.now().minus(31, ChronoUnit.DAYS));
+        elsewhere.setColumnEntered(Instant.now().minus(31, ChronoUnit.DAYS));
+
+        ruleEngine.archiveDue();
+
+        assertThat(old.getArchivedAt()).isNotNull();
+        assertThat(fresh.getArchivedAt()).isNull();
+        assertThat(fresh.getPosition()).isZero();
+        assertThat(elsewhere.getArchivedAt()).isNull();
+        var latest = historyService.historyOf(old).get(0);
+        assertThat(latest.type()).isEqualTo("archived");
+        assertThat(latest.user()).isNull();
+        assertThat(latest.changes()).containsEntry("automation", true);
+
+        // Restored, its days start again: the next run leaves it alone.
+        boardService.restoreTask(old.getId(), ALICE);
+        ruleEngine.archiveDue();
+        assertThat(old.getArchivedAt()).isNull();
+    }
+
+    @Test
+    void anArchiveRuleNeedsAtLeastOneDayAndDoesNothingWhenOff() {
+        assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(doing.getId(), "ARCHIVE_AFTER", null, null, 0, null, null, null)))
+                .isInstanceOf(ResponseStatusException.class);
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(todo.getId(), "ARCHIVE_AFTER", null, null, 1, null, null, false));
+        Task task = addTask(null);
+        task.setColumnEntered(Instant.now().minus(5, ChronoUnit.DAYS));
+
+        ruleEngine.archiveDue();
+
+        assertThat(task.getArchivedAt()).isNull();
     }
 }

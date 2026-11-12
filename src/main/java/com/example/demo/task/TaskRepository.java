@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,10 @@ public interface TaskRepository extends JpaRepository<Task, Integer> {
     int countByBoardColumn(BoardColumn column);
 
     List<Task> findByBoardColumnAndArchivedAtIsNotNull(BoardColumn column);
+
+    // Tasks that entered the column at or before the given time.
+    @Query("select t from Task t where t.boardColumn = :column and t.archivedAt is null and t.columnEntered <= :before")
+    List<Task> findInColumnSince(BoardColumn column, Instant before);
 
     // With the archived ones, for deleting the board.
     List<Task> findByBoardColumnBoard(Board board);

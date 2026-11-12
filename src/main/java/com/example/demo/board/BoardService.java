@@ -319,6 +319,8 @@ public class BoardService {
         if (task.getArchivedAt() != null) {
             task.setPosition(taskRepository.countByBoardColumn(task.getBoardColumn()));
             task.setArchivedAt(null);
+            // Or an ARCHIVE_AFTER rule of the column would take it right back.
+            task.setColumnEntered(Instant.now());
             historyService.recordArchived(task, false, email);
             changed(task.getBoardColumn().getBoard());
         }

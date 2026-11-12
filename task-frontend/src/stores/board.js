@@ -159,6 +159,7 @@ export const useBoardStore = defineStore('board', {
     },
 
     // ---- Rules (automations, owner only): [{ id, columnId, action, items, days, enabled }] ----
+    // ARCHIVE_AFTER has only days: the task is archived after that long in the column.
 
     async fetchRules(boardId) {
       return (await expectOk(await authFetch(`/api/boards/${boardId}/rules`), 'Loading automations')).json()

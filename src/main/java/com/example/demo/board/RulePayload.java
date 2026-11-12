@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * Settings of a {@link BoardRule}, stored as JSON: items for APPEND_CHECKLIST and REPLACE_CHECKLIST,
  * text and days for ADD_NOTE_REMINDER; removeOnLeave (true or absent) deletes that note again when the
- * task leaves the column. NOTIFY: text and userIds (owner or members of the board).
+ * task leaves the column. NOTIFY: text and userIds (owner or members of the board). ARCHIVE_AFTER: days.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RulePayload(List<String> items, String text, Integer days, Boolean removeOnLeave, List<Integer> userIds) {

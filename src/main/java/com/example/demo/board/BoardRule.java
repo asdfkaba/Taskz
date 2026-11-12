@@ -7,7 +7,7 @@ import lombok.Setter;
 
 /**
  * An automation of a board: when a task enters {@link #column}, {@link #action} runs with the
- * settings in {@link #payload}. Applied by RuleEngine, managed by the owner through BoardRuleService.
+ * settings in {@link #payload}; ARCHIVE_AFTER runs later, once the task was in the column for its days. Applied by RuleEngine, managed by the owner through BoardRuleService.
  */
 @Entity
 @Table(name = "board_rule", indexes = @Index(name = "board_rule_column_id", columnList = "column_id"))
@@ -18,7 +18,7 @@ public class BoardRule {
 
     public enum Trigger { ENTERED_COLUMN }
 
-    public enum Action { APPEND_CHECKLIST, REPLACE_CHECKLIST, ADD_NOTE_REMINDER, NOTIFY }
+    public enum Action { APPEND_CHECKLIST, REPLACE_CHECKLIST, ADD_NOTE_REMINDER, NOTIFY, ARCHIVE_AFTER }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,7 +35,7 @@ public class BoardRule {
     @Column(nullable = false, length = 32)
     private String action;
 
-    // JSON: {"items":["Prepare"]} for APPEND_CHECKLIST and REPLACE_CHECKLIST, {"text":"Follow up","days":14} for ADD_NOTE_REMINDER.
+    // JSON: {"items":["Prepare"]} for APPEND_CHECKLIST and REPLACE_CHECKLIST, {"text":"Follow up","days":14} for ADD_NOTE_REMINDER, {"days":30} for ARCHIVE_AFTER.
     @Column(nullable = false, columnDefinition = "text")
     private String payload;
 

@@ -1,6 +1,7 @@
 package com.example.demo.task;
 
 import com.example.demo.board.Board;
+import com.example.demo.board.BoardChanged;
 import com.example.demo.board.BoardColumn;
 import com.example.demo.board.BoardMemberRepository;
 import com.example.demo.board.BoardRule;
@@ -9,12 +10,15 @@ import com.example.demo.board.RulePayload;
 import com.example.demo.notification.NotificationService;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -22,7 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Runs the board rules of a column when a task enters it (moved there or created in it).
+ * Runs the board rules of a column when a task enters it (moved there or created in it), and
+ * archives tasks whose time in a column is over (archiveDue).
  * Changes made here don't trigger rules again, so rules can't loop.
  */
 @Service
@@ -38,11 +43,12 @@ public class RuleEngine {
     private final UserRepository userRepository;
     private final BoardMemberRepository memberRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher events;
 
     public RuleEngine(BoardRuleRepository ruleRepository, TaskRepository taskRepository,
                       TaskHistoryService historyService, TaskNoteRepository noteRepository,
                       UserRepository userRepository, BoardMemberRepository memberRepository,
-                      NotificationService notificationService) {
+                      NotificationService notificationService, ApplicationEventPublisher events) {
         this.ruleRepository = ruleRepository;
         this.taskRepository = taskRepository;
         this.historyService = historyService;
@@ -50,6 +56,7 @@ public class RuleEngine {
         this.userRepository = userRepository;
         this.memberRepository = memberRepository;
         this.notificationService = notificationService;
+        this.events = events;
     }
 
     /**
@@ -84,6 +91,33 @@ public class RuleEngine {
         }
     }
 
+    /**
+     * Archives the tasks that have been in a column for as long as its ARCHIVE_AFTER rule says, like
+     * BoardService.archiveTask. Hourly, so a task goes up to an hour after its days are over.
+     */
+    @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1H")
+    @Transactional
+    public void archiveDue() {
+        Instant now = Instant.now();
+        for (BoardRule rule : ruleRepository.findByActionAndEnabledTrue(BoardRule.Action.ARCHIVE_AFTER.name())) {
+            BoardColumn column = rule.getColumn();
+            int days = RulePayload.parse(rule.getPayload()).days();
+            List<Task> due = taskRepository.findInColumnSince(column, now.minus(days, ChronoUnit.DAYS));
+            if (due.isEmpty()) {
+                continue;
+            }
+            for (Task task : due) {
+                task.setArchivedAt(now);
+                historyService.recordArchived(task, true, null);
+            }
+            List<Task> left = taskRepository.findByBoardColumnOrderByPosition(column);
+            for (int i = 0; i < left.size(); i++) {
+                left.get(i).setPosition(i);
+            }
+            events.publishEvent(new BoardChanged(column.getBoard().getId()));
+        }
+    }
+
     private void apply(BoardRule rule, Task task, String email) {
         RulePayload payload = RulePayload.parse(rule.getPayload());
         switch (BoardRule.Action.valueOf(rule.getAction())) {
@@ -94,6 +128,9 @@ public class RuleEngine {
                 note.setRemindAt(LocalDateTime.now(userZone()).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
                 note.setRuleId(rule.getId());
                 noteRepository.save(note);
+            }
+            case ARCHIVE_AFTER -> {
+                // Not on entering: archiveDue does it once the days have passed.
             }
             case NOTIFY -> notificationService.notify(recipients(task.getBoardColumn().getBoard(), payload.userIds(), email),
                     payload.text(), null, task);
