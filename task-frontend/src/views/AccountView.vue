@@ -13,7 +13,7 @@ const deleting = ref(false)
 
 <template>
   <SidebarLayout v-slot="{ openBoards }">
-  <div class="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-4 md:py-8" data-testid="account">
+  <div class="mx-auto flex w-full max-w-4xl min-w-0 flex-col gap-6 px-4 py-4 md:py-8" data-testid="account">
     <div class="flex items-center gap-1">
         <Button
           icon="pi pi-bars"
