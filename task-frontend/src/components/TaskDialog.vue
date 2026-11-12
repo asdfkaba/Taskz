@@ -213,8 +213,8 @@ function askOverwrite() {
   <Dialog
     v-model:visible="visible"
     modal
-    :style="{ width: '40rem' }"
-    :breakpoints="{ '640px': '95vw' }"
+    :style="{ width: '48rem' }"
+    :breakpoints="{ '820px': '95vw' }"
     :draggable="false"
   >
     <template #header>
