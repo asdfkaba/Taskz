@@ -79,7 +79,7 @@ test('Board settings', async ({ browser }) => {
   })
 
   await test.step('back on the board the label is there', async () => {
-    await page.getByRole('button', { name: 'Back to board' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
     ensure(new URL(page.url()).pathname === '/boards/job-hunt', page.url())
     await page.locator('[data-task-id="1"] h3').click()

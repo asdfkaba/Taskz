@@ -38,7 +38,7 @@ test('Readable share links', async ({ browser }) => {
     await page.getByRole('button', { name: 'Copy' }).click()
     expect((await page.evaluate(() => navigator.clipboard.readText())) === link, 'clipboard')
     await page.screenshot({ path: `${outDir}/sl-1-settings.png` })
-    await page.getByRole('button', { name: 'Back to board' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
   })
 
   await check('guest opens the link, address stays, loaded once', async () => {

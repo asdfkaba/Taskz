@@ -18,7 +18,7 @@ test('Task template', async ({ browser }) => {
     await templateSection().waitFor()
   }
   const backToBoard = async () => {
-    await page.getByRole('button', { name: 'Back to board' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
   }
 
