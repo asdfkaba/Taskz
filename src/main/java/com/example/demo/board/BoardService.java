@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -120,7 +121,7 @@ public class BoardService {
         memberRepository.deleteByBoard(board);
         notificationRepository.deleteByBoard(board);
         // Deleting the tasks also clears their rows in task_label.
-        taskRepository.deleteAll(taskRepository.findByBoardInOrder(board));
+        taskRepository.deleteAll(taskRepository.findByBoardColumnBoard(board));
         labelRepository.deleteAll(labelRepository.findByBoardOrderById(board));
         ruleRepository.deleteByColumnBoard(board);
         columnRepository.deleteAll(columnRepository.findByBoardOrderByPosition(board));
@@ -285,11 +286,50 @@ public class BoardService {
         return labelRepository.findByBoardOrderById(board).stream().map(LabelDto::from).toList();
     }
 
-    // Sorted by column position, then by position within the column.
+    // Sorted by column position, then by position within the column. Without archived tasks.
     List<TaskDto> tasksOf(Board board) {
         return taskRepository.findByBoardInOrder(board).stream()
                 .map(TaskDto::from)
                 .toList();
+    }
+
+    /** The board's archived tasks, last archived first. */
+    @Transactional(readOnly = true)
+    public List<TaskDto> archivedOf(int boardId, String email) {
+        return taskRepository.findArchived(findBoard(boardId, email)).stream().map(TaskDto::from).toList();
+    }
+
+    /** Takes the task off the board. It keeps its column; the tasks after it move up. No rules run. */
+    @Transactional
+    public Task archiveTask(int taskId, String email) {
+        Task task = findTask(taskId, email);
+        if (task.getArchivedAt() == null) {
+            task.setArchivedAt(Instant.now());
+            renumber(taskRepository.findByBoardColumnOrderByPosition(task.getBoardColumn()));
+            historyService.recordArchived(task, true, email);
+            changed(task.getBoardColumn().getBoard());
+        }
+        return task;
+    }
+
+    /** Puts an archived task back at the end of its column. It did not enter the column, so no rules run. */
+    @Transactional
+    public Task restoreTask(int taskId, String email) {
+        Task task = findTask(taskId, email);
+        if (task.getArchivedAt() != null) {
+            task.setPosition(taskRepository.countByBoardColumn(task.getBoardColumn()));
+            task.setArchivedAt(null);
+            historyService.recordArchived(task, false, email);
+            changed(task.getBoardColumn().getBoard());
+        }
+        return task;
+    }
+
+    /** Archived tasks can only be restored or deleted. */
+    public static void requireNotArchived(Task task) {
+        if (task.getArchivedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The task is archived");
+        }
     }
 
     @Transactional
@@ -328,6 +368,7 @@ public class BoardService {
     /**
      * Deletes a column. A column that still has tasks needs an explicit choice:
      * move them to another column of the same board ({@code moveTo}) or delete them ({@code deleteTasks}).
+     * Its archived tasks go the same way; without a choice they move to the first remaining column.
      */
     @Transactional
     public void deleteColumn(int columnId, String email, Integer moveTo, boolean deleteTasks) {
@@ -371,6 +412,14 @@ public class BoardService {
         }
 
         columns.removeIf(c -> c.getId().equals(column.getId()));
+        List<Task> archived = taskRepository.findByBoardColumnAndArchivedAtIsNotNull(column);
+        if (deleteTasks) {
+            archived.forEach(task -> historyService.recordDeleted(task, email));
+            taskRepository.deleteAll(archived);
+        } else {
+            BoardColumn home = target != null ? target : columns.get(0);
+            archived.forEach(task -> task.setBoardColumn(home));
+        }
         ruleRepository.deleteByColumn(column);
         columnRepository.delete(column);
         for (int i = 0; i < columns.size(); i++) {
@@ -386,6 +435,7 @@ public class BoardService {
     @Transactional
     public Task moveTask(int taskId, int columnId, int position, String email) {
         Task task = findTask(taskId, email);
+        requireNotArchived(task);
         BoardColumn source = task.getBoardColumn();
         BoardColumn target = findColumn(columnId, email);
         requireSameBoard(source, target);

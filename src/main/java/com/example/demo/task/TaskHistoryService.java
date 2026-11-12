@@ -122,6 +122,12 @@ public class TaskHistoryService {
         save(task, added ? Type.ATTACHED : Type.DETACHED, Map.of("file", fileName), email);
     }
 
+    /** The task went into the archive (archived) or came back from it. */
+    @Transactional
+    public void recordArchived(Task task, boolean archived, String email) {
+        save(task, archived ? Type.ARCHIVED : Type.RESTORED, Map.of(), email);
+    }
+
     @Transactional
     public void recordDeleted(Task task, String email) {
         save(task, Type.DELETED, Map.of("title", task.getTitle()), email);

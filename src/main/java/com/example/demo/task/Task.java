@@ -32,6 +32,11 @@ public class Task {
     Instant created;
     Instant edited;
 
+    // Since when the task is in its board's archive; null for a task on the board. An archived task
+    // keeps its column, so it can come back, but has no place in the column's order.
+    @Column(name = "archived_at")
+    Instant archivedAt;
+
     // Markdown, rendered by the frontend. "text" because varchar(255) is too short.
     @Column(columnDefinition = "text")
     String description;

@@ -29,7 +29,7 @@ const deletingBoard = ref(null)
 
 // The board view loads the list itself (and reports errors there); the other pages need it here.
 onMounted(async () => {
-  if (store.boardsLoaded || route.name === 'board' || route.name === 'board-settings') return
+  if (store.boardsLoaded || ['board', 'board-settings', 'board-archive'].includes(route.name)) return
   try {
     await store.fetchBoards()
   } catch (err) {

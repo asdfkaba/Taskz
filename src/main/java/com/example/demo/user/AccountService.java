@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.Map;
 
 /** The account settings: the user's logins (sessions), a download of their data, and deleting the account. */
@@ -66,8 +67,9 @@ public class AccountService {
     public record Membership(String boardName, String ownerName) {
     }
 
-    // notes and attachments (metadata only, not the files) by task id.
-    public record ExportedBoard(BoardDetail board, Map<Integer, List<NoteDto>> notes,
+    // archived: the board's archived tasks, which BoardDetail leaves out.
+    // notes and attachments (metadata only, not the files) by task id, of archived tasks too.
+    public record ExportedBoard(BoardDetail board, List<TaskDto> archived, Map<Integer, List<NoteDto>> notes,
                                 Map<Integer, List<AttachmentDto>> attachments) {
     }
 
@@ -110,11 +112,12 @@ public class AccountService {
             BoardDetail detail = boardService.getBoard(board.getId(), email);
             Map<Integer, List<NoteDto>> notes = new LinkedHashMap<>();
             Map<Integer, List<AttachmentDto>> attachments = new LinkedHashMap<>();
-            for (TaskDto task : detail.tasks()) {
+            List<TaskDto> archived = boardService.archivedOf(board.getId(), email);
+            for (TaskDto task : Stream.concat(detail.tasks().stream(), archived.stream()).toList()) {
                 notes.put(task.id(), noteService.notesOf(task.id(), email));
                 attachments.put(task.id(), attachmentService.attachmentsOf(task.id(), email));
             }
-            return new ExportedBoard(detail, notes, attachments);
+            return new ExportedBoard(detail, archived, notes, attachments);
         }).toList();
         List<Membership> memberships = memberRepository.boardsOf(email).stream()
                 .map(b -> new Membership(b.getName(), b.getUser().getName()))

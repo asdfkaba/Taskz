@@ -17,6 +17,8 @@ public record TaskDto(
         LocalDateTime due_date,
         Instant created,
         Instant edited,
+        // Since when the task is archived; null on the board.
+        Instant archived,
         Integer columnId,
         int position,
         List<Integer> labelIds,
@@ -35,13 +37,13 @@ public record TaskDto(
                 .map(item -> new ChecklistItemDto(item.getId(), item.getText(), item.isChecked()))
                 .toList();
         return new TaskDto(task.getId(), task.getTitle(), task.getDescription(), task.getDue_date(),
-                task.getCreated(), task.getEdited(),
+                task.getCreated(), task.getEdited(), task.getArchivedAt(),
                 task.getBoardColumn().getId(), task.getPosition(), labelIds, checklist,
                 task.getAttachmentCount(), revisionOf(task));
     }
 
     public TaskDto withoutAttachments() {
-        return new TaskDto(id, title, description, due_date, created, edited, columnId, position, labelIds, checklist,
+        return new TaskDto(id, title, description, due_date, created, edited, archived, columnId, position, labelIds, checklist,
                 null, revision);
     }
 

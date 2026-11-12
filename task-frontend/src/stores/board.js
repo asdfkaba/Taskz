@@ -304,10 +304,33 @@ export const useBoardStore = defineStore('board', {
       return updated
     },
 
+    // Also deletes an archived task for good.
     async deleteTask(id) {
       await expectOk(await authFetch(`/api/tasks/${id}/delete`, { method: 'DELETE' }), 'Deleting task')
       const found = this.findTask(id)
       if (found) this.tasksByColumn[found.columnId].splice(found.index, 1)
+    },
+
+    // ---- Archive: tasks off the board that can come back ----
+
+    async archiveTask(id) {
+      await expectOk(await authFetch(`/api/tasks/${id}/archive`, { method: 'PATCH' }), 'Archiving task')
+      const found = this.findTask(id)
+      if (found) this.tasksByColumn[found.columnId].splice(found.index, 1)
+      this.renumberTasks()
+    },
+
+    // The open board's archived tasks, last archived first; each with archived (when).
+    async fetchArchive() {
+      return (await expectOk(await authFetch(`/api/boards/${this.board.id}/archive`), 'Loading archive')).json()
+    },
+
+    // The task comes back at the end of its column.
+    async restoreTask(id) {
+      const response = await expectOk(await authFetch(`/api/tasks/${id}/restore`, { method: 'PATCH' }), 'Restoring task')
+      const task = await response.json()
+      if (!this.findTask(id)) this.tasksByColumn[task.columnId]?.push(task)
+      return task
     },
 
     // Moves a task locally (e.g. from a menu) and then saves it.
