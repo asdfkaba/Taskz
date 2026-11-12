@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import InputText from 'primevue/inputtext'
@@ -9,10 +9,12 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 
-// Automations of the open board: when a task enters a column, change its checklist, add a note with a
-// reminder (written as whoever moved the task, so the reminder is theirs) or notify people of the board.
-// A task can also be archived once it was in the column for some days (done hourly by the backend).
-// Part of the board settings, owner only. Column and action of a rule are fixed; its settings can be edited.
+// Automations of the open board. A rule belongs to a column and runs on a trigger (see TRIGGERS):
+// when a task enters the column, change its checklist, add a note with a reminder (written as whoever
+// moved the task, so the reminder is theirs) or notify people of the board; when it stayed there for
+// some days (checked hourly by the backend), archive it, move it or notify; when its checklist gets
+// completed there, move it or notify.
+// Part of the board settings, owner only. Column, trigger and action of a rule are fixed; its settings can be edited.
 const props = defineProps({ boardId: { type: Number, required: true } })
 
 // Same limits as BoardRuleService and TaskNoteService.
@@ -25,10 +27,18 @@ const ACTIONS = [
   { value: 'REPLACE_CHECKLIST', label: 'Replace the checklist' },
   { value: 'ADD_NOTE_REMINDER', label: 'Add a note with a reminder' },
   { value: 'NOTIFY', label: 'Notify people' },
-  { value: 'ARCHIVE_AFTER', label: 'Archive it after some days' },
+  { value: 'ARCHIVE', label: 'Archive it' },
+  { value: 'MOVE', label: 'Move it to another column' },
 ]
-// Which settings an action has: 'items', 'note', 'notify' or 'archive'.
-const KINDS = { ADD_NOTE_REMINDER: 'note', NOTIFY: 'notify', ARCHIVE_AFTER: 'archive' }
+// When a rule runs and which actions it can have then; same as BoardRule.Trigger. label continues
+// "When a task ...", heading is the same for the list of rules.
+const TRIGGERS = [
+  { value: 'ENTERED_COLUMN', label: 'enters', heading: 'enters', actions: ['APPEND_CHECKLIST', 'REPLACE_CHECKLIST', 'ADD_NOTE_REMINDER', 'NOTIFY'] },
+  { value: 'IN_COLUMN_FOR', label: 'stays in', heading: 'stays in', actions: ['ARCHIVE', 'NOTIFY', 'MOVE'] },
+  { value: 'CHECKLIST_DONE', label: 'completes its checklist in', heading: 'completes its checklist in', actions: ['MOVE', 'NOTIFY'] },
+]
+// Which settings an action has: 'items', 'note', 'notify', 'move' or 'none'.
+const KINDS = { ADD_NOTE_REMINDER: 'note', NOTIFY: 'notify', MOVE: 'move', ARCHIVE: 'none' }
 const kindOf = (ruleAction) => KINDS[ruleAction] ?? 'items'
 
 const store = useBoardStore()
@@ -41,16 +51,40 @@ const loading = ref(true)
 const busy = ref(false)
 
 const columnId = ref(store.columns[0]?.id ?? null)
+const trigger = ref('ENTERED_COLUMN')
 const action = ref('APPEND_CHECKLIST')
+const actionOptions = computed(() => {
+  // In the trigger's own order, so its most likely action comes first.
+  const allowed = TRIGGERS.find((t) => t.value === trigger.value).actions
+  return allowed.map((value) => ACTIONS.find((a) => a.value === value))
+})
+watch(trigger, () => {
+  if (!actionOptions.value.some((a) => a.value === action.value)) action.value = actionOptions.value[0].value
+})
+// Where a rule of the given column can move tasks: any other column.
+const targetsFor = (ownColumnId) => store.columns.filter((c) => c.id !== ownColumnId)
 // The fields of a rule's settings, for the new rule and the one being edited.
-const emptyFields = () => ({ itemsText: '', noteText: '', days: '14', removeOnLeave: false, notifyText: '', userIds: [], archiveDays: '30' })
+// stayDays: the days of the trigger IN_COLUMN_FOR; days: those of a note's reminder.
+const emptyFields = () => ({ itemsText: '', noteText: '', days: '14', removeOnLeave: false, notifyText: '', userIds: [], stayDays: '30', targetColumnId: null })
 const fields = ref(emptyFields())
 
 const toItems = (text) => text.split('\n').map((line) => line.trim()).filter(Boolean)
 const toDays = (text) => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : null)
-// The settings the backend expects for the action, or null if they aren't valid yet.
-function settings(ruleAction, f) {
+// The settings the backend expects for the trigger and action of a rule in the given column, or
+// null if they aren't valid yet.
+function settings(ruleTrigger, ruleAction, ownColumnId, f) {
+  if (ruleTrigger !== 'IN_COLUMN_FOR') return actionSettings(ruleAction, ownColumnId, f)
+  const days = toDays(f.stayDays)
+  const rest = actionSettings(ruleAction, ownColumnId, f)
+  return rest && days != null && days >= 1 && days <= MAX_DAYS ? { ...rest, days } : null
+}
+
+function actionSettings(ruleAction, ownColumnId, f) {
   const kind = kindOf(ruleAction)
+  if (kind === 'none') return {}
+  if (kind === 'move') {
+    return targetsFor(ownColumnId).some((c) => c.id === f.targetColumnId) ? { targetColumnId: f.targetColumnId } : null
+  }
   if (kind === 'items') {
     const list = toItems(f.itemsText)
     return list.length > 0 && list.length <= MAX_ITEMS ? { items: list } : null
@@ -59,15 +93,11 @@ function settings(ruleAction, f) {
     const text = f.notifyText.trim()
     return text && f.userIds.length ? { text, userIds: f.userIds } : null
   }
-  if (kind === 'archive') {
-    const days = toDays(f.archiveDays)
-    return days != null && days >= 1 && days <= MAX_DAYS ? { days } : null
-  }
   const n = toDays(f.days)
   return f.noteText.trim() && n != null && n <= MAX_DAYS ? { text: f.noteText.trim(), days: n, removeOnLeave: f.removeOnLeave } : null
 }
 
-const newSettings = computed(() => settings(action.value, fields.value))
+const newSettings = computed(() => settings(trigger.value, action.value, columnId.value, fields.value))
 const canAdd = computed(() => !busy.value && columnId.value != null && newSettings.value != null)
 
 // The rule being edited: { id, ...fields }, or null.
@@ -75,13 +105,19 @@ const editing = ref(null)
 const editSettings = computed(() => {
   const e = editing.value
   const rule = e && rules.value.find((r) => r.id === e.id)
-  return rule ? settings(rule.action, e) : null
+  return rule ? settings(rule.trigger, rule.action, rule.columnId, e) : null
 })
 
-// Rules grouped under their column, in the board's column order.
-const byColumn = computed(() =>
+// Rules grouped under their column and trigger, in the board's column order.
+const groups = computed(() =>
   store.columns
-    .map((column) => ({ column, rules: rules.value.filter((r) => r.columnId === column.id) }))
+    .flatMap((column) =>
+      TRIGGERS.map((t) => ({
+        key: `${column.id}-${t.value}`,
+        heading: `When a task ${t.heading} ${column.name}`,
+        rules: rules.value.filter((r) => r.columnId === column.id && r.trigger === t.value),
+      })),
+    )
     .filter((group) => group.rules.length > 0),
 )
 
@@ -91,9 +127,16 @@ function names(userIds) {
 }
 
 function describe(rule) {
+  const text = describeAction(rule)
+  if (rule.trigger !== 'IN_COLUMN_FOR') return text
+  return `After ${rule.days} ${rule.days === 1 ? 'day' : 'days'}: ${text[0].toLowerCase()}${text.slice(1)}`
+}
+
+function describeAction(rule) {
+  if (rule.action === 'ARCHIVE') return 'Archive it'
+  if (rule.action === 'MOVE') return `Move it to ${store.columnById(rule.targetColumnId)?.name ?? 'a deleted column'}`
   if (rule.action === 'APPEND_CHECKLIST') return `Add checklist items: ${rule.items.join(', ')}`
   if (rule.action === 'REPLACE_CHECKLIST') return `Replace the checklist with: ${rule.items.join(', ')}`
-  if (rule.action === 'ARCHIVE_AFTER') return `Archive it after ${rule.days} ${rule.days === 1 ? 'day' : 'days'} in the column`
   if (rule.action === 'NOTIFY') return `Notify ${names(rule.userIds)}: “${rule.text}”`
   const removed = rule.removeOnLeave ? ', removed when the task leaves' : ''
   return `Add the note “${rule.text}” with a reminder in ${rule.days} ${rule.days === 1 ? 'day' : 'days'}${removed}`
@@ -118,7 +161,7 @@ async function add() {
   if (!canAdd.value) return
   busy.value = true
   try {
-    rules.value.push(await store.addRule(props.boardId, { columnId: columnId.value, action: action.value, ...newSettings.value }))
+    rules.value.push(await store.addRule(props.boardId, { columnId: columnId.value, trigger: trigger.value, action: action.value, ...newSettings.value }))
     fields.value = emptyFields()
   } catch (err) {
     showError('Could not add the automation', err)
@@ -143,7 +186,8 @@ function startEdit(rule) {
     itemsText: (rule.items ?? []).join('\n'),
     noteText: rule.text ?? '',
     days: String(rule.days ?? ''),
-    archiveDays: String(rule.days ?? ''),
+    stayDays: String(rule.days ?? ''),
+    targetColumnId: rule.targetColumnId ?? null,
     removeOnLeave: rule.removeOnLeave,
     notifyText: rule.text ?? '',
     userIds: [...(rule.userIds ?? [])],
@@ -177,21 +221,27 @@ async function remove(rule) {
 <template>
   <div class="flex flex-col gap-4" data-testid="board-rules">
     <p class="text-sm text-slate-600 dark:text-slate-400">
-      Run when a task is moved into a column or created in it. Adding skips items the checklist already has.
+      Most run when a task is moved into a column or created in it. Adding skips items the checklist already has.
       Replacing makes the list the task's checklist; items in both stay ticked. A note with a reminder is
       written as whoever moved the task, and shows in their “What's due”; it can be removed again when the
       task leaves the column. Notifying skips whoever moved the task; it shows under their bell for the others.
-      Archiving happens once the task has been in the column for the given days, checked every hour; a task
-      that leaves the column earlier stays on the board.
+      “Stays in” runs once the task has been in the column for the given days, checked every hour; a task
+      that leaves earlier is left alone. “Completes its checklist” runs when someone ticks the last open item.
+      A task moved by a rule goes to the end of the other column, and that column's rules for entering run.
     </p>
 
     <p v-if="loading" class="text-sm text-slate-400">Loading…</p>
     <p v-else-if="!rules.length" class="text-sm text-slate-500 dark:text-slate-400">No automations yet.</p>
-    <div v-for="group in byColumn" :key="group.column.id" class="flex flex-col gap-1">
-      <h3 class="text-sm font-medium text-slate-800 dark:text-slate-200">When a task enters {{ group.column.name }}</h3>
+    <div v-for="group in groups" :key="group.key" class="flex flex-col gap-1">
+      <h3 class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ group.heading }}</h3>
       <ul class="flex flex-col">
         <li v-for="rule in group.rules" :key="rule.id" class="py-1" data-testid="rule">
           <form v-if="editing?.id === rule.id" class="flex flex-col gap-2" @submit.prevent="saveEdit(rule)" @keydown.esc.stop="editing = null">
+            <div v-if="rule.trigger === 'IN_COLUMN_FOR'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <span>After</span>
+              <InputText v-model="editing.stayDays" inputmode="numeric" class="w-20" size="small" aria-label="Edit days in the column" />
+              <span>days in the column</span>
+            </div>
             <Textarea
               v-if="kindOf(rule.action) === 'items'"
               v-model="editing.itemsText"
@@ -212,12 +262,11 @@ async function remove(rule) {
                 size="small"
               />
             </div>
-            <div v-else-if="kindOf(rule.action) === 'archive'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-              <span>Archive it after</span>
-              <InputText v-model="editing.archiveDays" inputmode="numeric" class="w-20" size="small" aria-label="Edit days in the column" />
-              <span>days in the column</span>
+            <div v-else-if="kindOf(rule.action) === 'move'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <span>Move it to</span>
+              <Select v-model="editing.targetColumnId" :options="targetsFor(rule.columnId)" optionLabel="name" optionValue="id" aria-label="Edit target column" size="small" />
             </div>
-            <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <div v-else-if="kindOf(rule.action) === 'note'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <InputText v-model="editing.noteText" :maxlength="MAX_NOTE_LENGTH" class="min-w-0 flex-1" size="small" aria-label="Edit note" />
               <span>remind in</span>
               <InputText v-model="editing.days" inputmode="numeric" class="w-20" size="small" aria-label="Edit days from now" />
@@ -269,9 +318,15 @@ async function remove(rule) {
 
     <form class="flex flex-col gap-2 border-t border-slate-200 pt-3 dark:border-slate-800" @submit.prevent="add">
       <div class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-        <span>When a task enters</span>
+        <span>When a task</span>
+        <Select v-model="trigger" :options="TRIGGERS" optionLabel="label" optionValue="value" aria-label="Trigger" size="small" />
         <Select v-model="columnId" :options="store.columns" optionLabel="name" optionValue="id" aria-label="Column" size="small" />
-        <Select v-model="action" :options="ACTIONS" optionLabel="label" optionValue="value" aria-label="Action" size="small" />
+        <template v-if="trigger === 'IN_COLUMN_FOR'">
+          <span>for</span>
+          <InputText v-model="fields.stayDays" inputmode="numeric" class="w-20" size="small" aria-label="Days in the column" />
+          <span>days</span>
+        </template>
+        <Select v-model="action" :options="actionOptions" optionLabel="label" optionValue="value" aria-label="Action" size="small" />
       </div>
       <Textarea
         v-if="kindOf(action) === 'items'"
@@ -300,12 +355,19 @@ async function remove(rule) {
           size="small"
         />
       </div>
-      <div v-else-if="kindOf(action) === 'archive'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-        <span>after</span>
-        <InputText v-model="fields.archiveDays" inputmode="numeric" class="w-20" size="small" aria-label="Days in the column" />
-        <span>days in the column</span>
+      <div v-else-if="kindOf(action) === 'move'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <span>Move it to</span>
+        <Select
+          v-model="fields.targetColumnId"
+          :options="targetsFor(columnId)"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Column"
+          aria-label="Target column"
+          size="small"
+        />
       </div>
-      <div v-else class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+      <div v-else-if="kindOf(action) === 'note'" class="flex flex-wrap items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
         <InputText
           v-model="fields.noteText"
           :maxlength="MAX_NOTE_LENGTH"

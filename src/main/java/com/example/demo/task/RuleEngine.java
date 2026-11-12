@@ -3,6 +3,7 @@ package com.example.demo.task;
 import com.example.demo.board.Board;
 import com.example.demo.board.BoardChanged;
 import com.example.demo.board.BoardColumn;
+import com.example.demo.board.BoardColumnRepository;
 import com.example.demo.board.BoardMemberRepository;
 import com.example.demo.board.BoardRule;
 import com.example.demo.board.BoardRuleRepository;
@@ -26,9 +27,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Runs the board rules of a column when a task enters it (moved there or created in it), and
- * archives tasks whose time in a column is over (archiveDue).
- * Changes made here don't trigger rules again, so rules can't loop.
+ * Runs the board rules (see BoardRule.Trigger): when a task enters a column (moved there or created
+ * in it), when its days in a column are over (runTimed) and when its checklist is completed.
+ * A rule that moves a task runs the rules for entering its new column, and those can't move tasks;
+ * what rules change never counts as completing a checklist. So rules can't loop.
  */
 @Service
 public class RuleEngine {
@@ -44,11 +46,13 @@ public class RuleEngine {
     private final BoardMemberRepository memberRepository;
     private final NotificationService notificationService;
     private final ApplicationEventPublisher events;
+    private final BoardColumnRepository columnRepository;
 
     public RuleEngine(BoardRuleRepository ruleRepository, TaskRepository taskRepository,
                       TaskHistoryService historyService, TaskNoteRepository noteRepository,
                       UserRepository userRepository, BoardMemberRepository memberRepository,
-                      NotificationService notificationService, ApplicationEventPublisher events) {
+                      NotificationService notificationService, ApplicationEventPublisher events,
+                      BoardColumnRepository columnRepository) {
         this.ruleRepository = ruleRepository;
         this.taskRepository = taskRepository;
         this.historyService = historyService;
@@ -57,6 +61,7 @@ public class RuleEngine {
         this.memberRepository = memberRepository;
         this.notificationService = notificationService;
         this.events = events;
+        this.columnRepository = columnRepository;
     }
 
     /**
@@ -92,32 +97,91 @@ public class RuleEngine {
     }
 
     /**
-     * Archives the tasks that have been in a column for as long as its ARCHIVE_AFTER rule says, like
-     * BoardService.archiveTask. Hourly, so a task goes up to an hour after its days are over.
+     * Runs the IN_COLUMN_FOR rules for the tasks whose days in the column are over. Hourly, so a
+     * task's turn comes up to an hour late.
      */
     @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1H")
     @Transactional
-    public void archiveDue() {
+    public void runTimed() {
         Instant now = Instant.now();
-        for (BoardRule rule : ruleRepository.findByActionAndEnabledTrue(BoardRule.Action.ARCHIVE_AFTER.name())) {
+        for (BoardRule rule : ruleRepository.findByTriggerAndEnabledTrueOrderById(BoardRule.Trigger.IN_COLUMN_FOR.name())) {
             BoardColumn column = rule.getColumn();
-            int days = RulePayload.parse(rule.getPayload()).days();
-            List<Task> due = taskRepository.findInColumnSince(column, now.minus(days, ChronoUnit.DAYS));
-            if (due.isEmpty()) {
-                continue;
-            }
+            BoardRule.Action action = BoardRule.Action.valueOf(rule.getAction());
+            RulePayload payload = RulePayload.parse(rule.getPayload());
+            // Archiving and moving take the task out of the column. A notification leaves it there,
+            // so it only goes out for tasks whose days ended since the rule was last looked at.
+            Instant after = action == BoardRule.Action.NOTIFY && rule.getCheckedAt() != null
+                    ? rule.getCheckedAt().minus(payload.days(), ChronoUnit.DAYS) : Instant.EPOCH;
+            List<Task> due = taskRepository.findEnteredBetween(column, after, now.minus(payload.days(), ChronoUnit.DAYS));
+            rule.setCheckedAt(now);
             for (Task task : due) {
-                task.setArchivedAt(now);
-                historyService.recordArchived(task, true, null);
+                switch (action) {
+                    case ARCHIVE -> {
+                        task.setArchivedAt(now);
+                        historyService.recordArchived(task, true, null);
+                    }
+                    case MOVE -> move(task, payload.targetColumnId(), null);
+                    default -> apply(rule, task, null);
+                }
             }
-            List<Task> left = taskRepository.findByBoardColumnOrderByPosition(column);
-            for (int i = 0; i < left.size(); i++) {
-                left.get(i).setPosition(i);
+            if (!due.isEmpty()) {
+                renumber(column);
+                events.publishEvent(new BoardChanged(column.getBoard().getId()));
             }
-            events.publishEvent(new BoardChanged(column.getBoard().getId()));
         }
     }
 
+    /**
+     * Call when a user ticked a checklist item and the task's checklist is complete now: runs the
+     * CHECKLIST_DONE rules of its column. Returns true if a rule moved the task.
+     */
+    @Transactional
+    public boolean checklistDone(Task task, String email) {
+        BoardColumn column = task.getBoardColumn();
+        boolean moved = false;
+        for (BoardRule rule : ruleRepository.findByColumnAndTriggerAndEnabledTrueOrderById(
+                column, BoardRule.Trigger.CHECKLIST_DONE.name())) {
+            if (!BoardRule.Action.MOVE.name().equals(rule.getAction())) {
+                apply(rule, task, email);
+            } else if (!moved) {
+                // The first move counts: after it the task is no longer in this column.
+                moved = move(task, RulePayload.parse(rule.getPayload()).targetColumnId(), email);
+            }
+        }
+        if (moved) {
+            renumber(column);
+        }
+        return moved;
+    }
+
+    /**
+     * Puts the task at the end of the target column, as a rule: the history shows no user. The rules
+     * for leaving and entering run, as whoever caused the move (nobody for the hourly job, so a note
+     * with a reminder added then reminds no one). The caller renumbers the column the task left.
+     */
+    private boolean move(Task task, Integer targetColumnId, String email) {
+        BoardColumn source = task.getBoardColumn();
+        BoardColumn target = targetColumnId == null ? null : columnRepository.findById(targetColumnId).orElse(null);
+        if (target == null) {
+            return false;
+        }
+        int last = taskRepository.countByBoardColumn(target);
+        taskLeft(task, source);
+        task.setBoardColumn(target);
+        task.setPosition(last);
+        historyService.recordMove(task, source, target, null);
+        taskEntered(task, email);
+        return true;
+    }
+
+    private void renumber(BoardColumn column) {
+        List<Task> tasks = taskRepository.findByBoardColumnOrderByPosition(column);
+        for (int i = 0; i < tasks.size(); i++) {
+            tasks.get(i).setPosition(i);
+        }
+    }
+
+    // The actions that change or tell about the task where it is; archiving and moving are done by the callers.
     private void apply(BoardRule rule, Task task, String email) {
         RulePayload payload = RulePayload.parse(rule.getPayload());
         switch (BoardRule.Action.valueOf(rule.getAction())) {
@@ -129,11 +193,10 @@ public class RuleEngine {
                 note.setRuleId(rule.getId());
                 noteRepository.save(note);
             }
-            case ARCHIVE_AFTER -> {
-                // Not on entering: archiveDue does it once the days have passed.
-            }
             case NOTIFY -> notificationService.notify(recipients(task.getBoardColumn().getBoard(), payload.userIds(), email),
                     payload.text(), null, task);
+            case ARCHIVE, MOVE -> {
+            }
         }
     }
 

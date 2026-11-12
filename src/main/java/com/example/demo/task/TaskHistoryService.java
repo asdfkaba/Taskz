@@ -103,10 +103,16 @@ public class TaskHistoryService {
         return changes;
     }
 
+    /** Without email: moved by a board rule, marked like {@link #recordAutomation}. */
     @Transactional
     public void recordMove(Task task, BoardColumn from, BoardColumn to, String email) {
         if (!Objects.equals(from.getId(), to.getId())) {
-            save(task, Type.MOVED, Map.of("column", List.of(from.getName(), to.getName())), email);
+            Map<String, Object> changes = new LinkedHashMap<>();
+            changes.put("column", List.of(from.getName(), to.getName()));
+            if (email == null) {
+                changes.put("automation", true);
+            }
+            save(task, Type.MOVED, changes, email);
         }
     }
 

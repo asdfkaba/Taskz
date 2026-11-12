@@ -12,8 +12,9 @@ test('Board automations', async ({ browser }) => {
   const rules = () => page.getByTestId('board-rules')
   const card = (id) => page.locator(`[data-task-id="${id}"]`)
   async function choose(label, option) {
-    await rules().getByRole('combobox', { name: label }).click()
-    await page.getByRole('option', { name: option, exact: true }).click()
+    await rules().getByRole('combobox', { name: label, exact: true }).click()
+    // last: the list of the select before may still be fading out.
+    await page.getByRole('option', { name: option, exact: true }).last().click()
   }
 
   await page.goto(`${BASE}/boards/my-board/settings`)
@@ -119,25 +120,59 @@ test('Board automations', async ({ browser }) => {
     ensure((await latest.getByTestId('event-user').innerText()).includes('Automation'), await latest.innerText())
   })
 
-  await test.step('an archive rule takes days and can be edited', async () => {
+  await test.step('a rule for tasks that stay in a column takes days and can be edited', async () => {
     await page.goto(`${BASE}/boards/my-board/settings`)
     await rules().getByTestId('rule').first().waitFor()
     const before = (await state()).rules.length
+    await choose('Trigger', 'stays in')
     await choose('Column', 'Done')
-    await choose('Action', 'Archive it after some days')
+    // Only what goes with the trigger is offered.
+    await rules().getByRole('combobox', { name: 'Action', exact: true }).click()
+    ensure((await page.getByRole('option', { name: 'Add checklist items' }).count()) === 0, 'checklist action offered for a timed rule')
+    await page.getByRole('option', { name: 'Archive it', exact: true }).click()
     await rules().getByRole('textbox', { name: 'Days in the column' }).fill('0')
     ensure(await rules().getByRole('button', { name: 'Add automation' }).isDisabled(), 'added with 0 days')
     await rules().getByRole('textbox', { name: 'Days in the column' }).fill('30')
     await rules().getByRole('button', { name: 'Add automation' }).click()
-    await rules().getByText('Archive it after 30 days in the column').waitFor()
+    await rules().getByText('After 30 days: archive it').waitFor()
+    ensure((await rules().getByText('When a task stays in Done').count()) === 1, 'no heading for the trigger')
     const added = (await state()).rules.at(-1)
-    ensure((await state()).rules.length === before + 1 && added.action === 'ARCHIVE_AFTER' && added.days === 30 && added.columnId === 12, JSON.stringify(added))
+    ensure((await state()).rules.length === before + 1 && added.trigger === 'IN_COLUMN_FOR' && added.action === 'ARCHIVE' && added.days === 30 && added.columnId === 12, JSON.stringify(added))
 
-    await rules().getByRole('button', { name: 'Edit automation: Archive it after 30 days in the column' }).click()
+    await rules().getByRole('button', { name: 'Edit automation: After 30 days: archive it' }).click()
     await rules().getByRole('textbox', { name: 'Edit days in the column' }).fill('1')
     await rules().getByRole('button', { name: 'Save' }).click()
-    await rules().getByText('Archive it after 1 day in the column').waitFor()
-    await page.screenshot({ path: `${test.info().outputDir}/ru-archive.png` })
+    await rules().getByText('After 1 day: archive it').waitFor()
+  })
+
+  await test.step('completing the checklist moves the task, and the history names the automation', async () => {
+    await choose('Trigger', 'completes its checklist in')
+    await choose('Column', 'Done')
+    // Archiving doesn't go with this trigger, so the action switched to the first that does.
+    ensure((await rules().getByRole('combobox', { name: 'Action', exact: true }).innerText()).includes('Move it'), 'action not switched')
+    ensure(await rules().getByRole('button', { name: 'Add automation' }).isDisabled(), 'added without a target')
+    await choose('Target column', 'To do')
+    await rules().getByRole('button', { name: 'Add automation' }).click()
+    await rules().getByText('Move it to To do').waitFor()
+    ensure((await rules().getByText('When a task completes its checklist in Done').count()) === 1, 'no heading for the trigger')
+    await page.screenshot({ path: `${test.info().outputDir}/ru-triggers.png` })
+
+    // Task 1 is in Done with two open items.
+    await page.goto(`${BASE}/boards/my-board`)
+    await card(1).locator('h3').click()
+    await page.getByTestId('task-view').waitFor()
+    await page.getByTestId('task-checklist').getByText('Thank-you mail').click()
+    await page.waitForFunction(async () => (await (await fetch('/api/__state')).json()).tasks.find((t) => t.id === 1).checklist[0].checked)
+    ensure((await state()).tasks.find((t) => t.id === 1).columnId === 12, 'moved before the checklist was complete')
+    await page.getByTestId('task-checklist').getByText('Follow up').click()
+    await page.locator('[data-column-id="10"] [data-task-id="1"]').waitFor()
+    const task = (await state()).tasks.find((t) => t.id === 1)
+    ensure(task.columnId === 10 && task.position === 1, JSON.stringify([task.columnId, task.position]))
+    const history = page.getByTestId('task-history')
+    await history.getByRole('button', { name: 'History' }).click()
+    const moved = history.locator('li').filter({ hasText: 'Moved from Done to To do' })
+    await moved.waitFor()
+    ensure((await moved.getByTestId('event-user').innerText()).includes('Automation'), await moved.innerText())
   })
 
   ensure(errors.length === 0, errors.join('\n'))

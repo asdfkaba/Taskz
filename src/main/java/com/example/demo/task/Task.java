@@ -59,7 +59,7 @@ public class Task {
     private BoardColumn boardColumn;
 
     // Since when the task is in its column; restarts when it comes back from the archive.
-    // An ARCHIVE_AFTER rule of the column counts its days from here (RuleEngine.archiveDue).
+    // Rules with the trigger IN_COLUMN_FOR count their days from here (RuleEngine.runTimed).
     @Column(name = "column_entered", nullable = false)
     private Instant columnEntered;
 

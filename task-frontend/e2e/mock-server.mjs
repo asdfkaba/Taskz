@@ -127,20 +127,19 @@ const addNote = (taskId, text, remindAt, ruleId = null) => {
 }
 // Like RuleEngine.taskLeft: notes of the column's enabled rules with removeOnLeave go.
 function leaveRules(t, columnId) {
-  const ids = rules.filter((r) => r.columnId === columnId && r.enabled && r.removeOnLeave).map((r) => r.id)
+  const ids = rules.filter((r) => r.columnId === columnId && r.trigger === 'ENTERED_COLUMN' && r.enabled && r.removeOnLeave).map((r) => r.id)
   notes = notes.filter((n) => !(n.taskId === t.id && ids.includes(n.ruleId)))
 }
 
-// Rules like RuleEngine: checklist items added or replaced (ticks kept), a note reminding in N days.
+// Rules like RuleEngine.taskEntered: checklist items added or replaced (ticks kept), a note reminding in N days.
+// IN_COLUMN_FOR rules are only stored: the mock has no hourly job.
 function runRules(t) {
   const before = { checklist: itemTexts(t), due_date: t.due_date }
-  for (const r of rules.filter((x) => x.columnId === t.columnId && x.enabled)) {
+  for (const r of rules.filter((x) => x.columnId === t.columnId && x.trigger === 'ENTERED_COLUMN' && x.enabled)) {
     if (r.action === 'REPLACE_CHECKLIST') {
       t.checklist = r.items.map((text) => t.checklist.find((i) => i.text === text) ?? newItem(text))
     } else if (r.action === 'APPEND_CHECKLIST') {
       t.checklist = [...t.checklist, ...r.items.filter((text) => !itemTexts(t).includes(text)).map((text) => newItem(text))]
-    } else if (r.action === 'ARCHIVE_AFTER') {
-      // Done later by the backend's hourly job, which the mock doesn't have.
     } else if (r.action === 'NOTIFY') {
       // Alice moved it, so she isn't told; the others' bells aren't in the mock.
       for (const userId of r.userIds.filter((id) => id !== 1)) sentToOthers.push({ userId, text: r.text, taskId: t.id })
@@ -430,14 +429,14 @@ function api(method, url, body) {
   }
   if (method === 'GET' && p === '/boards/1/rules') return [200, rules]
   if (method === 'POST' && p === '/boards/1/rules') {
-    const r = { id: nextId++, columnId: body.columnId, action: body.action, items: body.items ?? null, text: body.text ?? null, days: body.days ?? null, removeOnLeave: body.removeOnLeave ?? false, userIds: body.userIds ?? null, enabled: true }
+    const r = { id: nextId++, columnId: body.columnId, trigger: body.trigger ?? 'ENTERED_COLUMN', targetColumnId: body.targetColumnId ?? null, action: body.action, items: body.items ?? null, text: body.text ?? null, days: body.days ?? null, removeOnLeave: body.removeOnLeave ?? false, userIds: body.userIds ?? null, enabled: true }
     rules.push(r)
     return [201, r]
   }
   if ((m = p.match(/^\/rules\/(\d+)$/))) {
     const r = rules.find((x) => x.id === +m[1])
     if (!r) return [404, {}]
-    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, text: body.text ?? r.text, days: body.days ?? r.days, removeOnLeave: body.removeOnLeave ?? r.removeOnLeave, userIds: body.userIds ?? r.userIds, enabled: body.enabled ?? r.enabled }); return [200, r] }
+    if (method === 'PUT') { Object.assign(r, { items: body.items ?? r.items, text: body.text ?? r.text, days: body.days ?? r.days, removeOnLeave: body.removeOnLeave ?? r.removeOnLeave, userIds: body.userIds ?? r.userIds, targetColumnId: body.targetColumnId ?? r.targetColumnId, enabled: body.enabled ?? r.enabled }); return [200, r] }
     if (method === 'DELETE') { rules = rules.filter((x) => x !== r); return [204, null] }
   }
   if (method === 'GET' && p === '/boards/1/share') return share ? [200, { path: `${board.slug}-${share.key}`, created: share.created }] : [204, null]
@@ -469,6 +468,23 @@ function api(method, url, body) {
     if (item.checked !== body.checked) {
       item.checked = body.checked
       record(t, body.checked ? 'checked' : 'unchecked', { item: item.text })
+      // Like RuleEngine.checklistDone: the column's rules notify, and the first MOVE rule moves the task last.
+      if (t.checklist.every((i) => i.checked)) {
+        const done = rules.filter((r) => r.columnId === t.columnId && r.trigger === 'CHECKLIST_DONE' && r.enabled)
+        for (const r of done.filter((x) => x.action === 'NOTIFY')) {
+          for (const userId of r.userIds.filter((id) => id !== 1)) sentToOthers.push({ userId, text: r.text, taskId: t.id })
+        }
+        const move = done.find((r) => r.action === 'MOVE')
+        if (move) {
+          const from = t.columnId
+          leaveRules(t, from)
+          t.position = inColumn(move.targetColumnId).length
+          t.columnId = move.targetColumnId
+          renumber(inColumn(from))
+          events.unshift({ id: eventId++, taskId: t.id, type: 'moved', at: now(), user: null, userId: null, changes: { column: [colName(from), colName(t.columnId)], automation: true } })
+          runRules(t)
+        }
+      }
     }
     return [200, t]
   }

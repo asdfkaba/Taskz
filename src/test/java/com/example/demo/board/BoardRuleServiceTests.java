@@ -96,13 +96,13 @@ class BoardRuleServiceTests {
     }
 
     private void checklistRule(BoardColumn column, String... items) {
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(column.getId(), "APPEND_CHECKLIST", List.of(items), null, null, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(column.getId(), "APPEND_CHECKLIST", List.of(items), null, null, null, null, null, null, null));
     }
 
     @Test
     void movingIntoTheColumnRunsItsRulesAndRecordsThemAsAutomation() {
         checklistRule(doing, "Prepare", "Thank-you mail");
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, " Follow up ", 14, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, " Follow up ", 14, null, null, null, null, null));
         Task task = addTask("Notes");
 
         boardService.moveTask(task.getId(), doing.getId(), 0, BOB);
@@ -134,7 +134,7 @@ class BoardRuleServiceTests {
 
         checklistRule(todo, "Review");
         ruleService.updateRule(ruleRepository.findByColumnBoardOrderById(board).get(1).getId(), ALICE,
-                new RuleRequest(null, null, List.of("Review"), null, null, null, null, false));
+                new RuleRequest(null, null, List.of("Review"), null, null, null, null, false, null, null));
         boardService.moveTask(task.getId(), todo.getId(), 0, ALICE);
         boardService.moveTask(task.getId(), todo.getId(), 5, ALICE);
         assertThat(items(task)).containsExactly("Prepare");
@@ -142,9 +142,9 @@ class BoardRuleServiceTests {
 
     @Test
     void eachStageReplacesTheChecklist() {
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "REPLACE_CHECKLIST", List.of("Prepare", "Research"), null, null, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "REPLACE_CHECKLIST", List.of("Prepare", "Research"), null, null, null, null, null, null, null));
         BoardColumn done = columnRepository.findByBoardOrderByPosition(board).get(2);
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(done.getId(), "REPLACE_CHECKLIST", List.of("Research", "Thank-you mail"), null, null, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(done.getId(), "REPLACE_CHECKLIST", List.of("Research", "Thank-you mail"), null, null, null, null, null, null, null));
         Task task = addTask("Contact: Ann\n- [ ] Apply");
 
         boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
@@ -158,8 +158,8 @@ class BoardRuleServiceTests {
 
     @Test
     void aNoteRuleCanRemoveItsNoteWhenTheTaskLeaves() {
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Chase", 7, true, null, null));
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Keep", 7, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Chase", 7, true, null, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Keep", 7, null, null, null, null, null));
         assertThat(ruleService.rulesOf(board.getId(), ALICE)).extracting(r -> r.removeOnLeave()).containsExactly(true, false);
         Task task = addTask(null);
         int own = noteService.addNote(task.getId(), ALICE, "Written by hand", null).id();
@@ -188,7 +188,7 @@ class BoardRuleServiceTests {
         int aliceId = userRepository.findByEmail(ALICE).orElseThrow().getId();
         int bobId = userRepository.findByEmail(BOB).orElseThrow().getId();
         ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "NOTIFY", null, " Please review ", null, null, List.of(aliceId, bobId, aliceId), null));
+                new RuleRequest(doing.getId(), "NOTIFY", null, " Please review ", null, null, List.of(aliceId, bobId, aliceId), null, null, null));
         assertThat(ruleService.rulesOf(board.getId(), ALICE).get(0).userIds()).containsExactly(aliceId, bobId);
         Task task = addTask(null);
 
@@ -213,13 +213,13 @@ class BoardRuleServiceTests {
         int bobId = userRepository.findByEmail(BOB).orElseThrow().getId();
         int stranger = userRepository.save(new User("Eve", "eve@example.com")).getId();
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "NOTIFY", null, "Hi", null, null, List.of(bobId, stranger), null)))
+                new RuleRequest(doing.getId(), "NOTIFY", null, "Hi", null, null, List.of(bobId, stranger), null, null, null)))
                 .hasMessageContaining("people of this board");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "NOTIFY", null, "Hi", null, null, List.of(), null)))
+                new RuleRequest(doing.getId(), "NOTIFY", null, "Hi", null, null, List.of(), null, null, null)))
                 .hasMessageContaining("people of this board");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "NOTIFY", null, " ", null, null, List.of(bobId), null)))
+                new RuleRequest(doing.getId(), "NOTIFY", null, " ", null, null, List.of(bobId), null, null, null)))
                 .hasMessageContaining("1 to 500 characters");
     }
 
@@ -228,7 +228,7 @@ class BoardRuleServiceTests {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Time-Zone", "Pacific/Kiritimati"); // UTC+14, far from any server
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Now", 0, null, null, null));
+        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Now", 0, null, null, null, null, null));
         Task task = addTask(null);
 
         boardService.moveTask(task.getId(), doing.getId(), 0, ALICE);
@@ -248,7 +248,7 @@ class BoardRuleServiceTests {
     }
 
     private void checklistRuleAs(String email) {
-        ruleService.addRule(board.getId(), email, new RuleRequest(doing.getId(), "APPEND_CHECKLIST", List.of("x"), null, null, null, null, null));
+        ruleService.addRule(board.getId(), email, new RuleRequest(doing.getId(), "APPEND_CHECKLIST", List.of("x"), null, null, null, null, null, null, null));
     }
 
     @Test
@@ -264,15 +264,15 @@ class BoardRuleServiceTests {
         assertThatThrownBy(() -> checklistRule(doing, " ")).hasMessageContaining("1 to 20 items");
         assertThatThrownBy(() -> checklistRule(doing, "a\nb")).hasMessageContaining("one line");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Text", -1, null, null, null))).hasMessageContaining("days");
+                new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, "Text", -1, null, null, null, null, null))).hasMessageContaining("days");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, " ", 3, null, null, null))).hasMessageContaining("empty");
+                new RuleRequest(doing.getId(), "ADD_NOTE_REMINDER", null, " ", 3, null, null, null, null, null))).hasMessageContaining("empty");
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "DELETE_TASK", null, null, null, null, null, null))).hasMessageContaining("Unknown action");
+                new RuleRequest(doing.getId(), "DELETE_TASK", null, null, null, null, null, null, null, null))).hasMessageContaining("Unknown action");
         Board other = boardService.createBoard(ALICE, "Other");
         int foreignColumn = columnRepository.findByBoardOrderByPosition(other).get(0).getId();
         assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(foreignColumn, "ADD_NOTE_REMINDER", null, "Text", 1, null, null, null))).hasMessageContaining("column of this board");
+                new RuleRequest(foreignColumn, "ADD_NOTE_REMINDER", null, "Text", 1, null, null, null, null, null))).hasMessageContaining("column of this board");
     }
 
     @Test
@@ -290,18 +290,28 @@ class BoardRuleServiceTests {
         assertThat(ruleRepository.count()).isZero();
     }
 
+    // RuleRequest(columnId, action, items, text, days, removeOnLeave, userIds, enabled, trigger, targetColumnId)
+    private void timedRule(BoardColumn column, String action, int days, String text, List<Integer> userIds, Integer target) {
+        ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(column.getId(), action, null, text, days, null, userIds, null, "IN_COLUMN_FOR", target));
+    }
+
+    private static Instant daysAgo(int days) {
+        return Instant.now().minus(days, ChronoUnit.DAYS);
+    }
+
     @Test
-    void anArchiveRuleArchivesTasksOnceTheirDaysInTheColumnAreOver() {
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(doing.getId(), "ARCHIVE_AFTER", null, null, 30, null, null, null));
+    void aTimedArchiveRuleArchivesTasksOnceTheirDaysInTheColumnAreOver() {
+        timedRule(doing, "ARCHIVE", 30, null, null, null);
         Task old = addTask("old");
         Task fresh = addTask("fresh");
         Task elsewhere = addTask("elsewhere");
         boardService.moveTask(old.getId(), doing.getId(), 0, ALICE);
         boardService.moveTask(fresh.getId(), doing.getId(), 1, ALICE);
-        old.setColumnEntered(Instant.now().minus(31, ChronoUnit.DAYS));
-        elsewhere.setColumnEntered(Instant.now().minus(31, ChronoUnit.DAYS));
+        old.setColumnEntered(daysAgo(31));
+        elsewhere.setColumnEntered(daysAgo(31));
 
-        ruleEngine.archiveDue();
+        ruleEngine.runTimed();
 
         assertThat(old.getArchivedAt()).isNotNull();
         assertThat(fresh.getArchivedAt()).isNull();
@@ -314,21 +324,112 @@ class BoardRuleServiceTests {
 
         // Restored, its days start again: the next run leaves it alone.
         boardService.restoreTask(old.getId(), ALICE);
-        ruleEngine.archiveDue();
+        ruleEngine.runTimed();
         assertThat(old.getArchivedAt()).isNull();
     }
 
     @Test
-    void anArchiveRuleNeedsAtLeastOneDayAndDoesNothingWhenOff() {
-        assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
-                new RuleRequest(doing.getId(), "ARCHIVE_AFTER", null, null, 0, null, null, null)))
-                .isInstanceOf(ResponseStatusException.class);
-        ruleService.addRule(board.getId(), ALICE, new RuleRequest(todo.getId(), "ARCHIVE_AFTER", null, null, 1, null, null, false));
+    void aTimedRuleNeedsAtLeastOneDayAndDoesNothingWhenOff() {
+        assertThatThrownBy(() -> timedRule(doing, "ARCHIVE", 0, null, null, null)).isInstanceOf(ResponseStatusException.class);
+        ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(todo.getId(), "ARCHIVE", null, null, 1, null, null, false, "IN_COLUMN_FOR", null));
         Task task = addTask(null);
-        task.setColumnEntered(Instant.now().minus(5, ChronoUnit.DAYS));
+        task.setColumnEntered(daysAgo(5));
 
-        ruleEngine.archiveDue();
+        ruleEngine.runTimed();
 
         assertThat(task.getArchivedAt()).isNull();
+    }
+
+    @Test
+    void aTimedNotifyRuleTellsOnceWhenTheDaysEndAndNotAboutTasksAlreadyOverdue() {
+        int aliceId = userRepository.findByEmail(ALICE).orElseThrow().getId();
+        Task longAgo = addTask("long ago");
+        longAgo.setColumnEntered(daysAgo(20));
+        timedRule(todo, "NOTIFY", 7, "Still waiting", List.of(aliceId), null);
+        BoardRule rule = ruleRepository.findByColumnBoardOrderById(board).get(0);
+        Task task = addTask("just over");
+        // As if the rule was last looked at an hour ago, and the task's 7 days ended since.
+        rule.setCheckedAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        task.setColumnEntered(daysAgo(7).minus(10, ChronoUnit.MINUTES));
+
+        ruleEngine.runTimed();
+        ruleEngine.runTimed();
+
+        assertThat(notificationRepository.findAll()).singleElement().satisfies(n -> {
+            assertThat(n.getText()).isEqualTo("Still waiting");
+            assertThat(n.getTask()).isEqualTo(task);
+        });
+    }
+
+    @Test
+    void aTimedMoveRuleMovesTheTaskLastAndRunsTheRulesOfItsNewColumn() {
+        checklistRule(doing, "Prepare");
+        timedRule(todo, "MOVE", 3, null, null, doing.getId());
+        Task waiting = addTask(null);
+        boardService.moveTask(waiting.getId(), doing.getId(), 0, ALICE);
+        Task task = addTask(null);
+        Task stays = addTask(null);
+        stays.setPosition(1);
+        task.setColumnEntered(daysAgo(4));
+
+        ruleEngine.runTimed();
+
+        assertThat(task.getBoardColumn().getId()).isEqualTo(doing.getId());
+        assertThat(task.getPosition()).isEqualTo(1);
+        assertThat(stays.getPosition()).isZero();
+        assertThat(items(task)).containsExactly("Prepare");
+        var moved = historyService.historyOf(task).stream().filter(e -> e.type().equals("moved")).findFirst().orElseThrow();
+        assertThat(moved.user()).isNull();
+        assertThat(moved.changes()).containsEntry("automation", true);
+    }
+
+    @Test
+    void completingTheChecklistMovesTheTaskAndTellsPeople() {
+        int aliceId = userRepository.findByEmail(ALICE).orElseThrow().getId();
+        ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(todo.getId(), "MOVE", null, null, null, null, null, null, "CHECKLIST_DONE", doing.getId()));
+        ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(todo.getId(), "NOTIFY", null, "All done", null, null, List.of(aliceId), null, "CHECKLIST_DONE", null));
+        Task task = addTask(null);
+
+        // Entering the column doesn't run them.
+        assertThat(notificationRepository.count()).isZero();
+
+        assertThat(ruleEngine.checklistDone(task, BOB)).isTrue();
+
+        assertThat(task.getBoardColumn().getId()).isEqualTo(doing.getId());
+        assertThat(notificationRepository.findAll()).singleElement()
+                .satisfies(n -> assertThat(n.getText()).isEqualTo("All done"));
+    }
+
+    @Test
+    void triggersOnlyTakeTheirOwnActionsAndAMoveNeedsAnotherColumnOfTheBoard() {
+        // Archiving on entering, a checklist on a timer, an unknown trigger.
+        assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(todo.getId(), "ARCHIVE", null, null, null, null, null, null, null, null)))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(todo.getId(), "APPEND_CHECKLIST", List.of("A"), null, 3, null, null, null, "IN_COLUMN_FOR", null)))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> ruleService.addRule(board.getId(), ALICE,
+                new RuleRequest(todo.getId(), "MOVE", null, null, null, null, null, null, "SOMETIMES", doing.getId())))
+                .isInstanceOf(ResponseStatusException.class);
+        // Into its own column, into a column of another board.
+        assertThatThrownBy(() -> timedRule(todo, "MOVE", 3, null, null, todo.getId())).isInstanceOf(ResponseStatusException.class);
+        Board other = boardService.createBoard(ALICE, "Other");
+        int foreign = columnRepository.findByBoardOrderByPosition(other).get(0).getId();
+        assertThatThrownBy(() -> timedRule(todo, "MOVE", 3, null, null, foreign)).isInstanceOf(ResponseStatusException.class);
+        assertThat(ruleService.rulesOf(board.getId(), ALICE)).isEmpty();
+    }
+
+    @Test
+    void deletingAColumnDeletesTheRulesThatMoveTasksIntoIt() {
+        timedRule(todo, "MOVE", 3, null, null, doing.getId());
+        timedRule(todo, "ARCHIVE", 3, null, null, null);
+
+        boardService.deleteColumn(doing.getId(), ALICE, null, false);
+
+        assertThat(ruleService.rulesOf(board.getId(), ALICE)).extracting("action").containsExactly("ARCHIVE");
     }
 }

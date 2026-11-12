@@ -9,13 +9,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * The automations of a board (see {@link BoardRule}; run by RuleEngine). Only the owner sees and
+ * The automations of a board (see {@link BoardRule}; run by RuleEngine). A rule that moves tasks goes
+ * when its target column is deleted (BoardService.deleteColumn). Only the owner sees and
  * changes them; for others the board's rules are "not found".
  */
 @Service
@@ -29,12 +31,14 @@ public class BoardRuleService {
     private final BoardService boardService;
     private final BoardRuleRepository ruleRepository;
     private final BoardMemberRepository memberRepository;
+    private final BoardColumnRepository columnRepository;
 
     public BoardRuleService(BoardService boardService, BoardRuleRepository ruleRepository,
-                            BoardMemberRepository memberRepository) {
+                            BoardMemberRepository memberRepository, BoardColumnRepository columnRepository) {
         this.boardService = boardService;
         this.ruleRepository = ruleRepository;
         this.memberRepository = memberRepository;
+        this.columnRepository = columnRepository;
     }
 
     @Transactional(readOnly = true)
@@ -51,19 +55,22 @@ public class BoardRuleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "columnId must be a column of this board");
         }
         BoardRule.Action action = validAction(request.action());
-        BoardRule rule = new BoardRule(column, action, validPayload(action, request, board).toJson());
+        BoardRule.Trigger trigger = validTrigger(request.trigger(), action);
+        BoardRule rule = new BoardRule(column, trigger, action, validPayload(trigger, action, request, column).toJson());
         if (request.enabled() != null) {
             rule.setEnabled(request.enabled());
         }
         return RuleDto.from(ruleRepository.save(rule));
     }
 
-    /** Changes the settings and whether the rule is on. Column and action stay; absent enabled too. */
+    /** Changes the settings and whether the rule is on. Column, trigger and action stay; absent enabled too. */
     @Transactional
     public RuleDto updateRule(int ruleId, String email, RuleRequest request) {
         BoardRule rule = findRule(ruleId, email);
         BoardRule.Action action = BoardRule.Action.valueOf(rule.getAction());
-        rule.setPayload(validPayload(action, request, rule.getColumn().getBoard()).toJson());
+        rule.setPayload(validPayload(BoardRule.Trigger.valueOf(rule.getTrigger()), action, request, rule.getColumn()).toJson());
+        // Changed or switched on again: it watches from now, without catching up on what it missed.
+        rule.setCheckedAt(Instant.now());
         if (request.enabled() != null) {
             rule.setEnabled(request.enabled());
         }
@@ -89,31 +96,51 @@ public class BoardRuleService {
         }
     }
 
-    private RulePayload validPayload(BoardRule.Action action, RuleRequest request, Board board) {
+    private static BoardRule.Trigger validTrigger(String trigger, BoardRule.Action action) {
+        try {
+            BoardRule.Trigger result = trigger == null ? BoardRule.Trigger.ENTERED_COLUMN : BoardRule.Trigger.valueOf(trigger);
+            if (result.allows(action)) {
+                return result;
+            }
+        } catch (IllegalArgumentException e) {
+            // Unknown trigger: same answer as for one that doesn't go with the action.
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trigger " + trigger + " cannot run " + action);
+    }
+
+    // column: the rule's own.
+    private RulePayload validPayload(BoardRule.Trigger trigger, BoardRule.Action action, RuleRequest request, BoardColumn column) {
+        Board board = column.getBoard();
+        Integer days = trigger == BoardRule.Trigger.IN_COLUMN_FOR ? validDays(request.days(), 1) : null;
         return switch (action) {
-            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null, null, null, null);
-            case ADD_NOTE_REMINDER -> {
-                if (request.days() == null || request.days() < 0 || request.days() > MAX_DAYS) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 0 and " + MAX_DAYS);
-                }
-                yield new RulePayload(null, TaskNoteService.validText(request.text()), request.days(),
-                        Boolean.TRUE.equals(request.removeOnLeave()) ? true : null, null);
-            }
-            case ARCHIVE_AFTER -> {
-                if (request.days() == null || request.days() < 1 || request.days() > MAX_DAYS) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between 1 and " + MAX_DAYS);
-                }
-                yield new RulePayload(null, null, request.days(), null, null);
-            }
+            case APPEND_CHECKLIST, REPLACE_CHECKLIST -> new RulePayload(validItems(request.items()), null, null, null, null, null);
+            case ADD_NOTE_REMINDER -> new RulePayload(null, TaskNoteService.validText(request.text()), validDays(request.days(), 0),
+                    Boolean.TRUE.equals(request.removeOnLeave()) ? true : null, null, null);
             case NOTIFY -> {
                 String text = request.text() == null ? "" : request.text().strip();
                 if (text.isEmpty() || text.length() > MAX_NOTIFICATION_LENGTH) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "A notification needs 1 to " + MAX_NOTIFICATION_LENGTH + " characters");
                 }
-                yield new RulePayload(null, text, null, null, validRecipients(request.userIds(), board));
+                yield new RulePayload(null, text, days, null, validRecipients(request.userIds(), board), null);
+            }
+            case ARCHIVE -> new RulePayload(null, null, days, null, null, null);
+            case MOVE -> {
+                BoardColumn target = request.targetColumnId() == null ? null
+                        : columnRepository.findById(request.targetColumnId()).orElse(null);
+                if (target == null || !target.getBoard().getId().equals(board.getId()) || target.getId().equals(column.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "targetColumnId must be another column of this board");
+                }
+                yield new RulePayload(null, null, days, null, null, target.getId());
             }
         };
+    }
+
+    private static int validDays(Integer days, int min) {
+        if (days == null || days < min || days > MAX_DAYS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "days must be between " + min + " and " + MAX_DAYS);
+        }
+        return days;
     }
 
     // The owner and the members of the board; each at most once, in the order given.

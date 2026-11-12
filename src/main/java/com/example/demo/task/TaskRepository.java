@@ -25,9 +25,12 @@ public interface TaskRepository extends JpaRepository<Task, Integer> {
 
     List<Task> findByBoardColumnAndArchivedAtIsNotNull(BoardColumn column);
 
-    // Tasks that entered the column at or before the given time.
-    @Query("select t from Task t where t.boardColumn = :column and t.archivedAt is null and t.columnEntered <= :before")
-    List<Task> findInColumnSince(BoardColumn column, Instant before);
+    // Tasks that entered the column after the first and not after the second time, in the column's order.
+    @Query("""
+            select t from Task t where t.boardColumn = :column and t.archivedAt is null
+              and t.columnEntered > :after and t.columnEntered <= :until
+            order by t.position""")
+    List<Task> findEnteredBetween(BoardColumn column, Instant after, Instant until);
 
     // With the archived ones, for deleting the board.
     List<Task> findByBoardColumnBoard(Board board);
