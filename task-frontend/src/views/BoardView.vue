@@ -145,6 +145,17 @@ const archiveOpen = computed(() => route.name === 'board-archive')
 // Either of them: a page of the board without its tasks, with a way back.
 const subPage = computed(() => settingsOpen.value || archiveOpen.value)
 
+// Opens the settings or the archive; a second click on the open one goes back to the board.
+function togglePage(name) {
+  router.push({ name: route.name === name ? 'board' : name, params: { slug: route.params.slug } })
+}
+
+// From the settings or the archive, the view switch also leads back to the board.
+function chooseMode(value) {
+  setMode(value)
+  if (subPage.value) router.push({ name: 'board', params: { slug: route.params.slug } })
+}
+
 // ---- Small screens: one column at a time, with tabs ----
 // Matches Tailwind's md breakpoint (48rem).
 const mobileQuery = window.matchMedia('(max-width: 47.99rem)')
@@ -561,20 +572,12 @@ function askDeleteColumn(column) {
             </span>
           </div>
         </div>
-        <div v-if="store.board && subPage" class="flex shrink-0 gap-2">
+        <!-- The same toolbar on the board, its settings and its archive: the open page's button is
+             filled, and the view switch leads back to the board. What only works on the board is hidden.
+             Icon-only buttons on small screens to keep the header in one line -->
+        <div v-if="store.board" class="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
           <Button
-            :label="isMobile ? undefined : 'Back to board'"
-            aria-label="Back to board"
-            icon="pi pi-arrow-left"
-            severity="secondary"
-            outlined
-            @click="router.push({ name: 'board', params: { slug: route.params.slug } })"
-          />
-        </div>
-        <!-- Icon-only buttons on small screens to keep the header in one line -->
-        <div v-else-if="store.board" class="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
-          <Button
-            v-if="isMobile"
+            v-if="isMobile && !subPage"
             icon="pi pi-search"
             aria-label="Search"
             severity="secondary"
@@ -582,27 +585,29 @@ function askDeleteColumn(column) {
             :aria-expanded="filterOpen || filterActive"
             @click="toggleFilterRow"
           />
-          <ViewSwitch :mode="mode" @update:mode="setMode" />
+          <ViewSwitch :mode="subPage ? '' : mode" @update:mode="chooseMode" />
           <!-- Always an icon: the header is full as it is. -->
           <Button
             icon="pi pi-inbox"
             aria-label="Archive"
             title="Archive"
-            severity="secondary"
-            outlined
-            @click="router.push({ name: 'board-archive', params: { slug: route.params.slug } })"
+            :severity="archiveOpen ? undefined : 'secondary'"
+            :outlined="!archiveOpen"
+            :aria-pressed="archiveOpen"
+            @click="togglePage('board-archive')"
           />
           <Button
             :label="isMobile ? undefined : 'Settings'"
             aria-label="Board settings"
             icon="pi pi-cog"
-            severity="secondary"
-            outlined
-            @click="router.push({ name: 'board-settings', params: { slug: route.params.slug } })"
+            :severity="settingsOpen ? undefined : 'secondary'"
+            :outlined="!settingsOpen"
+            :aria-pressed="settingsOpen"
+            @click="togglePage('board-settings')"
           />
           <!-- Small screens have the + in the column tabs instead. -->
           <Button
-            v-if="!isMobile"
+            v-if="!isMobile && !subPage"
             label="Add column"
             icon="pi pi-objects-column"
             severity="secondary"
@@ -610,7 +615,7 @@ function askDeleteColumn(column) {
             @click="openAddColumn"
           />
           <Button
-            v-if="store.columns.length"
+            v-if="store.columns.length && !subPage"
             :label="isMobile ? undefined : 'New task'"
             aria-label="New task"
             icon="pi pi-plus"

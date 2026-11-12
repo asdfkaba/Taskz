@@ -23,8 +23,19 @@ test('Archive', async ({ browser }) => {
     await page.getByRole('button', { name: 'Archive' }).click()
     await archive().getByText('No archived tasks.').waitFor()
     ensure(page.url().endsWith('/archive'), page.url())
-    await page.getByRole('button', { name: 'Back to board' }).click()
+    // The toolbar stays: the archive's button is pressed, no view is, and what needs the board is gone.
+    const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
+    ensure((await pressed('Archive')) === 'true', 'archive button not pressed')
+    ensure((await pressed('Board view')) === 'false', 'a view is pressed in the archive')
+    ensure((await page.getByRole('button', { name: 'New task' }).count()) === 0, 'new task offered in the archive')
+    await page.getByRole('button', { name: 'Board settings' }).click()
+    await page.getByTestId('board-settings').waitFor()
+    ensure((await pressed('Board settings')) === 'true' && (await pressed('Archive')) === 'false', 'settings button not pressed')
+    await page.screenshot({ path: `${test.info().outputDir}/ar-0-toolbar.png` })
+    // A second click on the open page's button goes back to the board.
+    await page.getByRole('button', { name: 'Board settings' }).click()
     await page.locator('[data-task-id="1"]').waitFor()
+    ensure((await pressed('Board view')) === 'true', 'board view not pressed again')
   })
 
   await test.step('archiving takes tasks off the board without asking', async () => {
@@ -60,7 +71,7 @@ test('Archive', async ({ browser }) => {
   })
 
   await test.step('the restored task is on the board again, with its history', async () => {
-    await page.getByRole('button', { name: 'Back to board' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
     ensure((await page.locator('[data-task-id="3"]').count()) === 0, 'deleted task shown')
     ensure((await page.locator('[data-task-id]').evaluateAll((els) => els.map((e) => e.dataset.taskId))).join() === '2,1', 'order on the board')

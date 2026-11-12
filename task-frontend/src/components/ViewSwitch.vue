@@ -6,7 +6,7 @@ import Button from 'primevue/button'
 // board with smaller cards; the table has no compact form. See useBoardViewPrefs.
 // Labels only where the header has room for them; below that the buttons are icons.
 const props = defineProps({
-  mode: { type: String, required: true }, // 'board' | 'compact' | 'table'
+  mode: { type: String, required: true }, // 'board' | 'compact' | 'table'; '' while none of them shows
   // From which width the labels show. Default: Tailwind's xl, as the board header also holds
   // Settings, Add column and New task; shared boards have room earlier.
   labelsFrom: { type: String, default: '80rem' },

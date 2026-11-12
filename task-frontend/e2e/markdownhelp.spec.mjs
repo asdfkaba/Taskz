@@ -60,7 +60,7 @@ test('Markdown formatting help', async ({ browser }) => {
     await page.getByRole('button', { name: 'Formatting help (Markdown)' }).click()
     await help().waitFor()
     ensure((await help().getByTestId('markdown-example').count()) >= 12, 'examples missing')
-    await page.getByRole('button', { name: 'Back to board' }).click()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
   })
 
