@@ -23,11 +23,11 @@ test('Archive', async ({ browser }) => {
     await page.getByRole('button', { name: 'Archive' }).click()
     await archive().getByText('No archived tasks.').waitFor()
     ensure(page.url().endsWith('/archive'), page.url())
-    // The archive is one of the views: its button is pressed, and nothing in the toolbar moves or goes.
+    // The archive is one of the views: its button is pressed, and the toolbar stays where it is.
     const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
     ensure((await pressed('Archive')) === 'true', 'archive button not pressed')
     ensure((await pressed('Board view')) === 'false', 'board view pressed in the archive')
-    await page.getByRole('button', { name: 'New task' }).waitFor()
+    ensure((await page.getByRole('button', { name: 'New task' }).count()) === 0, 'new task offered in the archive')
     await page.screenshot({ path: `${test.info().outputDir}/ar-0-toolbar.png` })
     const settings = page.getByRole('button', { name: 'Board settings' })
     const before = await settings.boundingBox()

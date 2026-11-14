@@ -575,7 +575,8 @@ function askDeleteColumn(column) {
           </div>
         </div>
         <!-- The same toolbar on the board, its archive and its settings. The archive is one of the
-             views; in the settings none is pressed and the board's own buttons are gone.
+             views; in the settings none is pressed. Add column and New task sit in the filter row
+             below, so nothing here jumps when the page changes.
              Icon-only buttons on small screens to keep the header in one line -->
         <div v-if="store.board" class="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
           <Button
@@ -601,35 +602,36 @@ function askDeleteColumn(column) {
             :aria-pressed="settingsOpen"
             @click="toggleSettings"
           />
-          <!-- Small screens have the + in the column tabs instead. -->
+          <!-- Small screens fold the filter row away, so their New task stays here, on every page. -->
           <Button
-            v-if="!isMobile && !settingsOpen"
-            label="Add column"
-            icon="pi pi-objects-column"
-            severity="secondary"
-            outlined
-            @click="openAddColumn"
-          />
-          <Button
-            v-if="store.columns.length && !settingsOpen"
-            :label="isMobile ? undefined : 'New task'"
+            v-if="isMobile && store.columns.length"
             aria-label="New task"
             icon="pi pi-plus"
-            @click="openCreateTask(isMobile && view === 'board' ? activeColumnId : store.columns[0].id)"
+            @click="openCreateTask(view === 'board' && !subPage ? activeColumnId : store.columns[0].id)"
           />
         </div>
       </div>
 
-      <BoardFilter
+      <!-- Filter on the left, what adds to the board on the right. Small screens have the + for
+           columns in the column tabs and the one for tasks in the header. -->
+      <div
         v-if="store.loaded && !subPage && (!isMobile || filterOpen || filterActive)"
-        ref="filterBar"
-        v-model:text="filterText"
-        v-model:labelIds="filterLabelIds"
-        :labels="store.labels"
-        :active="filterActive"
-        class="-mt-1 md:-mt-3"
-        @clear="clearFilter"
-      />
+        class="-mt-1 flex flex-wrap items-center gap-2 md:-mt-3"
+      >
+        <BoardFilter
+          ref="filterBar"
+          v-model:text="filterText"
+          v-model:labelIds="filterLabelIds"
+          :labels="store.labels"
+          :active="filterActive"
+          class="min-w-0 flex-1"
+          @clear="clearFilter"
+        />
+        <template v-if="!isMobile">
+          <Button label="Add column" icon="pi pi-objects-column" severity="secondary" outlined @click="openAddColumn" />
+          <Button v-if="store.columns.length" label="New task" icon="pi pi-plus" @click="openCreateTask(store.columns[0].id)" />
+        </template>
+      </div>
 
       <div
         v-if="store.boardsLoaded && store.boards.length === 0"
