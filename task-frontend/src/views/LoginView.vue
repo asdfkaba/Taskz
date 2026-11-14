@@ -161,6 +161,13 @@ async function loginWithGoogle() {
           @click="loginWithDiscord"
         />
       </div>
+
+      <RouterLink
+        :to="{ name: 'help' }"
+        class="mt-6 block text-center text-sm text-slate-500 hover:text-emerald-700 hover:underline dark:text-slate-400 dark:hover:text-emerald-400"
+      >
+        What can Taskz do?
+      </RouterLink>
     </div>
   </div>
 </template>
