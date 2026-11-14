@@ -1,4 +1,4 @@
-// Archive: a task leaves the board from its menu, and comes back or is deleted for good on the archive page.
+// Archive: a task leaves the board from its menu, and comes back or is deleted for good in the archive view.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
@@ -23,18 +23,18 @@ test('Archive', async ({ browser }) => {
     await page.getByRole('button', { name: 'Archive' }).click()
     await archive().getByText('No archived tasks.').waitFor()
     ensure(page.url().endsWith('/archive'), page.url())
-    // The toolbar stays: the archive's button is pressed, no view is, and what needs the board is gone.
+    // The archive is one of the views: its button is pressed, and nothing in the toolbar moves or goes.
     const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
     ensure((await pressed('Archive')) === 'true', 'archive button not pressed')
-    ensure((await pressed('Board view')) === 'false', 'a view is pressed in the archive')
-    ensure((await page.getByRole('button', { name: 'New task' }).count()) === 0, 'new task offered in the archive')
-    await page.getByRole('button', { name: 'Board settings' }).click()
-    await page.getByTestId('board-settings').waitFor()
-    ensure((await pressed('Board settings')) === 'true' && (await pressed('Archive')) === 'false', 'settings button not pressed')
+    ensure((await pressed('Board view')) === 'false', 'board view pressed in the archive')
+    await page.getByRole('button', { name: 'New task' }).waitFor()
     await page.screenshot({ path: `${test.info().outputDir}/ar-0-toolbar.png` })
-    // A second click on the open page's button goes back to the board.
-    await page.getByRole('button', { name: 'Board settings' }).click()
+    const settings = page.getByRole('button', { name: 'Board settings' })
+    const before = await settings.boundingBox()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
+    const after = await settings.boundingBox()
+    ensure(before.x === after.x && before.y === after.y, 'the toolbar jumped between archive and board')
     ensure((await pressed('Board view')) === 'true', 'board view not pressed again')
   })
 

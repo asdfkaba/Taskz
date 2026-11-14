@@ -140,20 +140,22 @@ const tableTasks = computed(() =>
 
 // /boards/<slug>/settings shows the board's settings instead of its columns.
 const settingsOpen = computed(() => route.name === 'board-settings')
-// /boards/<slug>/archive shows the board's archived tasks.
+// /boards/<slug>/archive shows the board's archived tasks: a fourth view in the view switch, but
+// with its own address and not remembered as the board's view.
 const archiveOpen = computed(() => route.name === 'board-archive')
-// Either of them: a page of the board without its tasks, with a way back.
+// Either of them: the board's tasks don't show, so neither do the filter and who is online.
 const subPage = computed(() => settingsOpen.value || archiveOpen.value)
 
-// Opens the settings or the archive; a second click on the open one goes back to the board.
-function togglePage(name) {
-  router.push({ name: route.name === name ? 'board' : name, params: { slug: route.params.slug } })
-}
+const goTo = (name) => router.push({ name, params: { slug: route.params.slug } })
 
-// From the settings or the archive, the view switch also leads back to the board.
+// A second click on the open settings goes back to the board.
+const toggleSettings = () => goTo(settingsOpen.value ? 'board' : 'board-settings')
+
+// The view switch also leads out of the settings and the archive.
 function chooseMode(value) {
+  if (value === 'archive') return goTo('board-archive')
   setMode(value)
-  if (subPage.value) router.push({ name: 'board', params: { slug: route.params.slug } })
+  if (subPage.value) goTo('board')
 }
 
 // ---- Small screens: one column at a time, with tabs ----
@@ -572,14 +574,12 @@ function askDeleteColumn(column) {
             </span>
           </div>
         </div>
-        <!-- The same toolbar on the board, its settings and its archive: the open page's button is
-             filled, and the view switch leads back to the board. What only works on the board turns
-             invisible but keeps its room, so the other buttons don't jump when the page changes.
+        <!-- The same toolbar on the board, its archive and its settings. The archive is one of the
+             views; in the settings none is pressed and the board's own buttons are gone.
              Icon-only buttons on small screens to keep the header in one line -->
         <div v-if="store.board" class="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
           <Button
-            v-if="isMobile"
-            :class="{ invisible: subPage }"
+            v-if="isMobile && !subPage"
             icon="pi pi-search"
             aria-label="Search"
             severity="secondary"
@@ -587,16 +587,10 @@ function askDeleteColumn(column) {
             :aria-expanded="filterOpen || filterActive"
             @click="toggleFilterRow"
           />
-          <ViewSwitch :mode="subPage ? '' : mode" @update:mode="chooseMode" />
-          <!-- Always an icon: the header is full as it is. -->
-          <Button
-            icon="pi pi-inbox"
-            aria-label="Archive"
-            title="Archive"
-            :severity="archiveOpen ? undefined : 'secondary'"
-            :outlined="!archiveOpen"
-            :aria-pressed="archiveOpen"
-            @click="togglePage('board-archive')"
+          <ViewSwitch
+            archive
+            :mode="settingsOpen ? '' : archiveOpen ? 'archive' : mode"
+            @update:mode="chooseMode"
           />
           <Button
             :label="isMobile ? undefined : 'Settings'"
@@ -605,12 +599,11 @@ function askDeleteColumn(column) {
             :severity="settingsOpen ? undefined : 'secondary'"
             :outlined="!settingsOpen"
             :aria-pressed="settingsOpen"
-            @click="togglePage('board-settings')"
+            @click="toggleSettings"
           />
           <!-- Small screens have the + in the column tabs instead. -->
           <Button
-            v-if="!isMobile"
-            :class="{ invisible: subPage }"
+            v-if="!isMobile && !settingsOpen"
             label="Add column"
             icon="pi pi-objects-column"
             severity="secondary"
@@ -618,8 +611,7 @@ function askDeleteColumn(column) {
             @click="openAddColumn"
           />
           <Button
-            v-if="store.columns.length"
-            :class="{ invisible: subPage }"
+            v-if="store.columns.length && !settingsOpen"
             :label="isMobile ? undefined : 'New task'"
             aria-label="New task"
             icon="pi pi-plus"

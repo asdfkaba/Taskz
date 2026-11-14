@@ -17,12 +17,8 @@ test('Board settings', async ({ browser }) => {
   await page.locator('[data-task-id="1"]').waitFor()
 
   await test.step('the gear opens the settings of the board', async () => {
-    const gear = page.getByRole('button', { name: 'Board settings' })
-    const before = await gear.boundingBox()
-    await gear.click()
+    await page.getByRole('button', { name: 'Board settings' }).click()
     await page.getByTestId('board-settings').waitFor()
-    const after = await gear.boundingBox()
-    ensure(before.x === after.x && before.y === after.y, 'the toolbar jumped when the settings opened')
     ensure(new URL(page.url()).pathname === '/boards/my-board/settings', page.url())
     ensure((await page.title()) === 'Settings · My board · Taskz', await page.title())
     ensure((await sidebarLink().getAttribute('aria-current')) === 'page', 'board not highlighted')

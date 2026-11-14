@@ -6,17 +6,19 @@ import Button from 'primevue/button'
 // board with smaller cards; the table has no compact form. See useBoardViewPrefs.
 // Labels only where the header has room for them; below that the buttons are icons.
 const props = defineProps({
-  mode: { type: String, required: true }, // 'board' | 'compact' | 'table'; '' while none of them shows
+  mode: { type: String, required: true }, // 'board' | 'compact' | 'table' | 'archive'; '' while none of them shows
+  archive: Boolean, // offer the archive as a fourth view (not on shared boards)
   // From which width the labels show. Default: Tailwind's xl, as the board header also holds
   // Settings, Add column and New task; shared boards have room earlier.
   labelsFrom: { type: String, default: '80rem' },
 })
 const emit = defineEmits(['update:mode'])
 
-const MODES = [
+const modes = [
   { value: 'board', label: 'Board', icon: 'pi pi-th-large', name: 'Board view' },
   { value: 'compact', label: 'Compact', icon: 'pi pi-list', name: 'Compact board view' },
   { value: 'table', label: 'Table', icon: 'pi pi-table', name: 'Table view' },
+  ...(props.archive ? [{ value: 'archive', label: 'Archive', icon: 'pi pi-inbox', name: 'Archive' }] : []),
 ]
 
 const wideQuery = window.matchMedia(`(min-width: ${props.labelsFrom})`)
@@ -29,7 +31,7 @@ onBeforeUnmount(() => wideQuery.removeEventListener('change', onChange))
 <template>
   <div role="group" aria-label="View" class="flex">
     <Button
-      v-for="(option, index) in MODES"
+      v-for="(option, index) in modes"
       :key="option.value"
       :icon="option.icon"
       :label="wide ? option.label : undefined"
@@ -38,7 +40,7 @@ onBeforeUnmount(() => wideQuery.removeEventListener('change', onChange))
       :aria-label="option.name"
       :title="option.name"
       :aria-pressed="mode === option.value"
-      :class="[index > 0 && '-ml-px !rounded-l-none', index < MODES.length - 1 && '!rounded-r-none']"
+      :class="[index > 0 && '-ml-px !rounded-l-none', index < modes.length - 1 && '!rounded-r-none']"
       @click="emit('update:mode', option.value)"
     />
   </div>
