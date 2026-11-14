@@ -573,11 +573,13 @@ function askDeleteColumn(column) {
           </div>
         </div>
         <!-- The same toolbar on the board, its settings and its archive: the open page's button is
-             filled, and the view switch leads back to the board. What only works on the board is hidden.
+             filled, and the view switch leads back to the board. What only works on the board turns
+             invisible but keeps its room, so the other buttons don't jump when the page changes.
              Icon-only buttons on small screens to keep the header in one line -->
         <div v-if="store.board" class="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
           <Button
-            v-if="isMobile && !subPage"
+            v-if="isMobile"
+            :class="{ invisible: subPage }"
             icon="pi pi-search"
             aria-label="Search"
             severity="secondary"
@@ -607,7 +609,8 @@ function askDeleteColumn(column) {
           />
           <!-- Small screens have the + in the column tabs instead. -->
           <Button
-            v-if="!isMobile && !subPage"
+            v-if="!isMobile"
+            :class="{ invisible: subPage }"
             label="Add column"
             icon="pi pi-objects-column"
             severity="secondary"
@@ -615,7 +618,8 @@ function askDeleteColumn(column) {
             @click="openAddColumn"
           />
           <Button
-            v-if="store.columns.length && !subPage"
+            v-if="store.columns.length"
+            :class="{ invisible: subPage }"
             :label="isMobile ? undefined : 'New task'"
             aria-label="New task"
             icon="pi pi-plus"
