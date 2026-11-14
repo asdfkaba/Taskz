@@ -1,8 +1,8 @@
-// Add column button in the header.
+// Add column button next to the filter.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
-test('Add column button in the header', async ({ browser }) => {
+test('Add column button next to the filter', async ({ browser }) => {
   const base = BASE
   const outDir = test.info().outputDir
   await resetMock()
@@ -29,10 +29,12 @@ test('Add column button in the header', async ({ browser }) => {
   await desk.getByText('Task A', { exact: true }).waitFor()
   const headerButton = () => desk.getByRole('button', { name: 'Add column' })
 
-  await check(desk, 'header has Settings, Add column, New task in that order', async () => {
-    const labels = await desk.locator('h1').locator('xpath=ancestor::div[contains(@class,"justify-between")][1]').getByRole('button').allInnerTexts()
-    const names = labels.map((t) => t.trim()).filter(Boolean)
-    expect(JSON.stringify(names.slice(-3)) === '["Settings","Add column","New task"]', JSON.stringify(names))
+  await check(desk, 'Add column and New task end the filter row, the header ends with Settings', async () => {
+    const names = async (row) => (await row.getByRole('button').allInnerTexts()).map((t) => t.trim()).filter(Boolean)
+    const header = await names(desk.locator('h1').locator('xpath=ancestor::div[contains(@class,"justify-between")][1]'))
+    expect(header.at(-1) === 'Settings', JSON.stringify(header))
+    const row = await names(desk.getByRole('search').locator('xpath=..'))
+    expect(JSON.stringify(row.slice(-2)) === '["Add column","New task"]', JSON.stringify(row))
     expect((await headerButton().count()) === 1, 'more than one Add column button')
     await desk.screenshot({ path: `${outDir}/ac-1-desktop.png` })
   })

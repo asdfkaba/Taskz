@@ -8,8 +8,8 @@ import Button from 'primevue/button'
 const props = defineProps({
   mode: { type: String, required: true }, // 'board' | 'compact' | 'table' | 'archive'; '' while none of them shows
   archive: Boolean, // offer the archive as a fourth view (not on shared boards)
-  // From which width the labels show. Default: Tailwind's xl, as the board header also holds
-  // Settings, Add column and New task; shared boards have room earlier.
+  // From which width the labels show. Default: Tailwind's xl, kept from when the board header
+  // also held Add column and New task; shared boards have room earlier.
   labelsFrom: { type: String, default: '80rem' },
 })
 const emit = defineEmits(['update:mode'])
