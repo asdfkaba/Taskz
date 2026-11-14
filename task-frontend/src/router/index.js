@@ -68,6 +68,13 @@ const router = createRouter({
       component: () => import('../views/JoinView.vue'),
       meta: { requiresAuth: true, title: 'Join board' },
     },
+    {
+      // What Taskz can do, for its users; no login needed, so it can be linked from anywhere.
+      path: '/help',
+      name: 'help',
+      component: () => import('../views/HelpView.vue'),
+      meta: { requiresAuth: false, title: 'Help' },
+    },
     // Old URL of the task list.
     { path: '/tasks', redirect: '/boards' },
     {
