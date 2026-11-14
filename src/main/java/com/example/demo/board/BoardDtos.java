@@ -23,8 +23,9 @@ public final class BoardDtos {
     }
 
     // Columns are sorted by position, tasks by column position and then by their own position.
+    // hasArchived: the board has archived tasks, which tasks leaves out.
     public record BoardDetail(Integer id, String name, String slug, List<ColumnDto> columns, List<LabelDto> labels,
-                              List<TaskDto> tasks, String taskTemplate) {
+                              List<TaskDto> tasks, String taskTemplate, boolean hasArchived) {
     }
 
     // Body and response of PUT /boards/{id}/task-template; null or blank removes the template.

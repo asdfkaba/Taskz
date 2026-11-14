@@ -10,6 +10,7 @@ test('Archive', async ({ browser }) => {
   const ensure = (cond, msg) => { if (!cond) throw new Error(msg) }
   const state = async () => (await fetch(`${BASE}/api/__state`)).json()
   const archive = () => page.getByTestId('board-archive')
+  const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
   const archiveFromMenu = async (taskId) => {
     await page.locator(`[data-task-id="${taskId}"]`).getByRole('button', { name: 'Task actions' }).click()
     await page.getByRole('menuitem', { name: 'Archive' }).click()
@@ -19,23 +20,14 @@ test('Archive', async ({ browser }) => {
   await page.goto(`${BASE}/boards`)
   await page.locator('[data-task-id="1"]').waitFor()
 
-  await test.step('an empty archive says how to fill it', async () => {
-    await page.getByRole('button', { name: 'Archive' }).click()
+  await test.step('an empty archive is not offered, but its address says how to fill it', async () => {
+    ensure((await page.getByRole('button', { name: 'Archive' }).count()) === 0, 'empty archive offered')
+    await page.goto(`${BASE}/boards/my-board/archive`)
     await archive().getByText('No archived tasks.').waitFor()
-    ensure(page.url().endsWith('/archive'), page.url())
-    // The archive is one of the views: its button is pressed, and the toolbar stays where it is.
-    const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
     ensure((await pressed('Archive')) === 'true', 'archive button not pressed')
-    ensure((await pressed('Board view')) === 'false', 'board view pressed in the archive')
-    ensure((await page.getByRole('button', { name: 'New task' }).count()) === 0, 'new task offered in the archive')
-    await page.screenshot({ path: `${test.info().outputDir}/ar-0-toolbar.png` })
-    const settings = page.getByRole('button', { name: 'Board settings' })
-    const before = await settings.boundingBox()
     await page.getByRole('button', { name: 'Board view', exact: true }).click()
     await page.locator('[data-task-id="1"]').waitFor()
-    const after = await settings.boundingBox()
-    ensure(before.x === after.x && before.y === after.y, 'the toolbar jumped between archive and board')
-    ensure((await pressed('Board view')) === 'true', 'board view not pressed again')
+    ensure((await page.getByRole('button', { name: 'Archive' }).count()) === 0, 'empty archive offered after leaving it')
   })
 
   await test.step('archiving takes tasks off the board without asking', async () => {
@@ -55,6 +47,32 @@ test('Archive', async ({ browser }) => {
     ensure(JSON.stringify(ids) === '["3","1"]', JSON.stringify(ids))
     ensure((await archive().locator('[data-archived-id="1"]').innerText()).includes('To do'), 'column name')
     await page.screenshot({ path: `${test.info().outputDir}/ar-1-archive.png` })
+    // The archive is one of the views: its button is pressed, and the toolbar stays where it is.
+    ensure((await pressed('Archive')) === 'true' && (await pressed('Board view')) === 'false', 'archive not the pressed view')
+    ensure((await page.getByRole('button', { name: 'New task' }).count()) === 0, 'new task offered in the archive')
+    const settings = page.getByRole('button', { name: 'Board settings' })
+    const before = await settings.boundingBox()
+    await page.getByRole('button', { name: 'Board view', exact: true }).click()
+    await page.locator('[data-task-id="2"]').waitFor()
+    const after = await settings.boundingBox()
+    ensure(before.x === after.x && before.y === after.y, 'the toolbar jumped between archive and board')
+  })
+
+  await test.step('phone: the header stays put between board, archive and settings', async () => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const gear = page.getByRole('button', { name: 'Board settings' })
+    const place = async () => JSON.stringify(await gear.boundingBox())
+    const onBoard = await place()
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await archive().waitFor()
+    ensure((await place()) === onBoard, `header jumped in the archive: ${onBoard} -> ${await place()}`)
+    await page.screenshot({ path: `${test.info().outputDir}/ar-2-phone.png` })
+    await gear.click()
+    await page.getByTestId('board-settings').waitFor()
+    ensure((await place()) === onBoard, `header jumped in the settings: ${onBoard} -> ${await place()}`)
+    await page.setViewportSize({ width: 1400, height: 900 })
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await archive().locator('[data-archived-id]').first().waitFor()
   })
 
   await test.step('restore puts the task back at the end of its column', async () => {
@@ -75,20 +93,6 @@ test('Archive', async ({ browser }) => {
     await page.locator('[data-task-id="1"]').waitFor()
     ensure((await page.locator('[data-task-id="3"]').count()) === 0, 'deleted task shown')
     ensure((await page.locator('[data-task-id]').evaluateAll((els) => els.map((e) => e.dataset.taskId))).join() === '2,1', 'order on the board')
-  })
-
-  await test.step('phone: the header stays put between board, archive and settings', async () => {
-    await page.setViewportSize({ width: 390, height: 844 })
-    const gear = page.getByRole('button', { name: 'Board settings' })
-    const place = async () => JSON.stringify(await gear.boundingBox())
-    const onBoard = await place()
-    await page.getByRole('button', { name: 'Archive' }).click()
-    await archive().waitFor()
-    ensure((await place()) === onBoard, `header jumped in the archive: ${onBoard} -> ${await place()}`)
-    await page.screenshot({ path: `${test.info().outputDir}/ar-2-phone.png` })
-    await gear.click()
-    await page.getByTestId('board-settings').waitFor()
-    ensure((await place()) === onBoard, `header jumped in the settings: ${onBoard} -> ${await place()}`)
   })
 
   if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`)

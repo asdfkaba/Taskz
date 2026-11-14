@@ -32,6 +32,7 @@ export const useBoardStore = defineStore('board', {
     columns: [], // [{ id, name, color, position }]
     labels: [], // [{ id, name, color }] of the open board, in creation order
     taskTemplate: null, // Markdown new tasks of the open board start with, or null
+    hasArchived: false, // the open board has archived tasks, so its archive is worth showing
     attachmentSettings: null, // { maxFileSize, types, extensions } from the backend, loaded once
     tasksByColumn: {}, // { [columnId]: [task, ...] }
     loading: false,
@@ -111,6 +112,7 @@ export const useBoardStore = defineStore('board', {
       this.columns = detail.columns
       this.labels = detail.labels ?? []
       this.taskTemplate = detail.taskTemplate ?? null
+      this.hasArchived = detail.hasArchived ?? false
       this.tasksByColumn = tasksByColumn
     },
 
@@ -325,6 +327,7 @@ export const useBoardStore = defineStore('board', {
       const found = this.findTask(id)
       if (found) this.tasksByColumn[found.columnId].splice(found.index, 1)
       this.renumberTasks()
+      this.hasArchived = true
     },
 
     // The open board's archived tasks, last archived first; each with archived (when).

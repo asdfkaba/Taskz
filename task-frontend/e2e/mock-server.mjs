@@ -288,7 +288,7 @@ function api(method, url, body) {
   if (method === 'GET' && p === '/boards/1') {
     const cols = sortedColumns()
     const ts = cols.flatMap((c) => inColumn(c.id))
-    return [200, { ...board, columns: cols, labels, tasks: ts }]
+    return [200, { ...board, columns: cols, labels, tasks: ts, hasArchived: tasks.some((t) => t.archived) }]
   }
   if (method === 'PATCH' && p === '/boards/1') {
     const name = body.name?.trim()

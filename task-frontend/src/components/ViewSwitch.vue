@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import Button from 'primevue/button'
 
 // Board, compact board or table, as one button group. Compact sits next to Board, as it is the
@@ -14,12 +14,12 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:mode'])
 
-const modes = [
+const modes = computed(() => [
   { value: 'board', label: 'Board', icon: 'pi pi-th-large', name: 'Board view' },
   { value: 'compact', label: 'Compact', icon: 'pi pi-list', name: 'Compact board view' },
   { value: 'table', label: 'Table', icon: 'pi pi-table', name: 'Table view' },
   ...(props.archive ? [{ value: 'archive', label: 'Archive', icon: 'pi pi-inbox', name: 'Archive' }] : []),
-]
+])
 
 const wideQuery = window.matchMedia(`(min-width: ${props.labelsFrom})`)
 const wide = ref(wideQuery.matches)
