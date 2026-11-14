@@ -8,9 +8,10 @@ import Button from 'primevue/button'
 const props = defineProps({
   mode: { type: String, required: true }, // 'board' | 'compact' | 'table' | 'archive'; '' while none of them shows
   archive: Boolean, // offer the archive as a fourth view (not on shared boards)
-  // From which width the labels show. Default: Tailwind's lg, where the board header fits them
-  // next to the sidebar and Settings; shared boards have no sidebar and room earlier.
-  labelsFrom: { type: String, default: '64rem' },
+  // From which width the labels show. Default: the narrowest window where the board's toolbar
+  // (four labelled views and Settings, 532px) still fits in one line next to the open sidebar,
+  // on its own line below the title if need be. Shared boards have no sidebar and room earlier.
+  labelsFrom: { type: String, default: '54rem' },
 })
 const emit = defineEmits(['update:mode'])
 
