@@ -35,6 +35,8 @@ public interface TaskRepository extends JpaRepository<Task, Integer> {
     // With the archived ones, for deleting the board.
     List<Task> findByBoardColumnBoard(Board board);
 
+    boolean existsByBoardColumnBoardAndArchivedAtIsNotNull(Board board);
+
     // The board's archive, last archived first.
     @Query("select t from Task t where t.boardColumn.board = :board and t.archivedAt is not null order by t.archivedAt desc, t.id desc")
     List<Task> findArchived(Board board);

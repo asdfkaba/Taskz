@@ -569,10 +569,12 @@ class BoardServiceTests {
         Task a = addTask("A", todo);
         addTask("B", todo);
         addTask("C", todo);
+        assertThat(boardService.getBoard(board.getId(), ALICE).hasArchived()).isFalse();
 
         boardService.archiveTask(a.getId(), ALICE);
 
         assertThat(titlesIn(todo)).containsExactly("B", "C");
+        assertThat(boardService.getBoard(board.getId(), ALICE).hasArchived()).isTrue();
         assertThat(boardService.getBoard(board.getId(), ALICE).tasks()).extracting("title").containsExactly("B", "C");
         assertThat(boardService.archivedOf(board.getId(), ALICE)).extracting("title").containsExactly("A");
         assertThat(boardService.archivedOf(board.getId(), ALICE).get(0).archived()).isNotNull();

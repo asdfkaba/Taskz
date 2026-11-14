@@ -590,8 +590,9 @@ function askDeleteColumn(column) {
             :aria-expanded="filterOpen || filterActive"
             @click="toggleFilterRow"
           />
+          <!-- An empty archive is not offered, but stays while it is open. -->
           <ViewSwitch
-            archive
+            :archive="store.hasArchived || archiveOpen"
             :mode="settingsOpen ? '' : archiveOpen ? 'archive' : mode"
             @update:mode="chooseMode"
           />
