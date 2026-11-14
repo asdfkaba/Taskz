@@ -77,6 +77,20 @@ test('Archive', async ({ browser }) => {
     ensure((await page.locator('[data-task-id]').evaluateAll((els) => els.map((e) => e.dataset.taskId))).join() === '2,1', 'order on the board')
   })
 
+  await test.step('phone: the header stays put between board, archive and settings', async () => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const gear = page.getByRole('button', { name: 'Board settings' })
+    const place = async () => JSON.stringify(await gear.boundingBox())
+    const onBoard = await place()
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await archive().waitFor()
+    ensure((await place()) === onBoard, `header jumped in the archive: ${onBoard} -> ${await place()}`)
+    await page.screenshot({ path: `${test.info().outputDir}/ar-2-phone.png` })
+    await gear.click()
+    await page.getByTestId('board-settings').waitFor()
+    ensure((await place()) === onBoard, `header jumped in the settings: ${onBoard} -> ${await place()}`)
+  })
+
   if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`)
   for (const context of browser.contexts()) await context.close()
 })

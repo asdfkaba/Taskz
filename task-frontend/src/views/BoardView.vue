@@ -527,8 +527,10 @@ function askDeleteColumn(column) {
             <h1 class="truncate text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 md:text-2xl">
               {{ store.board?.name ?? 'Boards' }}
             </h1>
-            <p v-if="settingsOpen" class="text-sm text-slate-500 dark:text-slate-400">Board settings</p>
-            <p v-else-if="archiveOpen" class="text-sm text-slate-500 dark:text-slate-400">Archive</p>
+            <!-- Not on phones: the header would grow by a line in the settings and the archive, and
+                 their pressed button says where you are. -->
+            <p v-if="settingsOpen" class="hidden text-sm text-slate-500 dark:text-slate-400 md:block">Board settings</p>
+            <p v-else-if="archiveOpen" class="hidden text-sm text-slate-500 dark:text-slate-400 md:block">Archive</p>
             <p v-else-if="store.loaded" class="hidden text-sm text-slate-500 dark:text-slate-400 md:block">
               <template v-if="filterActive">{{ matchingCount }} of {{ store.taskCount }} tasks match</template>
               <template v-else>
