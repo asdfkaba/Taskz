@@ -48,11 +48,12 @@ public class AuthController {
         String email = authentication.getName();
         Optional<User> user = userRepository.findByEmail(email);
         return ResponseEntity.ok(new UserInfoDto(email, user.map(User::getName).orElse(null),
-                user.map(User::getId).orElse(null)));
+                user.map(User::getId).orElse(null), user.map(User::isAdmin).orElse(false)));
     }
 
     // name and id: the page shows them, e.g. the own icon among who is on a board.
-    public static record UserInfoDto(String email, String name, Integer id) {}
+    // admin: the page shows the link to /admin.
+    public static record UserInfoDto(String email, String name, Integer id, boolean admin) {}
 
 
     @PostMapping("/login")

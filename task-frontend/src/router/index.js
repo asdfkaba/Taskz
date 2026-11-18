@@ -42,6 +42,13 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Account', fullWidth: true },
     },
     {
+      // Only for admins; the backend refuses everyone else.
+      path: '/admin',
+      name: 'admin',
+      component: () => import('../views/AdminView.vue'),
+      meta: { requiresAuth: true, title: 'Admin' },
+    },
+    {
       // The unsubscribe link in notification mails; no login needed.
       path: '/unsubscribe/:token',
       name: 'unsubscribe',

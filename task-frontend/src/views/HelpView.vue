@@ -177,6 +177,7 @@ const SECTIONS = [
       ['API tokens', 'For scripts and tools: a token acts as you on one board and can do only what you tick, e.g. read tasks, create them or write notes.'],
       ['Your data', 'Download everything Taskz has of you as a JSON file, or delete your account.'],
       ['Light and dark', 'The button next to your icon switches between light, dark and your system’s setting.'],
+      ['Admin', 'Only for admins: “Admin” in the same menu lists all users with when they registered, and deletes an account after you type its email.'],
     ],
   },
 ]
