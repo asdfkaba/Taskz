@@ -5,7 +5,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
+import java.time.Instant;
 import java.util.List;
 
 @Entity
@@ -20,6 +22,11 @@ public class User {
     // Accounts are matched by email at login, so one account per address (see V7).
     @Column(unique = true)
     private String email;
+    // Opens /admin. Only set by hand in the database (see V20).
+    private boolean admin;
+    // null for accounts created before V20.
+    @CreationTimestamp
+    private Instant createdAt;
 
     public User(String name, String email) {
         this.name = name;

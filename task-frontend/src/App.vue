@@ -55,6 +55,9 @@ const userMenuItems = computed(() => [
     items: [
       { label: 'Settings', icon: 'pi pi-cog', command: () => router.push({ name: 'account' }) },
       { label: 'Help', icon: 'pi pi-question-circle', command: () => router.push({ name: 'help' }) },
+      ...(authStore.user?.admin
+        ? [{ label: 'Admin', icon: 'pi pi-shield', command: () => router.push({ name: 'admin' }) }]
+        : []),
       { separator: true },
       { label: 'Log out', icon: 'pi pi-sign-out', command: logout },
     ],

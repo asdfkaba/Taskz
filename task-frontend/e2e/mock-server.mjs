@@ -45,6 +45,7 @@ let apiTokens
 // Alice's logins ([{ id, userAgent, ipAddress, issuedAt, expiresAt, current }]), and whether she deleted her account.
 let sessions
 let accountDeleted
+let adminUsers // what /admin/users lists; Alice (id 1) is an admin
 const TEAM_BOARD = { id: 2, name: 'Team board', slug: 'team-board', own: false, ownerName: 'Bob', ownerId: 2 }
 // Open live views of shared boards (server-sent events), like BoardEvents in the backend.
 const streams = new Set()
@@ -81,6 +82,10 @@ function reset() {
     session(3, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', false),
   ]
   accountDeleted = false
+  adminUsers = [
+    { id: 1, name: 'Alice', email: 'alice@example.com', admin: true, createdAt: '2026-03-02T10:00:00Z' },
+    { id: 2, name: 'Bob', email: 'bob@example.com', admin: false, createdAt: null },
+  ]
   nextId = 100
   columns = [
     { id: 10, name: 'To do', color: '#64748b', position: 0 },
@@ -164,7 +169,16 @@ function api(method, url, body) {
   const p = u.pathname.replace(/^\/api/, '')
   let m
   if (method === 'GET' && p === '/auth/status' && accountDeleted) return [401, {}]
-  if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice', id: 1 }]
+  if (method === 'GET' && p === '/auth/status') return [200, { email: 'alice@example.com', name: 'Alice', id: 1, admin: true }]
+  // Like AdminService: deleting needs the user's email typed, never the own account.
+  if (method === 'GET' && p === '/admin/users') return [200, adminUsers]
+  if (method === 'DELETE' && (m = p.match(/^\/admin\/users\/(\d+)$/))) {
+    const user = adminUsers.find((x) => x.id === +m[1])
+    if (!user) return [404, {}]
+    if (user.id === 1 || body?.email?.toLowerCase() !== user.email) return [400, {}]
+    adminUsers = adminUsers.filter((x) => x !== user)
+    return [204, null]
+  }
   // Like the backend: the code "unverified" stands for an account without a confirmed email.
   if (method === 'POST' && p === '/auth/logout') return [204, null]
   if (method === 'POST' && p === '/auth/login') {
@@ -666,7 +680,7 @@ http.createServer((req, res) => {
       }
       if (req.url === '/api/__state') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ board, apiTokens, sessions, accountDeleted, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
+        res.end(JSON.stringify({ board, apiTokens, sessions, accountDeleted, adminUsers, rules, notifications, sentToOthers, mail, share, shareRequests, notes, attachments: attachments.map(attachmentOut), columns: sortedColumns(), labels, tasks: sortedColumns().flatMap((c) => inColumn(c.id)), log }))
         return
       }
       if (req.method !== 'GET') log.push({ method: req.method, url: req.url, body })
