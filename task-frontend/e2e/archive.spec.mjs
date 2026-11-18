@@ -31,11 +31,24 @@ test('Archive', async ({ browser }) => {
   })
 
   await test.step('archiving takes tasks off the board without asking', async () => {
+    await page.getByText('3 tasks · 3 columns', { exact: true }).waitFor()
     await archiveFromMenu(1)
     await archiveFromMenu(3)
     ensure((await page.locator('.p-dialog').count()) === 0, 'asked before archiving')
     const tasks = (await state()).tasks
     ensure(JSON.stringify(tasks.map((t) => [t.id, t.position])) === '[[2,0]]', JSON.stringify(tasks))
+  })
+
+  await test.step('the line under the title counts the archived tasks, also on the shared board', async () => {
+    await page.getByText('1 task (2 archived) · 3 columns', { exact: true }).waitFor()
+    const { path } = await (await fetch(`${BASE}/api/boards/1/share`, { method: 'POST' })).json()
+    const shared = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await shared.goto(`${BASE}/share/${path}`)
+    await shared.getByTestId('board-summary').getByText('1 task (2 archived) · 3 columns', { exact: true }).waitFor()
+    // Only the number: the shared board offers no archive.
+    ensure((await shared.getByRole('button', { name: 'Archive' }).count()) === 0, 'archive offered on the shared board')
+    await shared.screenshot({ path: `${test.info().outputDir}/ar-0-shared.png` })
+    await shared.close()
   })
 
   await test.step('the archive lists them, last archived first, and survives a reload', async () => {

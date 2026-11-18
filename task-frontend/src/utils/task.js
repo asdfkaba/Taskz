@@ -34,3 +34,10 @@ export function contrastRatio(a, b) {
 export function labelTextColor(hex) {
   return contrastRatio(hex, '#ffffff') >= contrastRatio(hex, DARK_TEXT) ? '#ffffff' : DARK_TEXT
 }
+
+// The line under a board's title, e.g. "12 tasks (3 archived) · 4 columns".
+export function boardSummary(taskCount, archivedCount, columnCount) {
+  const tasks = `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`
+  const archived = archivedCount > 0 ? ` (${archivedCount} archived)` : ''
+  return `${tasks}${archived} · ${columnCount} ${columnCount === 1 ? 'column' : 'columns'}`
+}

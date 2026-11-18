@@ -259,9 +259,13 @@ public class BoardService {
     @Transactional(readOnly = true)
     public BoardDetail getBoard(int boardId, String email) {
         Board board = findBoard(boardId, email);
+        long archived = archivedCountOf(board);
         return new BoardDetail(board.getId(), board.getName(), board.getSlug(), columnsOf(board), labelsOf(board),
-                tasksOf(board), board.getTaskTemplate(),
-                taskRepository.existsByBoardColumnBoardAndArchivedAtIsNotNull(board));
+                tasksOf(board), board.getTaskTemplate(), archived > 0, archived);
+    }
+
+    public long archivedCountOf(Board board) {
+        return taskRepository.countByBoardColumnBoardAndArchivedAtIsNotNull(board);
     }
 
     /** Sets the description new tasks of the board start with. Blank removes it. Returns what is stored. */

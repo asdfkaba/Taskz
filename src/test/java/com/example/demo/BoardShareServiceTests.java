@@ -86,6 +86,20 @@ class BoardShareServiceTests {
         // Shared boards don't include attachments, not even how many there are.
         assertThat(shared.tasks()).extracting(t -> t.attachments()).containsOnlyNulls();
         assertThat(shareService.getShare(board.getId(), ALICE)).isPresent();
+        assertThat(shared.archivedCount()).isZero();
+    }
+
+    @Test
+    void sharedBoardCountsArchivedTasksWithoutShowingThem() {
+        String token = shareService.createShare(board.getId(), ALICE).getToken().toString();
+        Task task = taskRepository.findAll().get(0);
+        boardService.archiveTask(task.getId(), ALICE);
+        refresh(token);
+
+        BoardDtos.SharedBoard shared = shareService.sharedBoard(token);
+
+        assertThat(shared.tasks()).isEmpty();
+        assertThat(shared.archivedCount()).isEqualTo(1);
     }
 
     @Test

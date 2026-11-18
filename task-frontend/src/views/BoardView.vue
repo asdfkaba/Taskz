@@ -20,6 +20,7 @@ import SidebarLayout from '@/components/SidebarLayout.vue'
 import BoardSettings from '@/components/BoardSettings.vue'
 import UserIcon from '@/components/UserIcon.vue'
 import { usePageTitle } from '@/utils/title'
+import { boardSummary } from '@/utils/task'
 import { readStorage, writeStorage } from '@/utils/storage'
 import { useBoardViewPrefs } from '@/composables/useBoardViewPrefs'
 import { useBoardEvents } from '@/composables/useBoardEvents'
@@ -533,10 +534,7 @@ function askDeleteColumn(column) {
             <p v-else-if="archiveOpen" class="hidden text-sm text-slate-500 dark:text-slate-400 md:block">Archive</p>
             <p v-else-if="store.loaded" class="hidden text-sm text-slate-500 dark:text-slate-400 md:block">
               <template v-if="filterActive">{{ matchingCount }} of {{ store.taskCount }} tasks match</template>
-              <template v-else>
-                {{ store.taskCount }} {{ store.taskCount === 1 ? 'task' : 'tasks' }} ·
-                {{ store.columns.length }} {{ store.columns.length === 1 ? 'column' : 'columns' }}
-              </template>
+              <template v-else>{{ boardSummary(store.taskCount, store.archivedCount, store.columns.length) }}</template>
             </p>
           </div>
           <!-- Who has the board open right now: you first, then the others. On phones only their
@@ -592,7 +590,7 @@ function askDeleteColumn(column) {
           />
           <!-- An empty archive is not offered, but stays while it is open. -->
           <ViewSwitch
-            :archive="store.hasArchived || archiveOpen"
+            :archive="store.archivedCount > 0 || archiveOpen"
             :mode="settingsOpen ? '' : archiveOpen ? 'archive' : mode"
             @update:mode="chooseMode"
           />

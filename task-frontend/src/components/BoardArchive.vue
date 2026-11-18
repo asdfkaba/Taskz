@@ -20,7 +20,7 @@ const status = ref('loading') // 'loading' | 'ok' | 'error'
 onMounted(async () => {
   try {
     tasks.value = await store.fetchArchive()
-    store.hasArchived = tasks.value.length > 0
+    store.archivedCount = tasks.value.length
     status.value = 'ok'
   } catch {
     status.value = 'error'
@@ -29,7 +29,7 @@ onMounted(async () => {
 
 function remove(task) {
   tasks.value = tasks.value.filter((t) => t.id !== task.id)
-  store.hasArchived = tasks.value.length > 0
+  store.archivedCount = tasks.value.length
 }
 const showError = (summary, err) => toast.add({ severity: 'error', summary, detail: err.message, life: 5000 })
 

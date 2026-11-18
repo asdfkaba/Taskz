@@ -58,7 +58,8 @@ public class BoardShareService {
         Board board = share.getBoard();
         return new SharedBoard(board.getName(), ShareLinks.path(board.getSlug(), share.getToken()),
                 boardService.columnsOf(board), boardService.labelsOf(board),
-                boardService.tasksOf(board).stream().map(TaskDto::withoutAttachments).toList());
+                boardService.tasksOf(board).stream().map(TaskDto::withoutAttachments).toList(),
+                boardService.archivedCountOf(board));
     }
 
     /** The id of the board behind a link path; 404 like {@link #sharedBoard}. */
