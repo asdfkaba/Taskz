@@ -13,6 +13,11 @@ test('Help page', async ({ browser }) => {
   await page.goto(`${BASE}/boards`)
   await page.locator('[data-task-id="1"]').waitFor()
 
+  await test.step('the commit of the build shows under the logo', async () => {
+    const version = (await page.getByTestId('app-version').innerText()).trim()
+    ensure(/^[0-9a-f]{7,}$/.test(version), `version "${version}"`)
+  })
+
   await test.step('the account menu leads to it', async () => {
     await page.getByRole('button', { name: 'Account menu' }).click()
     await page.getByRole('menuitem', { name: 'Help' }).click()
