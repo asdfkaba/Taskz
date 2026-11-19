@@ -2,6 +2,10 @@ name: Deploy to Server
 on:
   push:
     branches: [ main ]
+# One deploy at a time: two merges in a row ran side by side, and the older build was copied last.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 jobs:
   tests:
     uses: ./.github/workflows/tests.yml
