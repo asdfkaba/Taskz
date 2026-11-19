@@ -17,7 +17,7 @@ test('Login callback', async ({ browser }) => {
     ensure((await message.innerText()).includes('no confirmed email'), await message.innerText())
     await page.screenshot({ path: `${test.info().outputDir}/login-refused.png` })
     await page.getByRole('button', { name: 'Back to login' }).click()
-    await page.waitForURL(/\/(login|boards)/)
+    await page.waitForURL(`${BASE}/`) // the login page
   })
 
   await test.step('without a code it says the login was cancelled', async () => {
