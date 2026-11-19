@@ -96,7 +96,7 @@ onMounted(async () => {
           <img src="/favicon.svg" alt="" class="h-8 w-8" />
           <span class="flex flex-col leading-tight">
             Taskz
-            <span class="text-[9px] font-normal text-slate-400 dark:text-slate-500" data-testid="app-version">{{ COMMIT }}</span>
+            <span class="text-[11px] font-normal text-slate-400 dark:text-slate-500" data-testid="app-version">{{ COMMIT }}</span>
           </span>
         </RouterLink>
 
