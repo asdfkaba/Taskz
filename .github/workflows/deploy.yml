@@ -34,6 +34,12 @@ jobs:
         run: |
           scp -O -i ~/.ssh/deploy_key -r task-frontend/dist/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/spring/
 
+      # Every deploy copies all current assets anew (fresh mtime), so files older than a week belong
+      # to builds no open tab still loads chunks from.
+      - name: Remove old frontend assets
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "find /var/www/spring/assets -type f -mtime +7 -delete"
+
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
