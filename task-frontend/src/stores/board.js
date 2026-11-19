@@ -349,13 +349,15 @@ export const useBoardStore = defineStore('board', {
       if (!found) throw new Error('Task not found')
       this.tasksByColumn[found.columnId].splice(found.index, 1)
       this.tasksByColumn[columnId].splice(index, 0, found.task)
-      await this.persistTaskMove(id)
+      return this.persistTaskMove(id)
     },
 
     // Saves the place the task now has in tasksByColumn (after drag & drop or moveTask).
+    // Returns the column it came from and the one it is in, e.g. to offer undoing the move.
     async persistTaskMove(id) {
       const found = this.findTask(id)
-      if (!found) return
+      if (!found) return null
+      const from = found.task.columnId
       found.task.columnId = found.columnId
       this.renumberTasks()
       const response = await expectOk(
@@ -365,6 +367,12 @@ export const useBoardStore = defineStore('board', {
       // Rules of the new column may have changed these; the place stays as it is now locally.
       const { checklist, due_date, edited, revision } = await response.json()
       Object.assign(found.task, { checklist, due_date, edited, revision })
+      return { from, to: found.columnId }
+    },
+
+    // Puts the task back before its moves of the last minute; the caller reloads the board.
+    async undoMove(id) {
+      await expectOk(await authFetch(`/api/tasks/${id}/undo-move`, { method: 'POST' }), 'Undoing move')
     },
 
     renumberTasks() {

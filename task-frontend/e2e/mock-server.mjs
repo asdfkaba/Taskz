@@ -16,6 +16,9 @@ let labels
 // History like the backend: newest first per task, only changed fields.
 let events
 let eventId
+// Like PendingMove: taskId → { from, position, event } of a move whose rules wait. Tests run them
+// with POST /api/__run-rules instead of waiting the minute.
+let pendingMoves
 const colName = (id) => columns.find((c) => c.id === id)?.name
 const labelNames = (ids) => labels.filter((l) => (ids ?? []).includes(l.id)).map((l) => l.name).sort()
 // Like the backend: points in time as UTC with a zone (Instant), due dates without one.
@@ -97,6 +100,7 @@ function reset() {
   boardDeleted = false
   events = []
   eventId = 1
+  pendingMoves = new Map()
   share = null
   shareRequests = []
   tasks = [
@@ -394,19 +398,55 @@ function api(method, url, body) {
     }
     return [200, t]
   }
+  // Like BoardService.moveTaskByHand: the rules wait; moving on rewrites the move entry, moving back
+  // to where it came from drops it.
   if ((m = p.match(/^\/tasks\/(\d+)\/move$/)) && method === 'PATCH') {
     const t = tasks.find((x) => x.id === +m[1])
-    if (body.columnId !== t.columnId) record(t, 'moved', { column: [colName(t.columnId), colName(body.columnId)] })
+    const from = t.columnId
+    const position = t.position
     const source = inColumn(t.columnId).filter((x) => x !== t)
     const target = body.columnId === t.columnId ? source : inColumn(body.columnId)
     target.splice(Math.min(body.position, target.length), 0, t)
-    const entered = t.columnId !== body.columnId
-    if (entered) leaveRules(t, t.columnId)
     t.columnId = body.columnId
     renumber(source)
     renumber(target)
-    if (entered) runRules(t)
+    if (from !== t.columnId) {
+      const pending = pendingMoves.get(t.id)
+      if (!pending) {
+        record(t, 'moved', { column: [colName(from), colName(t.columnId)] })
+        pendingMoves.set(t.id, { from, position, event: events[0] })
+      } else if (pending.from === t.columnId) {
+        events = events.filter((e) => e !== pending.event)
+        pendingMoves.delete(t.id)
+      } else {
+        Object.assign(pending.event, { at: now(), changes: { column: [colName(pending.from), colName(t.columnId)] } })
+      }
+    }
     return [200, t]
+  }
+  if ((m = p.match(/^\/tasks\/(\d+)\/undo-move$/)) && method === 'POST') {
+    const t = tasks.find((x) => x.id === +m[1])
+    const pending = t && pendingMoves.get(t.id)
+    if (!pending) return [409, {}]
+    events = events.filter((e) => e !== pending.event)
+    pendingMoves.delete(t.id)
+    const source = inColumn(t.columnId).filter((x) => x !== t)
+    const target = inColumn(pending.from)
+    target.splice(Math.min(pending.position, target.length), 0, t)
+    t.columnId = pending.from
+    renumber(source)
+    renumber(target)
+    return [200, t]
+  }
+  if (method === 'POST' && p === '/__run-rules') {
+    for (const [taskId, pending] of pendingMoves) {
+      const t = tasks.find((x) => x.id === taskId)
+      if (!t) continue
+      if (pending.from !== t.columnId) leaveRules(t, pending.from)
+      runRules(t)
+    }
+    pendingMoves.clear()
+    return [204, null]
   }
   if ((m = p.match(/^\/tasks\/(\d+)\/notes$/))) {
     const taskId = +m[1]

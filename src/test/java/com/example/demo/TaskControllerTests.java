@@ -35,6 +35,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -337,17 +338,27 @@ class TaskControllerTests {
         verify(taskRepository, never()).save(any());
     }
 
+    // From the page the rules wait, so the move can be undone (MoveByHandTests).
     @Test
-    void moveDelegatesToBoardService() throws Exception {
+    void moveFromThePageIsAMoveByHand() throws Exception {
         Task task = aliceTask();
         task.setPosition(3);
-        when(boardService.moveTask(1, 10, 3, ALICE)).thenReturn(task);
+        when(boardService.moveTaskByHand(1, 10, 3, ALICE)).thenReturn(task);
 
         mockMvc.perform(patch("/tasks/1/move")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"columnId\":10,\"position\":3}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.position").value(3));
+        verify(boardService, never()).moveTask(anyInt(), anyInt(), anyInt(), any());
+    }
+
+    @Test
+    void undoMoveDelegatesToBoardService() throws Exception {
+        when(boardService.undoMove(1, ALICE)).thenReturn(aliceTask());
+
+        mockMvc.perform(post("/tasks/1/undo-move")).andExpect(status().isOk());
+        verify(boardService).undoMove(1, ALICE);
     }
 
     @Test

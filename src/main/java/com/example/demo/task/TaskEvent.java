@@ -56,4 +56,10 @@ public class TaskEvent {
         this.changes = changes;
         this.at = Instant.now();
     }
+
+    // A move by hand corrected within its minute (see TaskHistoryService.retargetMove).
+    void retarget(String changes) {
+        this.changes = changes;
+        this.at = Instant.now();
+    }
 }

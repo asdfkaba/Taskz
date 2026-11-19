@@ -20,3 +20,10 @@ export async function dialogOpened(page) {
     .map((a) => a.finished.catch(() => {}))))
   await page.waitForFunction(() => document.querySelector('.p-dialog')?.contains(document.activeElement))
 }
+
+// After a move from the page the column's rules wait a minute (BoardService.moveTaskByHand); this
+// runs them at once, like the minute passing.
+export async function runWaitingRules() {
+  const response = await fetch(`${BASE}/api/__run-rules`, { method: 'POST' })
+  if (!response.ok) throw new Error(`running rules failed: ${response.status}`)
+}

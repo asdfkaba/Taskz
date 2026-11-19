@@ -103,16 +103,37 @@ public class TaskHistoryService {
         return changes;
     }
 
-    /** Without email: moved by a board rule, marked like {@link #recordAutomation}. */
+    /** Without email: moved by a board rule, marked like {@link #recordAutomation}. Returns the entry, or null. */
     @Transactional
-    public void recordMove(Task task, BoardColumn from, BoardColumn to, String email) {
-        if (!Objects.equals(from.getId(), to.getId())) {
-            Map<String, Object> changes = new LinkedHashMap<>();
-            changes.put("column", List.of(from.getName(), to.getName()));
-            if (email == null) {
-                changes.put("automation", true);
-            }
-            save(task, Type.MOVED, changes, email);
+    public TaskEvent recordMove(Task task, BoardColumn from, BoardColumn to, String email) {
+        if (Objects.equals(from.getId(), to.getId())) {
+            return null;
+        }
+        Map<String, Object> changes = new LinkedHashMap<>();
+        changes.put("column", List.of(from.getName(), to.getName()));
+        if (email == null) {
+            changes.put("automation", true);
+        }
+        return save(task, Type.MOVED, changes, email);
+    }
+
+    /**
+     * The task moved on within a minute of moving by hand: its move entry now goes straight from
+     * fromName to toName, as of now. False if the entry is gone.
+     */
+    @Transactional
+    public boolean retargetMove(Integer eventId, String fromName, String toName) {
+        return eventId != null && eventRepository.findById(eventId).map(event -> {
+            event.retarget(write(Map.of("column", List.of(fromName, toName))));
+            return true;
+        }).orElse(false);
+    }
+
+    /** Removes a move entry that was undone. */
+    @Transactional
+    public void forget(Integer eventId) {
+        if (eventId != null) {
+            eventRepository.deleteById(eventId);
         }
     }
 
@@ -154,8 +175,8 @@ public class TaskHistoryService {
                 .toList();
     }
 
-    private void save(Task task, Type type, Map<String, Object> changes, String email) {
-        eventRepository.save(new TaskEvent(task.getBoardColumn().getBoard(), task.getId(),
+    private TaskEvent save(Task task, Type type, Map<String, Object> changes, String email) {
+        return eventRepository.save(new TaskEvent(task.getBoardColumn().getBoard(), task.getId(),
                 email == null ? null : userRepository.findByEmail(email).orElse(null), type, write(changes)));
     }
 

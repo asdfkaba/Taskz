@@ -1,5 +1,6 @@
 package com.example.demo.task;
 
+import com.example.demo.board.ApiTokenAuthentication;
 import com.example.demo.board.BoardColumn;
 import com.example.demo.board.BoardDtos.MoveTaskRequest;
 import com.example.demo.board.BoardService;
@@ -134,7 +135,17 @@ public class TaskController {
         if (input.columnId() == null || input.position() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "columnId and position are required");
         }
-        return TaskDto.from(boardService.moveTask(id, input.columnId(), input.position(), currentUserEmail()));
+        // From the page the rules wait, so the move can be undone; API tokens have no undo.
+        boolean apiToken = SecurityContextHolder.getContext().getAuthentication() instanceof ApiTokenAuthentication;
+        return TaskDto.from(apiToken
+                ? boardService.moveTask(id, input.columnId(), input.position(), currentUserEmail())
+                : boardService.moveTaskByHand(id, input.columnId(), input.position(), currentUserEmail()));
+    }
+
+    /** Takes back the last moves by hand, within a minute, before their rules ran. 409 after that. */
+    @PostMapping("/{id}/undo-move")
+    public TaskDto undoMove(@PathVariable("id") int id) {
+        return TaskDto.from(boardService.undoMove(id, currentUserEmail()));
     }
 
     /** Takes the task off the board into the board's archive (GET /boards/{id}/archive). */

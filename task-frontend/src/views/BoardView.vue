@@ -7,6 +7,8 @@ import Skeleton from 'primevue/skeleton'
 import Menu from 'primevue/menu'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
+import Toast from 'primevue/toast'
+import { useMoveUndo } from '@/composables/useMoveUndo'
 import { useBoardStore } from '@/stores/board'
 import { useAuthStore } from '@/stores/auth'
 import TaskCard from '@/components/TaskCard.vue'
@@ -131,6 +133,8 @@ async function load() {
     handleLoadError('Could not load board', err)
   }
 }
+
+const moveUndo = useMoveUndo(load)
 
 // ---- Board or table view, compact cards ----
 const { view, compact, mode, setMode } = useBoardViewPrefs(() => store.board?.id ?? null)
@@ -298,8 +302,10 @@ function dragEnded() {
 async function onTaskDragEnd(event) {
   dragEnded()
   if (event.from === event.to && event.oldIndex === event.newIndex) return
+  const id = Number(event.item.dataset.taskId)
   try {
-    await store.persistTaskMove(Number(event.item.dataset.taskId))
+    const moved = await store.persistTaskMove(id)
+    if (moved) moveUndo.offer(id, moved.from, moved.to)
   } catch (err) {
     showError('Could not move task', err)
     await load()
@@ -381,7 +387,8 @@ function showTaskMenu(event, task) {
 // The menu puts the task at the end of the target column.
 async function moveTaskTo(task, columnId) {
   try {
-    await store.moveTask(task.id, columnId, store.tasksByColumn[columnId].length)
+    const moved = await store.moveTask(task.id, columnId, store.tasksByColumn[columnId].length)
+    if (moved) moveUndo.offer(task.id, moved.from, moved.to)
   } catch (err) {
     showError('Could not move task', err)
     await load()
@@ -820,6 +827,16 @@ function askDeleteColumn(column) {
       />
       <ColumnDialog v-model:visible="columnDialogVisible" :column="editingColumn" @created="showNewColumn" />
       <ColumnDeleteDialog v-model:visible="deleteDialogVisible" :column="deletingColumn" />
+      <!-- Offers to undo a move while the column's rules wait (useMoveUndo). -->
+      <Toast group="undo" position="bottom-center">
+        <template #message="{ message }">
+          <div class="flex flex-1 items-center gap-3" data-testid="undo-toast">
+            <i class="pi pi-arrow-right-arrow-left" aria-hidden="true" />
+            <span class="flex-1 font-medium">{{ message.summary }}</span>
+            <Button label="Undo" size="small" severity="secondary" @click="moveUndo.undo(message)" />
+          </div>
+        </template>
+      </Toast>
     </section>
   </SidebarLayout>
 </template>
