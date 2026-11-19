@@ -68,7 +68,7 @@ const SECTIONS = [
     intro: 'Archiving takes a finished task off the board without deleting it.',
     points: [
       ['Archive a task', '“Archive” in the task’s ⋮ menu. There is no question first, as the task can come back.'],
-      ['See the archive', 'As soon as a board has archived tasks, “Archive” appears in the view switch.'],
+      ['See the archive', 'As soon as a board has archived tasks, “Archive” appears in the view switch, and the line under the board’s name says how many there are, e.g. “12 tasks (3 archived)”. People with a share link see that number too, but not the archived tasks.'],
       ['Restore or delete', 'In the archive, “Restore” puts a task back at the end of its column; the trash deletes it for good.'],
       ['Automatically', 'An automation can archive tasks that stayed in a column for some days.'],
     ],

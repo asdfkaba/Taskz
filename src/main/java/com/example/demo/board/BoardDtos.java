@@ -23,9 +23,10 @@ public final class BoardDtos {
     }
 
     // Columns are sorted by position, tasks by column position and then by their own position.
-    // hasArchived: the board has archived tasks, which tasks leaves out.
+    // hasArchived, archivedCount: the board's archived tasks, which tasks leaves out. hasArchived stays
+    // for API token users.
     public record BoardDetail(Integer id, String name, String slug, List<ColumnDto> columns, List<LabelDto> labels,
-                              List<TaskDto> tasks, String taskTemplate, boolean hasArchived) {
+                              List<TaskDto> tasks, String taskTemplate, boolean hasArchived, long archivedCount) {
     }
 
     // Body and response of PUT /boards/{id}/task-template; null or blank removes the template.
@@ -37,8 +38,9 @@ public final class BoardDtos {
      * for the owner later don't become public by accident.
      * path is the link's current form (slug of the board's name + key), so outdated links can be corrected.
      */
+    // archivedCount: only the number, so viewers know the board had more tasks; the archive isn't shared.
     public record SharedBoard(String name, String path, List<ColumnDto> columns, List<LabelDto> labels,
-                              List<TaskDto> tasks) {
+                              List<TaskDto> tasks, long archivedCount) {
     }
 
     // path goes after /share/ in the link, e.g. "bewerbungen-E9ciaFkEQxu0EPNI3p7EFA".

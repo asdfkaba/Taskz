@@ -12,6 +12,7 @@ import { useBoardFilter } from '@/composables/useBoardFilter'
 import { useBoardViewPrefs } from '@/composables/useBoardViewPrefs'
 import ViewSwitch from '@/components/ViewSwitch.vue'
 import { usePageTitle } from '@/utils/title'
+import { boardSummary } from '@/utils/task'
 import { useBoardEvents } from '@/composables/useBoardEvents'
 
 // PrimeVue's DataTable is large; load it only when the table view is opened.
@@ -21,7 +22,7 @@ const TaskTable = defineAsyncComponent(() => import('@/components/TaskTable.vue'
 const route = useRoute()
 const router = useRouter()
 
-const board = ref(null) // { name, columns, labels, tasks }
+const board = ref(null) // { name, columns, labels, tasks, archivedCount }
 const status = ref('loading') // 'loading' | 'ok' | 'not-found' | 'error'
 
 const tasksByColumn = computed(() => {
@@ -169,6 +170,11 @@ watch(
         <Tag value="Read only" icon="pi pi-eye" severity="secondary" />
         <ViewSwitch class="ml-auto" labelsFrom="48rem" :mode="mode" @update:mode="setMode" />
       </div>
+      <!-- Also on phones: the archived tasks aren't shared, so this is the only sign they exist. -->
+      <p class="-mt-4 text-sm text-slate-500 dark:text-slate-400" data-testid="board-summary">
+        <template v-if="filterActive">{{ tableTasks.length }} of {{ board.tasks.length }} tasks match</template>
+        <template v-else>{{ boardSummary(board.tasks.length, board.archivedCount ?? 0, board.columns.length) }}</template>
+      </p>
 
       <BoardFilter
         v-model:text="filterText"

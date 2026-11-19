@@ -302,7 +302,7 @@ function api(method, url, body) {
   if (method === 'GET' && p === '/boards/1') {
     const cols = sortedColumns()
     const ts = cols.flatMap((c) => inColumn(c.id))
-    return [200, { ...board, columns: cols, labels, tasks: ts, hasArchived: tasks.some((t) => t.archived) }]
+    return [200, { ...board, columns: cols, labels, tasks: ts, hasArchived: tasks.some((t) => t.archived), archivedCount: tasks.filter((t) => t.archived).length }]
   }
   if (method === 'PATCH' && p === '/boards/1') {
     const name = body.name?.trim()
@@ -465,7 +465,7 @@ function api(method, url, body) {
     if (!shareOk(ref)) return [404, {}]
     const cols = sortedColumns()
     // Like the backend: no attachments on shared boards, not even their number.
-    return [200, { name: board.name, path: `${board.slug}-${share.key}`, columns: cols, labels, tasks: cols.flatMap((c) => inColumn(c.id)).map((t) => ({ ...t, attachments: null })) }]
+    return [200, { name: board.name, path: `${board.slug}-${share.key}`, columns: cols, labels, tasks: cols.flatMap((c) => inColumn(c.id)).map((t) => ({ ...t, attachments: null })), archivedCount: tasks.filter((t) => t.archived).length }]
   }
   if (method === 'GET' && p === '/share/test-token') {
     const cols = sortedColumns()
