@@ -16,6 +16,7 @@ import { useTheme } from '@/composables/useTheme'
 const boardStore = useBoardStore()
 const authStore = useAuthStore()
 const router = useRouter()
+const COMMIT = __COMMIT__ // set by vite.config.js
 const route = useRoute()
 // Full-width pages (the board with its sidebar) handle their own padding.
 const fullWidth = computed(() => route.meta.fullWidth === true)
@@ -93,7 +94,10 @@ onMounted(async () => {
       <div class="mx-auto flex h-14 items-center justify-between gap-4 px-4" :class="fullWidth ? 'max-w-none' : 'max-w-6xl'">
         <RouterLink to="/boards" class="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
           <img src="/favicon.svg" alt="" class="h-8 w-8" />
-          Taskz
+          <span class="flex flex-col leading-tight">
+            Taskz
+            <span class="text-[8px] font-normal text-slate-400 dark:text-slate-500" data-testid="app-version">{{ COMMIT }}</span>
+          </span>
         </RouterLink>
 
         <div class="flex min-w-0 items-center gap-2">
