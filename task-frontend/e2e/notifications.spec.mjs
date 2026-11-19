@@ -2,7 +2,7 @@
 // reading is separate; they link to their task (or nothing);
 // NOTIFY automations pick board members and skip whoever moved the task.
 import { test } from '@playwright/test'
-import { BASE, dialogOpened, resetMock } from './support.mjs'
+import { BASE, dialogOpened, resetMock, runWaitingRules } from './support.mjs'
 
 test('Notifications', async ({ browser }) => {
   await resetMock()
@@ -105,6 +105,8 @@ test('Notifications', async ({ browser }) => {
     const card = page.locator('[data-task-id="1"]')
     await card.hover()
     await card.getByRole('button', { name: 'Move to In progress' }).click()
+    await page.getByTestId('undo-toast').waitFor()
+    await runWaitingRules()
     await page.waitForFunction(async (base) => (await (await fetch(`${base}/api/__state`)).json()).sentToOthers.length === 1, BASE)
     const sent = (await state()).sentToOthers
     ensure(JSON.stringify(sent) === '[{"userId":2,"text":"Ready for review","taskId":1}]', JSON.stringify(sent))

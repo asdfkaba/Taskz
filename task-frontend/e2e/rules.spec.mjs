@@ -1,6 +1,6 @@
 // Automations in the board settings, and what they do when a task enters the column.
 import { test } from '@playwright/test'
-import { BASE, resetMock } from './support.mjs'
+import { BASE, resetMock, runWaitingRules } from './support.mjs'
 
 test('Board automations', async ({ browser }) => {
   await resetMock()
@@ -50,7 +50,10 @@ test('Board automations', async ({ browser }) => {
     ensure((await state()).rules[1].removeOnLeave === true, 'option not saved')
 
     // On: entering the column adds Alice's note with a reminder in 3 days; leaving removes it again.
-    const move = (columnId) => fetch(`${BASE}/api/tasks/2/move`, { method: 'PATCH', body: JSON.stringify({ columnId, position: 0 }) })
+    const move = async (columnId) => {
+      await fetch(`${BASE}/api/tasks/2/move`, { method: 'PATCH', body: JSON.stringify({ columnId, position: 0 }) })
+      await runWaitingRules()
+    }
     await move(11)
     const note = (await state()).notes.find((n) => n.taskId === 2)
     ensure(note?.text === 'Call back', JSON.stringify((await state()).notes))
@@ -87,6 +90,9 @@ test('Board automations', async ({ browser }) => {
     await page.goto(`${BASE}/boards/my-board`)
     await card(1).hover()
     await card(1).getByRole('button', { name: 'Move to In progress' }).click()
+    await page.getByTestId('undo-toast').getByText('Moved to In progress').waitFor()
+    ensure(!(await state()).tasks.find((t) => t.id === 1).checklist.length, 'rules ran before the minute')
+    await runWaitingRules()
     await card(1).getByTestId('checklist-progress').getByText('0/3').waitFor()
     const task = (await state()).tasks.find((t) => t.id === 1)
     ensure(task.checklist.map((i) => i.text).join() === 'Research,Prepare,Thank-you mail', JSON.stringify(task.checklist))
@@ -105,6 +111,8 @@ test('Board automations', async ({ browser }) => {
     await page.goto(`${BASE}/boards/my-board`)
     await card(1).hover()
     await card(1).getByRole('button', { name: 'Move to Done' }).click()
+    await page.getByTestId('undo-toast').getByText('Moved to Done').waitFor()
+    await runWaitingRules()
     await card(1).getByTestId('checklist-progress').getByText('0/2').waitFor()
     const task = (await state()).tasks.find((t) => t.id === 1)
     ensure(task.checklist.map((i) => i.text).join() === 'Thank-you mail,Follow up', JSON.stringify(task.checklist))

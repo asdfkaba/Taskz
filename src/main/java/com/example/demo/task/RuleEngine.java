@@ -12,13 +12,16 @@ import com.example.demo.notification.NotificationService;
 import com.example.demo.user.User;
 import com.example.demo.user.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -47,12 +50,16 @@ public class RuleEngine {
     private final NotificationService notificationService;
     private final ApplicationEventPublisher events;
     private final BoardColumnRepository columnRepository;
+    private final PendingMoveRepository pendingRepository;
+
+    // How long the rules wait after a move by hand: the undo in the page is offered that long.
+    public static final Duration RULE_DELAY = Duration.ofSeconds(60);
 
     public RuleEngine(BoardRuleRepository ruleRepository, TaskRepository taskRepository,
                       TaskHistoryService historyService, TaskNoteRepository noteRepository,
                       UserRepository userRepository, BoardMemberRepository memberRepository,
                       NotificationService notificationService, ApplicationEventPublisher events,
-                      BoardColumnRepository columnRepository) {
+                      BoardColumnRepository columnRepository, PendingMoveRepository pendingRepository) {
         this.ruleRepository = ruleRepository;
         this.taskRepository = taskRepository;
         this.historyService = historyService;
@@ -62,6 +69,7 @@ public class RuleEngine {
         this.notificationService = notificationService;
         this.events = events;
         this.columnRepository = columnRepository;
+        this.pendingRepository = pendingRepository;
     }
 
     /**
@@ -70,6 +78,10 @@ public class RuleEngine {
      */
     @Transactional
     public void taskEntered(Task task, String email) {
+        entered(task, email, userZone());
+    }
+
+    private void entered(Task task, String email, ZoneId zone) {
         var rules = ruleRepository.findByColumnAndTriggerAndEnabledTrueOrderById(
                 task.getBoardColumn(), BoardRule.Trigger.ENTERED_COLUMN.name());
         if (rules.isEmpty()) {
@@ -77,10 +89,90 @@ public class RuleEngine {
         }
         TaskHistoryService.Snapshot before = TaskHistoryService.Snapshot.of(task);
         for (BoardRule rule : rules) {
-            apply(rule, task, email);
+            apply(rule, task, email, zone);
         }
         taskRepository.save(task);
         historyService.recordAutomation(before, task);
+    }
+
+    /**
+     * Call after a task was moved by hand into another column. Its rules (leaving the column it came
+     * from, entering the one it is in) wait {@link #RULE_DELAY}, so a mistake can be undone or corrected
+     * without leaving traces: moving on within that time restarts the wait, and only the column it
+     * ends up in runs its rules; back where it came from, it is as if it never moved. Either way the
+     * history keeps one move entry at most. Someone else moving it, or a move that can't wait (API,
+     * rules), first runs what was waiting, see {@link #runWaiting}.
+     */
+    @Transactional
+    public void movedByHand(Task task, BoardColumn from, PendingMove.BoardColumnRef was, String email) {
+        BoardColumn to = task.getBoardColumn();
+        PendingMove pending = pendingRepository.findById(task.getId()).orElse(null);
+        if (pending == null) {
+            TaskEvent event = historyService.recordMove(task, from, to, email);
+            pending = new PendingMove(task, was, userRepository.findByEmail(email).orElse(null), timeZoneHeader(),
+                    event == null ? null : event.getId());
+        } else if (pending.getFromColumnId().equals(to.getId())) {
+            task.setColumnEntered(pending.getFromEntered());
+            historyService.forget(pending.getEventId());
+            pendingRepository.delete(pending);
+            return;
+        } else {
+            String origin = columnRepository.findById(pending.getFromColumnId()).map(BoardColumn::getName)
+                    .orElse(from.getName());
+            if (!historyService.retargetMove(pending.getEventId(), origin, to.getName())) {
+                TaskEvent event = historyService.recordMove(task, from, to, email);
+                pending.setEventId(event == null ? null : event.getId());
+            }
+        }
+        pending.setDueAt(Instant.now().plus(RULE_DELAY));
+        pendingRepository.save(pending);
+    }
+
+    /**
+     * Runs the rules still waiting for the task's last move by hand, unless keepFor (an email, or
+     * null) moved it and so may go on correcting. Call before the task moves in any other way.
+     */
+    @Transactional
+    public void runWaiting(Task task, String keepFor) {
+        pendingRepository.findById(task.getId())
+                .filter(p -> keepFor == null || p.getUser() == null || !p.getUser().getEmail().equals(keepFor))
+                .ifPresent(this::settle);
+    }
+
+    /**
+     * Takes back the waiting move of the task, for undo: the caller puts it back to the returned place.
+     * Only the one who moved it can, and only while its rules wait.
+     */
+    @Transactional
+    public PendingMove takeBack(Task task, String email) {
+        PendingMove pending = pendingRepository.findById(task.getId())
+                .filter(p -> p.getUser() != null && p.getUser().getEmail().equals(email))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "This move can't be undone anymore"));
+        historyService.forget(pending.getEventId());
+        pendingRepository.delete(pending);
+        return pending;
+    }
+
+    /** Runs the rules of moves by hand whose wait is over; every few seconds. */
+    // shortcut: a move by hand in the same moment as this job can run its rules twice; fine for one
+    // user's board, add a @Version to PendingMove if that ever matters.
+    @Scheduled(initialDelayString = "PT5S", fixedDelayString = "PT5S")
+    @Transactional
+    public void runDueMoves() {
+        for (PendingMove pending : pendingRepository.findByDueAtLessThanEqualOrderByDueAt(Instant.now())) {
+            settle(pending);
+            events.publishEvent(new BoardChanged(pending.getTask().getBoardColumn().getBoard().getId()));
+        }
+    }
+
+    private void settle(PendingMove pending) {
+        Task task = pending.getTask();
+        pendingRepository.delete(pending);
+        BoardColumn current = task.getBoardColumn();
+        columnRepository.findById(pending.getFromColumnId())
+                .filter(from -> !from.getId().equals(current.getId()))
+                .ifPresent(from -> taskLeft(task, from));
+        entered(task, pending.getUser() == null ? null : pending.getUser().getEmail(), zoneOf(pending.getTimeZone()));
     }
 
     /** Call when the task leaves the column: deletes the notes its rules added and should remove again. */
@@ -121,7 +213,7 @@ public class RuleEngine {
                         historyService.recordArchived(task, true, null);
                     }
                     case MOVE -> move(task, payload.targetColumnId(), null);
-                    default -> apply(rule, task, null);
+                    default -> apply(rule, task, null, userZone());
                 }
             }
             if (!due.isEmpty()) {
@@ -142,7 +234,7 @@ public class RuleEngine {
         for (BoardRule rule : ruleRepository.findByColumnAndTriggerAndEnabledTrueOrderById(
                 column, BoardRule.Trigger.CHECKLIST_DONE.name())) {
             if (!BoardRule.Action.MOVE.name().equals(rule.getAction())) {
-                apply(rule, task, email);
+                apply(rule, task, email, userZone());
             } else if (!moved) {
                 // The first move counts: after it the task is no longer in this column.
                 moved = move(task, RulePayload.parse(rule.getPayload()).targetColumnId(), email);
@@ -166,6 +258,7 @@ public class RuleEngine {
             return false;
         }
         int last = taskRepository.countByBoardColumn(target);
+        runWaiting(task, null);
         taskLeft(task, source);
         task.setBoardColumn(target);
         task.setPosition(last);
@@ -182,14 +275,14 @@ public class RuleEngine {
     }
 
     // The actions that change or tell about the task where it is; archiving and moving are done by the callers.
-    private void apply(BoardRule rule, Task task, String email) {
+    private void apply(BoardRule rule, Task task, String email, ZoneId zone) {
         RulePayload payload = RulePayload.parse(rule.getPayload());
         switch (BoardRule.Action.valueOf(rule.getAction())) {
             case APPEND_CHECKLIST -> Checklists.append(task, payload.items());
             case REPLACE_CHECKLIST -> Checklists.replace(task, payload.items());
             case ADD_NOTE_REMINDER -> {
                 TaskNote note = new TaskNote(task, userRepository.findByEmail(email).orElse(null), payload.text());
-                note.setRemindAt(LocalDateTime.now(userZone()).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
+                note.setRemindAt(LocalDateTime.now(zone).plusDays(payload.days()).truncatedTo(ChronoUnit.MINUTES));
                 note.setRuleId(rule.getId());
                 noteRepository.save(note);
             }
@@ -211,14 +304,20 @@ public class RuleEngine {
     }
 
     private static ZoneId userZone() {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
-            String zone = attributes.getRequest().getHeader(TIME_ZONE_HEADER);
-            if (zone != null) {
-                try {
-                    return ZoneId.of(zone);
-                } catch (DateTimeException e) {
-                    // Unknown zone: fall back to the server's.
-                }
+        return zoneOf(timeZoneHeader());
+    }
+
+    private static String timeZoneHeader() {
+        return RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes
+                ? attributes.getRequest().getHeader(TIME_ZONE_HEADER) : null;
+    }
+
+    private static ZoneId zoneOf(String zone) {
+        if (zone != null) {
+            try {
+                return ZoneId.of(zone);
+            } catch (DateTimeException e) {
+                // Unknown zone: fall back to the server's.
             }
         }
         return ZoneId.systemDefault();

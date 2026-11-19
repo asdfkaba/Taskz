@@ -34,6 +34,7 @@ const SECTIONS = [
       ['Create', '“New task” next to the search, or “Add task” at the bottom of a column.'],
       ['Open and edit', 'Click a task to read it; “Edit” changes it. The description understands Markdown, with a short formatting help under the field.'],
       ['Move', 'Drag a task to another place or column, or use “Move to” in its ⋮ menu.'],
+      ['Undo a move', 'After moving a task to another column, “Undo” at the bottom puts it back for a minute. Moving it on within that minute, e.g. after picking the wrong column, also leaves a single move in its history.'],
       ['The ⋮ menu', 'Every task has one, on its card and in the table: Edit, Move to, Archive, Delete.'],
       ['History', 'The task shows who changed what and when, including what an automation did.'],
       ['Task template', 'In the board’s Settings: a description every new task of the board starts with.'],
@@ -150,7 +151,7 @@ const SECTIONS = [
     id: 'automations',
     title: 'Automations',
     icon: 'pi pi-bolt',
-    intro: 'Rules that run by themselves when something happens to a task in a column. The board’s owner sets them up in the Settings.',
+    intro: 'Rules that run by themselves when something happens to a task in a column. The board’s owner sets them up in the Settings. After you move a task, the rules of the columns wait a minute, so a move you undo or correct leaves no trace; moves through an API token count at once.',
     points: [
       ['When a task enters a column', 'Add checklist items, replace the checklist, add a note with a reminder, or notify people.'],
       ['When a task stays in a column for some days', 'Archive it, notify people, or move it to another column. This is checked every hour.'],

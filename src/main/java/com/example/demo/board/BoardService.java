@@ -7,6 +7,7 @@ import com.example.demo.board.BoardDtos.ColumnPatch;
 import com.example.demo.board.BoardDtos.DueTask;
 import com.example.demo.board.BoardDtos.LabelDto;
 import com.example.demo.notification.NotificationRepository;
+import com.example.demo.task.PendingMove;
 import com.example.demo.task.Task;
 import com.example.demo.task.TaskController;
 import com.example.demo.task.TaskDto;
@@ -399,6 +400,7 @@ public class BoardService {
                 // Keep the order and append the tasks after the ones already in the target.
                 int next = taskRepository.countByBoardColumn(target);
                 for (Task task : tasks) {
+                    ruleEngine.runWaiting(task, null);
                     ruleEngine.taskLeft(task, column);
                     task.setBoardColumn(target);
                     task.setPosition(next++);
@@ -443,10 +445,58 @@ public class BoardService {
     public Task moveTask(int taskId, int columnId, int position, String email) {
         Task task = findTask(taskId, email);
         requireNotArchived(task);
-        BoardColumn source = task.getBoardColumn();
         BoardColumn target = findColumn(columnId, email);
-        requireSameBoard(source, target);
+        requireSameBoard(task.getBoardColumn(), target);
+        ruleEngine.runWaiting(task, null);
+        BoardColumn source = place(task, target, position);
+        if (!source.getId().equals(target.getId())) {
+            historyService.recordMove(task, source, target, email);
+            ruleEngine.taskLeft(task, source);
+            ruleEngine.taskEntered(task, email);
+        }
+        changed(target.getBoard());
+        return task;
+    }
 
+    /**
+     * Like {@link #moveTask}, from the page: the rules of the columns wait a minute, so the move can be
+     * undone ({@link #undoMove}) or corrected by moving on, see RuleEngine.movedByHand.
+     */
+    @Transactional
+    public Task moveTaskByHand(int taskId, int columnId, int position, String email) {
+        Task task = findTask(taskId, email);
+        requireNotArchived(task);
+        BoardColumn target = findColumn(columnId, email);
+        requireSameBoard(task.getBoardColumn(), target);
+        ruleEngine.runWaiting(task, email);
+        PendingMove.BoardColumnRef was = new PendingMove.BoardColumnRef(task.getBoardColumn().getId(),
+                task.getPosition(), task.getColumnEntered());
+        BoardColumn source = place(task, target, position);
+        if (!source.getId().equals(target.getId())) {
+            ruleEngine.movedByHand(task, source, was, email);
+        }
+        changed(target.getBoard());
+        return task;
+    }
+
+    /** Puts the task back where it was before its last moves by hand, whose rules never ran. */
+    @Transactional
+    public Task undoMove(int taskId, String email) {
+        Task task = findTask(taskId, email);
+        requireNotArchived(task);
+        PendingMove pending = ruleEngine.takeBack(task, email);
+        BoardColumn origin = columnRepository.findById(pending.getFromColumnId())
+                .filter(c -> c.getBoard().getId().equals(task.getBoardColumn().getBoard().getId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "The column it came from is gone"));
+        place(task, origin, pending.getFromPosition());
+        task.setColumnEntered(pending.getFromEntered());
+        changed(origin.getBoard());
+        return task;
+    }
+
+    /** Puts the task into target at position (clamped) and renumbers; returns the column it left. */
+    private BoardColumn place(Task task, BoardColumn target, int position) {
+        BoardColumn source = task.getBoardColumn();
         List<Task> sourceTasks = new ArrayList<>(taskRepository.findByBoardColumnOrderByPosition(source));
         sourceTasks.removeIf(t -> t.getId().equals(task.getId()));
 
@@ -458,16 +508,12 @@ public class BoardService {
         int index = Math.max(0, Math.min(position, targetTasks.size()));
         targetTasks.add(index, task);
         task.setBoardColumn(target);
-        historyService.recordMove(task, source, target, email);
 
         renumber(sourceTasks);
         if (!sameColumn) {
             renumber(targetTasks);
-            ruleEngine.taskLeft(task, source);
-            ruleEngine.taskEntered(task, email);
         }
-        changed(target.getBoard());
-        return task;
+        return source;
     }
 
     /** Tells open views of the board (see {@link BoardEvents}); sent once the transaction committed. */
