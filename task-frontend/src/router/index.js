@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { formatTitle } from '@/utils/title'
+import { useAuthStore } from '@/stores/auth'
 
 // Board, board settings and board archive share one view, so the sidebar and the loaded board stay when switching.
 const BoardView = () => import('../views/BoardView.vue')
@@ -92,6 +93,12 @@ const router = createRouter({
     // Old create/edit/detail pages are now dialogs on the board.
     { path: '/:pathMatch(.*)*', redirect: '/boards' },
   ],
+})
+
+// Logged out and clicking into the app, e.g. the Taskz logo on a shared board: to the login page.
+// The first page load is checked in App.vue, after asking the backend.
+router.beforeEach((to, from) => {
+  if (to.meta.requiresAuth && from.matched.length > 0 && !useAuthStore().isAuthenticated) return '/'
 })
 
 // Pages with a fixed title set it here; boards set theirs in the view (usePageTitle),
