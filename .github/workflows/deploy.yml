@@ -56,4 +56,4 @@ jobs:
 
       - name: Restart service
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mv /home/moritz/tasks/demo-*.jar /home/moritz/tasks/tasks.jar && export XDG_RUNTIME_DIR=/run/user/1000 && systemctl --user restart tasks"
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mv /home/moritz/tasks/taskz-*.jar /home/moritz/tasks/tasks.jar && export XDG_RUNTIME_DIR=/run/user/1000 && systemctl --user restart tasks"
