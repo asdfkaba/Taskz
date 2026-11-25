@@ -42,13 +42,14 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
+      # The deploy key may only run these commands (deploy/deploy-restricted.sh on the server).
       - name: Copy release to server
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "rm -rf ~/tasks/incoming && mkdir -p ~/tasks/incoming"
-          scp -O -i ~/.ssh/deploy_key -r taskz.jar task-frontend/dist deploy/release.sh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:tasks/incoming/
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} taskz-prepare
+          scp -O -i ~/.ssh/deploy_key -r taskz.jar task-frontend/dist ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/moritz/tasks/incoming/
 
       # Starts the new release next to the old one and switches over without downtime; the
-      # frontend follows once the backend is live (deploy/README.md).
+      # frontend follows once the backend is live (deploy/release.sh, installed on the server).
       - name: Release
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "bash ~/tasks/incoming/release.sh ~/tasks/incoming"
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} taskz-release
