@@ -171,7 +171,7 @@ class BoardShareControllerTests {
         board.setSlug("b");
         BoardShare share = new BoardShare(board);
         share.setShowNotes(true);
-        when(shareService.updateOptions(1, ALICE, new ShareOptions(null, true, null))).thenReturn(share);
+        when(shareService.updateOptions(1, ALICE, new ShareOptions(null, true, null, null))).thenReturn(share);
 
         mockMvc.perform(patch("/boards/1/share").contentType("application/json").content("{\"showNotes\":true}"))
                 .andExpect(status().isOk())

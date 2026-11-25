@@ -28,7 +28,7 @@ function record(task, type, changes) {
 }
 // Share link like the backend: a key (22 chars) plus the board slug in front; OLD_UUID imitates a pre-slug link.
 const OLD_UUID = '13d72268-5904-431b-b410-f348df9ec414'
-let share // { key, created, showAttachments, showNotes, showHistory }
+let share // { key, created, showAttachments, showNotes, showHistory, hideNames }
 let shareRequests
 const newKey = () => Array.from({ length: 22 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[Math.floor(Math.random() * 64)]).join('')
 let boardDeleted
@@ -60,6 +60,8 @@ let revisions = 0
 const newRevision = () => `rev${++revisions}`
 const shareOut = () => { const { key, ...rest } = share; return { path: `${board.slug}-${key}`, ...rest } }
 // Like BoardShareService.sharedTask: a task on the board, not archived, if the link shares what is asked for.
+// Like BoardShareService with hideNames: no user name or id.
+const anonymous = (item) => (share?.hideNames ? { ...item, user: null, userId: null } : item)
 const sharedTask = (ref, taskId, option) => shareOk(ref) && share?.[option] && tasks.find((t) => t.id === taskId && !t.archived)
 const shareOk = (ref) => ref === 'test-token' || (share && (ref === OLD_UUID || ref === share.key || (ref.length > 23 && ref.endsWith('-' + share.key))))
 let tasks
@@ -499,23 +501,23 @@ function api(method, url, body) {
   if (method === 'GET' && p === '/boards/1/share') return share ? [200, shareOut()] : [204, null]
   if (method === 'POST' && p === '/boards/1/share') {
     // Like the backend: a replaced link keeps the options.
-    const { showAttachments = false, showNotes = false, showHistory = false } = share ?? {}
-    share = { key: newKey(), created: '2026-10-28T20:00:00Z', showAttachments, showNotes, showHistory }
+    const { showAttachments = false, showNotes = false, showHistory = false, hideNames = false } = share ?? {}
+    share = { key: newKey(), created: '2026-10-28T20:00:00Z', showAttachments, showNotes, showHistory, hideNames }
     return [201, shareOut()]
   }
   if (method === 'PATCH' && p === '/boards/1/share') {
     if (!share) return [404, {}]
-    for (const k of ['showAttachments', 'showNotes', 'showHistory']) if (body[k] != null) share[k] = body[k]
+    for (const k of ['showAttachments', 'showNotes', 'showHistory', 'hideNames']) if (body[k] != null) share[k] = body[k]
     return [200, shareOut()]
   }
   if (method === 'GET' && (m = p.match(/^\/share\/([^/]+)\/tasks\/(\d+)\/notes$/))) {
     if (!sharedTask(decodeURIComponent(m[1]), +m[2], 'showNotes')) return [404, {}]
     // Like TaskNoteService.sharedNotesOf: no reminders, no edit rights.
-    return [200, notes.filter((n) => n.taskId === +m[2]).sort((a, b) => b.id - a.id).map(({ taskId, ruleId, ...n }) => ({ ...n, remindAt: null, canEdit: false, canDelete: false }))]
+    return [200, notes.filter((n) => n.taskId === +m[2]).sort((a, b) => b.id - a.id).map(({ taskId, ruleId, ...n }) => anonymous({ ...n, remindAt: null, canEdit: false, canDelete: false }))]
   }
   if (method === 'GET' && (m = p.match(/^\/share\/([^/]+)\/tasks\/(\d+)\/history$/))) {
     if (!sharedTask(decodeURIComponent(m[1]), +m[2], 'showHistory')) return [404, {}]
-    return [200, events.filter((e) => e.taskId === +m[2]).map(({ taskId, ...e }) => e)]
+    return [200, events.filter((e) => e.taskId === +m[2]).map(({ taskId, ...e }) => anonymous(e))]
   }
   if (method === 'DELETE' && p === '/boards/1/share') { share = null; return [204, null] }
   if (method === 'GET' && (m = p.match(/^\/share\/([^/]+)$/)) && m[1] !== 'test-token') {
@@ -641,7 +643,7 @@ async function attachmentApi(method, url, raw, headers) {
   }
   if (method === 'GET' && (m = url.match(/^\/api\/share\/([^/]+)\/tasks\/(\d+)\/attachments$/))) {
     if (!sharedTask(decodeURIComponent(m[1]), +m[2], 'showAttachments')) return [404, {}]
-    return [200, attachments.filter((a) => a.taskId === +m[2]).sort((a, b) => b.id - a.id).map(attachmentOut)]
+    return [200, attachments.filter((a) => a.taskId === +m[2]).sort((a, b) => b.id - a.id).map((a) => anonymous(attachmentOut(a)))]
   }
   if (method === 'GET' && (m = url.match(/^\/api\/share\/([^/]+)\/attachments\/([0-9a-f-]{36})$/))) {
     const a = attachments.find((x) => x.id === m[2])

@@ -246,7 +246,7 @@ class BoardShareServiceTests {
     @Test
     void sharedAttachmentsCanBeListedAndDownloaded() {
         AttachmentDto file = attach(task);
-        String token = shareWith(new ShareOptions(true, null, null));
+        String token = shareWith(new ShareOptions(true, null, null, null));
 
         BoardDtos.SharedBoard shared = shareService.sharedBoard(token);
         assertThat(shared.showAttachments()).isTrue();
@@ -260,7 +260,7 @@ class BoardShareServiceTests {
     @Test
     void sharedNotesLeaveOutRemindersAndEditRights() {
         noteService.addNote(task.getId(), ALICE, "Called back", LocalDateTime.now().plusDays(1));
-        String token = shareWith(new ShareOptions(null, true, null));
+        String token = shareWith(new ShareOptions(null, true, null, null));
 
         List<NoteDto> notes = shareService.sharedNotes(token, task.getId());
 
@@ -276,7 +276,7 @@ class BoardShareServiceTests {
     @Test
     void sharedHistoryShowsTheTasksChanges() {
         historyService.recordCreated(task, ALICE);
-        String token = shareWith(new ShareOptions(null, null, true));
+        String token = shareWith(new ShareOptions(null, null, true, null));
 
         assertThat(shareService.sharedHistory(token, task.getId())).extracting(e -> e.type()).containsExactly("created");
     }
@@ -293,7 +293,7 @@ class BoardShareServiceTests {
         AttachmentDto bobsFile = attachmentService.upload(bobsTask.getId(), BOB,
                 new MockMultipartFile("file", "secret.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8)));
         AttachmentDto file = attach(task);
-        String token = shareWith(new ShareOptions(true, true, true));
+        String token = shareWith(new ShareOptions(true, true, true, null));
 
         assertThatThrownBy(() -> shareService.sharedAttachments(token, bobsTask.getId())).satisfies(BoardShareServiceTests::assertNotFound);
         assertThatThrownBy(() -> shareService.sharedDownload(token, bobsFile.id())).satisfies(BoardShareServiceTests::assertNotFound);
@@ -309,7 +309,7 @@ class BoardShareServiceTests {
     void changingOptionsKeepsTheLinkAndUpdatesViewers() {
         String token = refresh(shareService.createShare(board.getId(), ALICE).getToken().toString());
 
-        BoardShare share = shareService.updateOptions(board.getId(), ALICE, new ShareOptions(true, false, null));
+        BoardShare share = shareService.updateOptions(board.getId(), ALICE, new ShareOptions(true, false, null, null));
 
         assertThat(share.getToken().toString()).isEqualTo(token);
         assertThat(share.isShowAttachments()).isTrue();
@@ -319,9 +319,10 @@ class BoardShareServiceTests {
 
     @Test
     void replacingTheLinkKeepsItsOptions() {
-        shareWith(new ShareOptions(true, true, false));
+        shareWith(new ShareOptions(true, true, false, true));
 
         BoardShare renewed = shareService.createShare(board.getId(), ALICE);
+        assertThat(renewed.isHideNames()).isTrue();
 
         assertThat(renewed.isShowAttachments()).isTrue();
         assertThat(renewed.isShowNotes()).isTrue();
@@ -331,14 +332,36 @@ class BoardShareServiceTests {
     @Test
     void onlyTheOwnerChangesOptions() {
         shareService.createShare(board.getId(), ALICE);
-        ShareOptions all = new ShareOptions(true, true, true);
+        ShareOptions all = new ShareOptions(true, true, true, null);
 
         assertThatThrownBy(() -> shareService.updateOptions(board.getId(), BOB, all)).satisfies(BoardShareServiceTests::assertNotFound);
     }
 
     @Test
     void optionsOfAnUnsharedBoardAreNotFound() {
-        assertThatThrownBy(() -> shareService.updateOptions(board.getId(), ALICE, new ShareOptions(true, null, null)))
+        assertThatThrownBy(() -> shareService.updateOptions(board.getId(), ALICE, new ShareOptions(true, null, null, null)))
                 .satisfies(BoardShareServiceTests::assertNotFound);
+    }
+
+    @Test
+    void hiddenNamesLeaveOutWhoWroteUploadedOrChanged() {
+        AttachmentDto file = attach(task);
+        noteService.addNote(task.getId(), ALICE, "Called back", null);
+        String token = shareWith(new ShareOptions(true, true, true, true));
+
+        assertThat(shareService.sharedAttachments(token, task.getId())).singleElement().satisfies(a -> {
+            assertThat(a.id()).isEqualTo(file.id());
+            assertThat(a.user()).isNull();
+            assertThat(a.userId()).isNull();
+        });
+        assertThat(shareService.sharedNotes(token, task.getId())).singleElement().satisfies(n -> {
+            assertThat(n.text()).isEqualTo("Called back");
+            assertThat(n.user()).isNull();
+            assertThat(n.userId()).isNull();
+        });
+        assertThat(shareService.sharedHistory(token, task.getId())).isNotEmpty().allSatisfy(e -> {
+            assertThat(e.user()).isNull();
+            assertThat(e.userId()).isNull();
+        });
     }
 }

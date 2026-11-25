@@ -1,4 +1,5 @@
-// Share link options: the owner chooses whether the link also shows attachments, notes and history.
+// Share link options: the owner chooses whether the link also shows attachments, notes and history,
+// and whether with names.
 import { test } from '@playwright/test'
 import { BASE, resetMock } from './support.mjs'
 
@@ -46,6 +47,7 @@ test('Share link shows attachments, notes and history only when the owner allows
     await page.goto(`${BASE}/boards`)
     await page.getByText('Task A', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'Board settings' }).click()
+    ensure(await page.getByRole('checkbox', { name: 'Hide names' }).isDisabled(), 'Hide names usable without options')
     for (const name of ['Attachments', 'Notes', 'History']) {
       const box = page.getByRole('checkbox', { name })
       ensure(!(await box.isChecked()), `${name} ticked before`)
@@ -73,6 +75,7 @@ test('Share link shows attachments, notes and history only when the owner allows
     const history = dialog().getByTestId('task-history')
     await history.getByRole('button', { name: 'History' }).click()
     await history.getByText(/plan\.md/).first().waitFor()
+    ensure((await dialog().getByText('Alice').count()) > 0, 'names missing')
     await guest.screenshot({ path: `${outDir}/so-2-guest.png` })
   })
 
@@ -81,6 +84,19 @@ test('Share link shows attachments, notes and history only when the owner allows
     await guest.getByTestId('attachment-preview').getByText('Step one').waitFor()
     await guest.keyboard.press('Escape')
     await guest.getByTestId('attachment-preview').waitFor({ state: 'hidden' })
+    await closeTask()
+  })
+
+  await test.step('"Hide names" leaves out who did what', async () => {
+    await page.getByRole('checkbox', { name: 'Hide names' }).check()
+    await page.waitForFunction(async () => (await (await fetch('/api/__state')).json()).share.hideNames)
+    await guest.waitForTimeout(500) // the live update
+    await openTask()
+    await dialog().getByTestId('task-notes').getByText('Called back').waitFor()
+    await dialog().getByTestId('task-history').getByRole('button', { name: 'History' }).click()
+    await dialog().getByTestId('task-history').getByText(/plan\.md/).first().waitFor()
+    ensure((await dialog().getByText('Alice').count()) === 0, 'a name is still shown')
+    await guest.screenshot({ path: `${outDir}/so-3-anonymous.png` })
     await closeTask()
   })
 

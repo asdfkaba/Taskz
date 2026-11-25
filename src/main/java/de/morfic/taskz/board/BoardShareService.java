@@ -25,7 +25,8 @@ import java.util.function.Predicate;
 /**
  * Read-only share links. Only the owner can see, create or revoke a board's link;
  * reading a board through its link needs no login. For now a board has at most one link.
- * The owner chooses whether the link also shows attachments, notes and history of the tasks.
+ * The owner chooses whether the link also shows attachments, notes and history of the tasks, and
+ * whether with or without the names of who uploaded, wrote or changed them.
  */
 @Service
 public class BoardShareService {
@@ -68,6 +69,7 @@ public class BoardShareService {
             share.setShowAttachments(old.isShowAttachments());
             share.setShowNotes(old.isShowNotes());
             share.setShowHistory(old.isShowHistory());
+            share.setHideNames(old.isHideNames());
         });
         shareRepository.deleteByBoard(board);
         events.publishEvent(new BoardShareEnded(boardId));
@@ -88,6 +90,9 @@ public class BoardShareService {
         }
         if (options.showHistory() != null) {
             share.setShowHistory(options.showHistory());
+        }
+        if (options.hideNames() != null) {
+            share.setHideNames(options.hideNames());
         }
         boardService.changed(board); // open views of the link load what they may show now
         return share;
@@ -119,7 +124,11 @@ public class BoardShareService {
 
     @Transactional(readOnly = true)
     public List<AttachmentDto> sharedAttachments(String path, int taskId) {
-        return attachmentService.attachmentsOf(sharedTask(path, taskId, BoardShare::isShowAttachments));
+        BoardShare share = findShare(path);
+        List<AttachmentDto> attachments = attachmentService.attachmentsOf(sharedTask(share, taskId, BoardShare::isShowAttachments));
+        return !share.isHideNames() ? attachments : attachments.stream()
+                .map(a -> new AttachmentDto(a.id(), a.name(), a.contentType(), a.size(), a.image(), null, null, a.created()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -133,17 +142,24 @@ public class BoardShareService {
 
     @Transactional(readOnly = true)
     public List<NoteDto> sharedNotes(String path, int taskId) {
-        return noteService.sharedNotesOf(sharedTask(path, taskId, BoardShare::isShowNotes));
+        BoardShare share = findShare(path);
+        List<NoteDto> notes = noteService.sharedNotesOf(sharedTask(share, taskId, BoardShare::isShowNotes));
+        return !share.isHideNames() ? notes : notes.stream()
+                .map(n -> new NoteDto(n.id(), n.text(), null, null, n.created(), n.edited(), n.remindAt(), n.canEdit(), n.canDelete()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public List<EventDto> sharedHistory(String path, int taskId) {
-        return historyService.historyOf(sharedTask(path, taskId, BoardShare::isShowHistory));
+        BoardShare share = findShare(path);
+        List<EventDto> events = historyService.historyOf(sharedTask(share, taskId, BoardShare::isShowHistory));
+        return !share.isHideNames() ? events : events.stream()
+                .map(e -> new EventDto(e.id(), e.type(), e.at(), null, null, e.changes()))
+                .toList();
     }
 
     // A task the link shows, if it shares what is asked for; 404 otherwise, like an unknown link.
-    private Task sharedTask(String path, int taskId, Predicate<BoardShare> shares) {
-        BoardShare share = findShare(path);
+    private Task sharedTask(BoardShare share, int taskId, Predicate<BoardShare> shares) {
         return taskRepository.findById(taskId)
                 .filter(task -> shares.test(share) && isShownOn(share).test(task))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));

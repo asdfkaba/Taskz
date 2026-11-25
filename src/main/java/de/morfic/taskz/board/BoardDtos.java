@@ -46,16 +46,17 @@ public final class BoardDtos {
     }
 
     // path goes after /share/ in the link, e.g. "bewerbungen-E9ciaFkEQxu0EPNI3p7EFA".
-    public record ShareDto(String path, Instant created, boolean showAttachments, boolean showNotes, boolean showHistory) {
+    public record ShareDto(String path, Instant created, boolean showAttachments, boolean showNotes, boolean showHistory,
+                           boolean hideNames) {
         static ShareDto from(BoardShare share) {
             return new ShareDto(ShareLinks.path(share.getBoard().getSlug(), share.getToken()), share.getCreated(),
-                    share.isShowAttachments(), share.isShowNotes(), share.isShowHistory());
+                    share.isShowAttachments(), share.isShowNotes(), share.isShowHistory(), share.isHideNames());
         }
     }
 
     // Body of PATCH /boards/{id}/share; absent fields stay unchanged.
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ShareOptions(Boolean showAttachments, Boolean showNotes, Boolean showHistory) {
+    public record ShareOptions(Boolean showAttachments, Boolean showNotes, Boolean showHistory, Boolean hideNames) {
     }
 
     public record ColumnDto(Integer id, String name, String color, int position) {

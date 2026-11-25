@@ -15,7 +15,7 @@ const store = useBoardStore()
 const confirm = useConfirm()
 const toast = useToast()
 
-const share = ref(null) // { path, created, showAttachments, showNotes, showHistory } or null; path is "<board-slug>-<key>"
+const share = ref(null) // { path, created, showAttachments, showNotes, showHistory, hideNames } or null; path is "<board-slug>-<key>"
 const loading = ref(true)
 const busy = ref(false)
 const urlInput = ref()
@@ -52,9 +52,11 @@ async function createLink() {
 // What the link shows besides the board. Changes apply to the current link right away.
 const OPTIONS = [
   { key: 'showAttachments', label: 'Attachments', hint: 'Viewers can open and download the files.' },
-  { key: 'showNotes', label: 'Notes', hint: 'With their authors; reminders stay private.' },
+  { key: 'showNotes', label: 'Notes', hint: 'Reminders stay private.' },
   { key: 'showHistory', label: 'History', hint: 'Who changed what and when.' },
 ]
+// Only matters while one of the options above shows something with names.
+const namesShown = computed(() => OPTIONS.some((o) => share.value?.[o.key]))
 
 async function setOption(key, value) {
   const before = share.value[key]
@@ -156,6 +158,20 @@ function askStop() {
           <label :for="`share-${option.key}`" class="flex flex-col text-sm text-slate-700 dark:text-slate-300">
             {{ option.label }}
             <span class="text-xs text-slate-500 dark:text-slate-400">{{ option.hint }}</span>
+          </label>
+        </div>
+        <div class="flex items-start gap-2">
+          <Checkbox
+            :modelValue="share.hideNames"
+            binary
+            inputId="share-hideNames"
+            class="mt-0.5"
+            :disabled="!namesShown"
+            @update:modelValue="setOption('hideNames', $event)"
+          />
+          <label for="share-hideNames" class="flex flex-col text-sm text-slate-700 dark:text-slate-300" :class="{ 'opacity-60': !namesShown }">
+            Hide names
+            <span class="text-xs text-slate-500 dark:text-slate-400">Viewers don't see who uploaded, wrote or changed something.</span>
           </label>
         </div>
       </fieldset>
