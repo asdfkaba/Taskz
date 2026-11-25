@@ -137,7 +137,7 @@ async function load() {
 const moveUndo = useMoveUndo(load)
 
 // ---- Board or table view, compact cards ----
-const { view, compact, mode, setMode } = useBoardViewPrefs(() => store.board?.id ?? null)
+const { view, compact, mode, setMode, collapsed, toggleCollapsed } = useBoardViewPrefs(() => store.board?.id ?? null)
 // All tasks that pass the filter, in board order (column by column).
 const tableTasks = computed(() =>
   store.columns.flatMap((c) => store.tasksByColumn[c.id] ?? []).filter((t) => matchOf(t).matches),
@@ -182,8 +182,11 @@ const filterBar = ref(null)
 const filterOpen = ref(false) // small screens: the search row is opened with the search button
 
 // Columns without any task shrink to a narrow strip on wide screens (not with a search that only
-// hides their tasks); a task moved or added in widens them again.
+// hides their tasks); a task moved or added in widens them again. Collapsed columns (column menu,
+// remembered on this device) are such a strip whatever they hold.
 const isEmpty = (columnId) => !store.tasksByColumn[columnId]?.length
+const isCollapsed = (columnId) => collapsed.value.has(columnId) && !isEmpty(columnId)
+const narrow = (columnId) => isEmpty(columnId) || collapsed.value.has(columnId)
 const visibleCount = (columnId) => (store.tasksByColumn[columnId] ?? []).filter((t) => matchOf(t).matches).length
 const matchingCount = computed(() => store.columns.reduce((sum, c) => sum + visibleCount(c.id), 0))
 // "3" without a filter, "1 / 3" with one.
@@ -465,6 +468,10 @@ const columnMenuItems = computed(() => {
       disabled: index === store.columns.length - 1,
       command: () => moveColumnTo(column, index + 1),
     },
+    // Wide screens only, like the strip of an empty column.
+    collapsed.value.has(column.id)
+      ? { label: 'Expand', icon: 'pi pi-window-maximize', class: 'max-md:hidden', command: () => toggleCollapsed(column.id) }
+      : { label: 'Collapse', icon: 'pi pi-window-minimize', class: 'max-md:hidden', command: () => toggleCollapsed(column.id) },
     { separator: true },
     {
       label: 'Delete',
@@ -728,9 +735,9 @@ function askDeleteColumn(column) {
                 :key="column.id"
                 :data-column-id="column.id"
                 class="flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col rounded-xl bg-slate-100 dark:bg-slate-900"
-                :class="isEmpty(column.id) ? 'md:w-12' : 'md:w-72'"
+                :class="narrow(column.id) ? 'md:w-12' : 'md:w-72'"
               >
-                <header class="flex items-center gap-1 px-2 pt-2" :class="{ 'md:flex-col md:px-1': isEmpty(column.id) }">
+                <header class="flex items-center gap-1 px-2 pt-2" :class="{ 'md:flex-col md:px-1': narrow(column.id) }">
                   <button
                     type="button"
                     class="column-handle hidden h-8 w-6 cursor-grab items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 active:cursor-grabbing md:flex"
@@ -741,7 +748,7 @@ function askDeleteColumn(column) {
                   </button>
                   <h2
                     class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-300"
-                    :class="{ 'md:w-full md:flex-none md:text-center md:text-[0.6875rem]': isEmpty(column.id) }"
+                    :class="{ 'md:w-full md:flex-none md:text-center md:text-[0.6875rem]': narrow(column.id) }"
                     :title="column.name"
                   >
                     {{ column.name }}
@@ -763,11 +770,12 @@ function askDeleteColumn(column) {
                 <p
                   v-if="filterActive && visibleCount(column.id) === 0"
                   class="px-4 pt-2 text-sm text-slate-400 dark:text-slate-500"
-                  :class="{ 'md:hidden': isEmpty(column.id) }"
+                  :class="{ 'md:hidden': narrow(column.id) }"
                 >
                   No matches
                 </p>
-                <!-- In an empty column's strip the drop target is small; outlined so it can be found. -->
+                <!-- In a strip the drop target is small; outlined so it can be found. A collapsed column's
+                     cards are hidden there; a task dropped in joins them. -->
                 <VueDraggable
                   v-model="store.tasksByColumn[column.id]"
                   group="tasks"
@@ -777,7 +785,8 @@ function askDeleteColumn(column) {
                   ghostClass="opacity-40"
                   class="flex min-h-16 flex-col gap-2 p-2"
                   :class="{
-                    'md:m-1 md:min-h-32 md:rounded-md md:border-2 md:border-dashed md:border-slate-300 md:p-1 md:dark:border-slate-700': isEmpty(column.id),
+                    'md:m-1 md:min-h-32 md:rounded-md md:border-2 md:border-dashed md:border-slate-300 md:p-1 md:dark:border-slate-700': narrow(column.id),
+                    'md:[&>*]:hidden': isCollapsed(column.id),
                   }"
                   @start="dragStarted"
                   @end="onTaskDragEnd"
@@ -808,7 +817,10 @@ function askDeleteColumn(column) {
                   severity="secondary"
                   size="small"
                   class="mx-2 mb-2 justify-start"
-                  :class="{ 'md:mx-1 md:justify-center md:[&_.p-button-label]:hidden': isEmpty(column.id) }"
+                  :class="{
+                    'md:mx-1 md:justify-center md:[&_.p-button-label]:hidden': isEmpty(column.id),
+                    'md:hidden': isCollapsed(column.id),
+                  }"
                   @click="openCreateTask(column.id)"
                 />
               </div>

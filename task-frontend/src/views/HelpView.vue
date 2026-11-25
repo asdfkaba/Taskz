@@ -23,6 +23,7 @@ const SECTIONS = [
       ['Add', '“Add column” next to the search; on phones the + at the end of the column tabs.'],
       ['Edit, move, delete', 'The ⋯ menu in a column’s header: name and color, move left or right, delete. Deleting a column with tasks asks whether they move to another column or are deleted too.'],
       ['Empty columns', 'On wide screens a column without tasks shrinks to a narrow strip.'],
+      ['Collapse', 'On wide screens “Collapse” in a column’s ⋯ menu shrinks it to such a strip even with tasks in it; the number shows how many. Tasks dragged onto the strip go into the column. “Expand” in the same menu brings it back. Remembered per board in this browser only.'],
     ],
   },
   {
