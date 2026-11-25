@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Puts a new release live without downtime (see deploy/README.md). deploy.yml copies it to the
-# server together with the release and runs it there:
-#   release.sh <dir with taskz.jar and dist/>
+# Puts a new release live without downtime (see deploy/README.md). Installed on the server as
+# ~/bin/taskz-release.sh; deploy.yml uploads the release and runs it through deploy-restricted.sh:
+#   taskz-release.sh <dir with taskz.jar and dist/>
 # The app runs as tasks@8081 or tasks@8082, and nginx sends requests to whichever answers. The new
 # release starts on the free port; the old one only stops once the new one answers. If the new one
 # doesn't come up, it is stopped again and the old one keeps running, frontend included.

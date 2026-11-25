@@ -2,7 +2,11 @@
 
 The app runs as one of two systemd user units, `tasks@8081` or `tasks@8082`. nginx knows both
 ports and sends each request to whichever answers. A deploy (`.github/workflows/deploy.yml`, on
-every push to `main`) runs `release.sh` on the server. The script:
+every push to `main`) uploads the release to `~/tasks/incoming` and runs `release.sh` on the
+server. The deploy key may only do exactly that: its forced command `deploy-restricted.sh` allows
+`taskz-prepare` (empty the upload folder), the upload into it, and `taskz-release`, which runs
+`~/bin/taskz-release.sh` (a copy of `release.sh`, outside the upload folder so no upload can change
+it). After a change to either script, copy it to the server again (see setup). The script:
 
 1. starts the new release on the free port, next to the old one,
 2. waits until its `/health` answers; if it doesn't come up, the script stops it again and the old
@@ -50,6 +54,15 @@ curl http://127.0.0.1:8081/health   # "ok"
 ```bash
 # 4. The old unit off for good
 systemctl --user disable --now tasks
+```
+
+```bash
+# 5. Release script and the deploy key's forced command (from your machine, in the checkout)
+scp deploy/release.sh SERVER:bin/taskz-release.sh
+scp deploy/deploy-restricted.sh SERVER:deploy-restricted.sh
+ssh SERVER 'chmod 755 ~/bin/taskz-release.sh ~/deploy-restricted.sh'
+# ~/.ssh/authorized_keys: the deploy key's line starts with
+#   command="/home/moritz/deploy-restricted.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty
 ```
 
 The next push to `main` deploys to 8082 and stops 8081, and so on.
