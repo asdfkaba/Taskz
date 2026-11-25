@@ -27,6 +27,14 @@ Both run in GitHub Actions on pull requests and before every deploy (`.github/wo
 The schema is managed by Flyway (`src/main/resources/db/migration`). Hibernate only validates it,
 so a new or changed entity field needs a new migration `V<n>__<description>.sql`.
 
+Migrations may only add (new tables, nullable columns or columns with a default): during a deploy
+the old release keeps running on the new schema for a few seconds. See [deploy](deploy/README.md).
+
+## Deploy
+
+Every push to `main` is tested and deployed without downtime: the new release starts next to the old
+one, which stops once the new one answers. Setup and details: [deploy/README.md](deploy/README.md).
+
 ## Attachments
 
 Files attached to tasks are stored on disk, in `~/tasks/attachments` of the user running the app.
