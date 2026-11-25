@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-// Attachments need a login; they are not part of shared boards.
+// Attachments need a login. Share links read them through BoardShareController.
 @RestController
 public class TaskAttachmentController {
 
@@ -47,14 +47,17 @@ public class TaskAttachmentController {
         return attachmentService.upload(taskId, currentUserEmail(), file);
     }
 
+    @GetMapping("/attachments/{id}")
+    public ResponseEntity<Resource> download(@PathVariable("id") String key) {
+        return fileResponse(attachmentService.download(key, currentUserEmail()));
+    }
+
     /**
-     * The file. Images, PDFs and text (TXT, MD) open in the browser; CSV is a download, as browsers
+     * The file, also for share links. Images, PDFs and text (TXT, MD) open in the browser; CSV is a download, as browsers
      * download it anyway. The sandbox policy keeps any script in a file from running on this site,
      * whatever it is; the PDF viewers of Chrome and Firefox work under it.
      */
-    @GetMapping("/attachments/{id}")
-    public ResponseEntity<Resource> download(@PathVariable("id") String key) {
-        Download download = attachmentService.download(key, currentUserEmail());
+    public static ResponseEntity<Resource> fileResponse(Download download) {
         TaskAttachment attachment = download.attachment();
         String type = attachment.getContentType();
         boolean shown = type.startsWith("image/") || type.equals("application/pdf")

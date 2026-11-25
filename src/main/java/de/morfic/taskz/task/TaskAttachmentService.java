@@ -21,10 +21,11 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /**
- * Files attached to tasks. Like notes, everyone who can open the board sees and changes them, and shared
- * boards don't include them. Only the types in {@link FileTypes} are accepted, checked by content.
+ * Files attached to tasks. Like notes, everyone who can open the board sees and changes them; a share
+ * link shows them if its owner allows it (see BoardShareService). Only the types in {@link FileTypes} are accepted, checked by content.
  */
 @Service
 public class TaskAttachmentService {
@@ -81,7 +82,13 @@ public class TaskAttachmentService {
 
     @Transactional(readOnly = true)
     public List<AttachmentDto> attachmentsOf(int taskId, String email) {
-        return attachmentRepository.findByTaskOrderByCreatedDescIdDesc(findTask(taskId, email)).stream()
+        return attachmentsOf(findTask(taskId, email));
+    }
+
+    /** Newest first. The caller checked that the task may be seen. */
+    @Transactional(readOnly = true)
+    public List<AttachmentDto> attachmentsOf(Task task) {
+        return attachmentRepository.findByTaskOrderByCreatedDescIdDesc(task).stream()
                 .map(AttachmentDto::from)
                 .toList();
     }
@@ -130,7 +137,15 @@ public class TaskAttachmentService {
 
     @Transactional(readOnly = true)
     public Download download(String key, String email) {
-        TaskAttachment attachment = findAttachment(key, email);
+        return download(key, task -> boardService.canAccess(task.getBoardColumn().getBoard(), email));
+    }
+
+    /** The file, if visible says its task may be seen; 404 otherwise, as for an unknown key. */
+    @Transactional(readOnly = true)
+    public Download download(String key, Predicate<Task> visible) {
+        TaskAttachment attachment = attachmentRepository.findByStorageKey(key)
+                .filter(a -> visible.test(a.getTask()))
+                .orElseThrow(TaskAttachmentService::notFound);
         Path file = storage.file(attachment.getStorageKey());
         if (!Files.isRegularFile(file)) {
             log.warn("Attachment {} has no file {}", attachment.getId(), attachment.getStorageKey());
@@ -203,6 +218,10 @@ public class TaskAttachmentService {
     private TaskAttachment findAttachment(String key, String email) {
         return attachmentRepository.findByStorageKey(key)
                 .filter(a -> boardService.canAccess(a.getTask().getBoardColumn().getBoard(), email))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
+                .orElseThrow(TaskAttachmentService::notFound);
+    }
+
+    private static ResponseStatusException notFound() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found");
     }
 }

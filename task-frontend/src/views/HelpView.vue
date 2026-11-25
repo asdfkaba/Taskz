@@ -144,7 +144,8 @@ const SECTIONS = [
     intro: 'A link that shows the board to anyone, without a login and without letting them change anything.',
     points: [
       ['Create', 'In the board’s Settings under Share link. The board behind it updates live, too.'],
-      ['Take it back', '“Stop sharing” ends it; “Replace link” makes a new one and the old one stops working.'],
+      ['What it shows', 'Tasks with their descriptions, labels, due dates and checklists. Under “Also show in each task” you can add attachments, notes (without reminders) and the history, and with “Hide names” leave out who uploaded, wrote or changed something. A change applies to the link right away.'],
+      ['Take it back', '“Stop sharing” ends it; “Replace link” makes a new one with the same settings, and the old one stops working.'],
     ],
   },
   {

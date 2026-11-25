@@ -30,6 +30,20 @@ public class BoardShare {
     @Column(nullable = false)
     private Instant created;
 
+    // What the link shows besides the board; all off for a new link.
+    @Column(nullable = false)
+    private boolean showAttachments;
+
+    @Column(nullable = false)
+    private boolean showNotes;
+
+    @Column(nullable = false)
+    private boolean showHistory;
+
+    // Attachments, notes and history without who uploaded, wrote or changed them.
+    @Column(nullable = false)
+    private boolean hideNames;
+
     public BoardShare(Board board) {
         this.board = board;
         this.token = UUID.randomUUID();

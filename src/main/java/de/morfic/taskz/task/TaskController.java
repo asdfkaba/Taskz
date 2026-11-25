@@ -169,7 +169,7 @@ public class TaskController {
         boardService.changed(task.getBoardColumn().getBoard());
     }
 
-    // Newest first. Only for the owner; shared boards don't show history.
+    // Newest first. Share links read it through BoardShareController.
     @GetMapping("/{id}/history")
     public List<TaskHistoryService.EventDto> getHistory(@PathVariable("id") int id) {
         return historyService.historyOf(findTask(id));

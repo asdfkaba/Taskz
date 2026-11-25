@@ -5,9 +5,13 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { useBoardStore } from '@/stores/board'
 import { formatDue, fromApi } from '@/utils/date'
 import { lineDiff } from '@/utils/diff'
+import { fetchShared } from '@/utils/share'
 
-// The task's change history, collapsed until opened. Only for the owner; shared boards don't show it.
-const props = defineProps({ task: { type: Object, required: true } })
+// The task's change history, collapsed until opened. With sharePath through the share link.
+const props = defineProps({
+  task: { type: Object, required: true },
+  sharePath: { type: String, default: null }, // the share link's path on a shared board
+})
 
 const store = useBoardStore()
 const open = ref(false)
@@ -18,7 +22,9 @@ const openDiffs = ref(new Set()) // event ids whose description diff is shown
 async function load() {
   status.value = 'loading'
   try {
-    events.value = await store.fetchTaskHistory(props.task.id)
+    events.value = props.sharePath
+      ? await (await fetchShared(props.sharePath, `tasks/${props.task.id}/history`)).json()
+      : await store.fetchTaskHistory(props.task.id)
     status.value = 'ok'
   } catch {
     status.value = 'error'

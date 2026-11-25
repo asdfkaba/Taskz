@@ -9,12 +9,17 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 import { formatDue, fromApi, toApi } from '@/utils/date'
+import { fetchShared } from '@/utils/share'
 
-// Plain-text notes on a task, newest first. Only for the owner; shared boards don't show them.
+// Plain-text notes on a task, newest first. With sharePath read-only, through the share link,
+// which leaves out reminders.
 // A note can have a reminder: it then shows in its author's "What's due" until marked done.
 const MAX_LENGTH = 5000 // same as TaskNoteService.MAX_LENGTH
 
-const props = defineProps({ taskId: { type: Number, required: true } })
+const props = defineProps({
+  taskId: { type: Number, required: true },
+  sharePath: { type: String, default: null }, // the share link's path on a shared board
+})
 
 const store = useBoardStore()
 const confirm = useConfirm()
@@ -41,7 +46,9 @@ function atNoonIfNew(before, date) {
 async function load() {
   status.value = 'loading'
   try {
-    notes.value = await store.fetchNotes(props.taskId)
+    notes.value = props.sharePath
+      ? await (await fetchShared(props.sharePath, `tasks/${props.taskId}/notes`)).json()
+      : await store.fetchNotes(props.taskId)
     status.value = 'ok'
   } catch {
     status.value = 'error'
@@ -124,7 +131,7 @@ const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
       Notes <span v-if="notes.length" class="font-normal text-slate-400 dark:text-slate-500">({{ notes.length }})</span>
     </h3>
 
-    <form class="flex flex-col gap-2" @submit.prevent="add">
+    <form v-if="!sharePath" class="flex flex-col gap-2" @submit.prevent="add">
       <Textarea
         v-model="draft"
         rows="2"
@@ -162,6 +169,7 @@ const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
 
     <p v-if="status === 'loading' && !notes.length" class="text-sm text-slate-400">Loading…</p>
     <p v-else-if="status === 'error'" class="text-sm text-red-600 dark:text-red-400">Could not load the notes.</p>
+    <p v-else-if="sharePath && !notes.length" class="text-xs text-slate-400 dark:text-slate-500">No notes.</p>
 
     <ol v-else class="flex flex-col gap-3">
       <li

@@ -7,6 +7,9 @@ import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
 import TaskCard from '@/components/TaskCard.vue'
 import TaskDetails from '@/components/TaskDetails.vue'
+import TaskAttachments from '@/components/TaskAttachments.vue'
+import TaskNotes from '@/components/TaskNotes.vue'
+import TaskHistory from '@/components/TaskHistory.vue'
 import BoardFilter from '@/components/BoardFilter.vue'
 import { useBoardFilter } from '@/composables/useBoardFilter'
 import { useBoardViewPrefs } from '@/composables/useBoardViewPrefs'
@@ -22,7 +25,8 @@ const TaskTable = defineAsyncComponent(() => import('@/components/TaskTable.vue'
 const route = useRoute()
 const router = useRouter()
 
-const board = ref(null) // { name, columns, labels, tasks, archivedCount }
+// show*: what the owner shares besides the board, loaded per task when one is opened.
+const board = ref(null) // { name, path, columns, labels, tasks, archivedCount, showAttachments, showNotes, showHistory }
 const status = ref('loading') // 'loading' | 'ok' | 'not-found' | 'error'
 
 const tasksByColumn = computed(() => {
@@ -248,7 +252,12 @@ watch(
       :breakpoints="{ '820px': '95vw' }"
       :draggable="false"
     >
-      <TaskDetails v-if="openTask" :task="openTask" :column="openColumn" :labels="labelsOf(openTask)" />
+      <div v-if="openTask" class="flex flex-col gap-4">
+        <TaskDetails :task="openTask" :column="openColumn" :labels="labelsOf(openTask)" />
+        <TaskAttachments v-if="board.showAttachments" :taskId="openTask.id" :sharePath="board.path" />
+        <TaskNotes v-if="board.showNotes" :taskId="openTask.id" :sharePath="board.path" />
+        <TaskHistory v-if="board.showHistory" :task="openTask" :sharePath="board.path" />
+      </div>
       <template #footer>
         <Button label="Close" severity="secondary" text @click="detailsVisible = false" />
       </template>
