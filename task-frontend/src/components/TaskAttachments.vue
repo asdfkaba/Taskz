@@ -9,13 +9,18 @@ import { useToast } from 'primevue/usetoast'
 import { useBoardStore } from '@/stores/board'
 import { fromApi } from '@/utils/date'
 import { renderMarkdown } from '@/utils/markdown'
+import { fetchShared, sharedUrl } from '@/utils/share'
 
-// Files attached to a task, newest first. Only for the owner; shared boards don't show them.
+// Files attached to a task, newest first. With sharePath read-only, through the share link.
 // The backend checks type and size (TaskAttachmentService) and says why it refuses a file. Its
 // size limit and accepted types come from /attachments/settings, so a too large file is refused
 // here before it is sent. Text and Markdown files open in a preview; everything else in a new tab.
 
-const props = defineProps({ taskId: { type: Number, required: true } })
+const props = defineProps({
+  taskId: { type: Number, required: true },
+  sharePath: { type: String, default: null }, // the share link's path on a shared board
+})
+const readonly = computed(() => !!props.sharePath)
 
 const store = useBoardStore()
 const confirm = useConfirm()
@@ -33,6 +38,7 @@ const tooLarge = () => `Files can be at most ${size(settings.value.maxFileSize)}
 
 // Without the settings the backend still checks everything; only the hint and the early check are missing.
 onMounted(async () => {
+  if (readonly.value) return
   try {
     settings.value = await store.fetchAttachmentSettings()
   } catch {
@@ -45,7 +51,9 @@ async function load() {
   const taskId = props.taskId
   status.value = 'loading'
   try {
-    const list = await store.fetchAttachments(taskId)
+    const list = props.sharePath
+      ? await (await fetchShared(props.sharePath, `tasks/${taskId}/attachments`)).json()
+      : await store.fetchAttachments(taskId)
     if (taskId !== props.taskId) return
     attachments.value = list
     status.value = 'ok'
@@ -88,6 +96,7 @@ function onPick(event) {
 
 function onDrop(event) {
   dragging.value = false
+  if (readonly.value) return
   upload([...event.dataTransfer.files])
 }
 
@@ -99,7 +108,7 @@ function onDragLeave(event) {
 
 // Only react to dragged files, not to dragged text or cards.
 function onDragOver(event) {
-  if (!event.dataTransfer.types.includes('Files')) return
+  if (readonly.value || !event.dataTransfer.types.includes('Files')) return
   event.preventDefault()
   dragging.value = true
 }
@@ -140,7 +149,9 @@ async function open(event, attachment) {
   const request = ++previewRequest
   preview.value = { attachment, text: null }
   try {
-    const text = await store.fetchAttachmentText(attachment.id)
+    const text = props.sharePath
+      ? await (await fetchShared(props.sharePath, `attachments/${attachment.id}`)).text()
+      : await store.fetchAttachmentText(attachment.id)
     if (request === previewRequest && preview.value) preview.value = { attachment, text }
   } catch (err) {
     if (request === previewRequest) preview.value = null
@@ -148,7 +159,8 @@ async function open(event, attachment) {
   }
 }
 
-const url = (attachment) => `/api/attachments/${attachment.id}`
+const url = (attachment) =>
+  props.sharePath ? sharedUrl(props.sharePath, `attachments/${attachment.id}`) : `/api/attachments/${attachment.id}`
 const icon = (attachment) => (attachment.contentType === 'application/pdf' ? 'pi-file-pdf' : 'pi-file')
 const relative = (at) => formatDistanceToNow(fromApi(at), { addSuffix: true })
 const absolute = (at) => format(fromApi(at), 'yyyy-MM-dd HH:mm')
@@ -180,6 +192,7 @@ function size(bytes) {
         </p>
       </div>
       <Button
+        v-if="!readonly"
         label="Add file"
         icon="pi pi-paperclip"
         text
@@ -188,7 +201,7 @@ function size(bytes) {
         class="ml-auto"
         @click="fileInput.click()"
       />
-      <input ref="fileInput" type="file" multiple :accept="accept" class="hidden" aria-label="Attach files" @change="onPick" />
+      <input v-if="!readonly" ref="fileInput" type="file" multiple :accept="accept" class="hidden" aria-label="Attach files" @change="onPick" />
     </div>
 
     <p v-if="status === 'loading' && !attachments.length" class="text-sm text-slate-400">Loading…</p>
@@ -197,7 +210,7 @@ function size(bytes) {
       v-else-if="!attachments.length && !uploading.length"
       class="text-xs text-slate-400 dark:text-slate-500"
     >
-      Drop files here.
+      {{ readonly ? 'No attachments.' : 'Drop files here.' }}
     </p>
 
     <ul v-if="attachments.length || uploading.length" class="flex flex-col gap-1">
@@ -245,6 +258,7 @@ function size(bytes) {
           </span>
         </div>
         <Button
+          v-if="!readonly"
           icon="pi pi-trash"
           text
           rounded

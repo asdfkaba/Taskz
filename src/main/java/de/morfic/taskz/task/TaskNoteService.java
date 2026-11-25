@@ -64,6 +64,19 @@ public class TaskNoteService {
                 .toList();
     }
 
+    /**
+     * For a share link: newest first, without reminders (they are their author's own) and without
+     * edit rights. The caller checked that the task may be seen.
+     */
+    @Transactional(readOnly = true)
+    public List<NoteDto> sharedNotesOf(Task task) {
+        return noteRepository.findByTaskOrderByCreatedDescIdDesc(task).stream()
+                .map(note -> new NoteDto(note.getId(), note.getText(), note.getUser() == null ? null : note.getUser().getName(),
+                        note.getUser() == null ? null : note.getUser().getId(), note.getCreated(), note.getEdited(),
+                        null, false, false))
+                .toList();
+    }
+
     @Transactional
     public NoteDto addNote(int taskId, String email, String text, LocalDateTime remindAt) {
         Task task = boardService.findTask(taskId, email);

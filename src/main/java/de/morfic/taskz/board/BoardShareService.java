@@ -1,18 +1,31 @@
 package de.morfic.taskz.board;
 
+import de.morfic.taskz.board.BoardDtos.ShareOptions;
 import de.morfic.taskz.board.BoardDtos.SharedBoard;
+import de.morfic.taskz.task.Task;
+import de.morfic.taskz.task.TaskAttachmentService;
+import de.morfic.taskz.task.TaskAttachmentService.AttachmentDto;
+import de.morfic.taskz.task.TaskAttachmentService.Download;
 import de.morfic.taskz.task.TaskDto;
+import de.morfic.taskz.task.TaskHistoryService;
+import de.morfic.taskz.task.TaskHistoryService.EventDto;
+import de.morfic.taskz.task.TaskNoteService;
+import de.morfic.taskz.task.TaskNoteService.NoteDto;
+import de.morfic.taskz.task.TaskRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * Read-only share links. Only the owner can see, create or revoke a board's link;
  * reading a board through its link needs no login. For now a board has at most one link.
+ * The owner chooses whether the link also shows attachments, notes and history of the tasks.
  */
 @Service
 public class BoardShareService {
@@ -20,12 +33,22 @@ public class BoardShareService {
     private final BoardService boardService;
     private final BoardShareRepository shareRepository;
     private final ApplicationEventPublisher events;
+    private final TaskRepository taskRepository;
+    private final TaskAttachmentService attachmentService;
+    private final TaskNoteService noteService;
+    private final TaskHistoryService historyService;
 
     public BoardShareService(BoardService boardService, BoardShareRepository shareRepository,
-                             ApplicationEventPublisher events) {
+                             ApplicationEventPublisher events, TaskRepository taskRepository,
+                             TaskAttachmentService attachmentService, TaskNoteService noteService,
+                             TaskHistoryService historyService) {
         this.boardService = boardService;
         this.shareRepository = shareRepository;
         this.events = events;
+        this.taskRepository = taskRepository;
+        this.attachmentService = attachmentService;
+        this.noteService = noteService;
+        this.historyService = historyService;
     }
 
     @Transactional(readOnly = true)
@@ -33,13 +56,41 @@ public class BoardShareService {
         return shareRepository.findByBoard(boardService.findOwnBoard(boardId, email));
     }
 
-    /** Creates the board's link. An existing link is replaced, so the old one stops working. */
+    /**
+     * Creates the board's link. An existing link is replaced, so the old one stops working; the new
+     * one shows the same as the old one.
+     */
     @Transactional
     public BoardShare createShare(int boardId, String email) {
         Board board = boardService.findOwnBoard(boardId, email);
+        BoardShare share = new BoardShare(board);
+        shareRepository.findByBoard(board).ifPresent(old -> {
+            share.setShowAttachments(old.isShowAttachments());
+            share.setShowNotes(old.isShowNotes());
+            share.setShowHistory(old.isShowHistory());
+        });
         shareRepository.deleteByBoard(board);
         events.publishEvent(new BoardShareEnded(boardId));
-        return shareRepository.save(new BoardShare(board));
+        return shareRepository.save(share);
+    }
+
+    /** Changes what the link shows; it stays the same link. 404 if the board isn't shared. */
+    @Transactional
+    public BoardShare updateOptions(int boardId, String email, ShareOptions options) {
+        Board board = boardService.findOwnBoard(boardId, email);
+        BoardShare share = shareRepository.findByBoard(board)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Board isn't shared"));
+        if (options.showAttachments() != null) {
+            share.setShowAttachments(options.showAttachments());
+        }
+        if (options.showNotes() != null) {
+            share.setShowNotes(options.showNotes());
+        }
+        if (options.showHistory() != null) {
+            share.setShowHistory(options.showHistory());
+        }
+        boardService.changed(board); // open views of the link load what they may show now
+        return share;
     }
 
     @Transactional
@@ -56,10 +107,52 @@ public class BoardShareService {
     public SharedBoard sharedBoard(String path) {
         BoardShare share = findShare(path);
         Board board = share.getBoard();
+        List<TaskDto> tasks = boardService.tasksOf(board);
+        if (!share.isShowAttachments()) {
+            tasks = tasks.stream().map(TaskDto::withoutAttachments).toList();
+        }
         return new SharedBoard(board.getName(), ShareLinks.path(board.getSlug(), share.getToken()),
-                boardService.columnsOf(board), boardService.labelsOf(board),
-                boardService.tasksOf(board).stream().map(TaskDto::withoutAttachments).toList(),
-                boardService.archivedCountOf(board));
+                boardService.columnsOf(board), boardService.labelsOf(board), tasks,
+                boardService.archivedCountOf(board),
+                share.isShowAttachments(), share.isShowNotes(), share.isShowHistory());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AttachmentDto> sharedAttachments(String path, int taskId) {
+        return attachmentService.attachmentsOf(sharedTask(path, taskId, BoardShare::isShowAttachments));
+    }
+
+    @Transactional(readOnly = true)
+    public Download sharedDownload(String path, String key) {
+        BoardShare share = findShare(path);
+        if (!share.isShowAttachments()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found");
+        }
+        return attachmentService.download(key, isShownOn(share));
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteDto> sharedNotes(String path, int taskId) {
+        return noteService.sharedNotesOf(sharedTask(path, taskId, BoardShare::isShowNotes));
+    }
+
+    @Transactional(readOnly = true)
+    public List<EventDto> sharedHistory(String path, int taskId) {
+        return historyService.historyOf(sharedTask(path, taskId, BoardShare::isShowHistory));
+    }
+
+    // A task the link shows, if it shares what is asked for; 404 otherwise, like an unknown link.
+    private Task sharedTask(String path, int taskId, Predicate<BoardShare> shares) {
+        BoardShare share = findShare(path);
+        return taskRepository.findById(taskId)
+                .filter(task -> shares.test(share) && isShownOn(share).test(task))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+    }
+
+    // Tasks on the board; archived ones aren't shared.
+    private static Predicate<Task> isShownOn(BoardShare share) {
+        return task -> task.getArchivedAt() == null
+                && task.getBoardColumn().getBoard().getId().equals(share.getBoard().getId());
     }
 
     /** The id of the board behind a link path; 404 like {@link #sharedBoard}. */

@@ -119,7 +119,8 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/login**", "/auth/**", "/error", "/health", "/").permitAll()
                         // Read-only share links work without login.
-                        .requestMatchers(HttpMethod.GET, "/share/*", "/share/*/events").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/share/*", "/share/*/events", "/share/*/attachments/*",
+                                "/share/*/tasks/*/attachments", "/share/*/tasks/*/notes", "/share/*/tasks/*/history").permitAll()
                         // The unsubscribe link in notification mails.
                         .requestMatchers(HttpMethod.POST, "/mail/unsubscribe/*").permitAll()
                         .anyRequest().authenticated()

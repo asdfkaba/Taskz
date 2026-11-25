@@ -141,7 +141,7 @@ export const useBoardStore = defineStore('board', {
 
     // ---- Share link (one read-only link per board) ----
 
-    // The board's link as { path, created }, or null if it isn't shared.
+    // The board's link as { path, created, showAttachments, showNotes, showHistory }, or null if it isn't shared.
     async fetchShare(boardId) {
       const response = await expectOk(await authFetch(`/api/boards/${boardId}/share`), 'Loading share link')
       return response.status === 204 ? null : response.json()
@@ -154,6 +154,11 @@ export const useBoardStore = defineStore('board', {
         'Creating share link',
       )
       return response.json()
+    },
+
+    // options: any of { showAttachments, showNotes, showHistory }; the link stays the same.
+    async updateShareOptions(boardId, options) {
+      return (await expectOk(await sendJson(`/api/boards/${boardId}/share`, 'PATCH', options), 'Saving share options')).json()
     },
 
     async revokeShare(boardId) {

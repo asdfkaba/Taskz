@@ -61,7 +61,8 @@ class SecurityTests {
     // The open paths pass the security chain (their controllers aren't part of this slice, so 404).
     @Test
     void openPathsNeedNoLogin() throws Exception {
-        for (String path : List.of("/health", "/auth/status", "/share/abc", "/share/abc/events", "/error")) {
+        for (String path : List.of("/health", "/auth/status", "/share/abc", "/share/abc/events", "/error",
+                "/share/abc/attachments/k", "/share/abc/tasks/1/attachments", "/share/abc/tasks/1/notes", "/share/abc/tasks/1/history")) {
             mockMvc.perform(get(path)).andExpect(result ->
                     assertThat(result.getResponse().getStatus()).as(path).isNotEqualTo(403));
         }
