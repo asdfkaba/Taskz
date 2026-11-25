@@ -4,10 +4,12 @@
 Description=Taskz on port %i
 
 [Service]
-# Database, OAuth, mail: the Environment= lines of the old tasks.service, as KEY=value lines.
-EnvironmentFile=%h/tasks/tasks.env
-# Java and JVM options as in the old tasks.service.
-ExecStart=java -jar %h/tasks/tasks-%i.jar --server.port=%i
+# Only nginx on this machine talks to the app.
+Environment=SERVER_ADDRESS=127.0.0.1
+WorkingDirectory=%h
+# Settings (database, OAuth, mail) in tasks.properties, the same for both ports; the port from the
+# command line wins over a server.port there.
+ExecStart=/usr/bin/java -jar %h/tasks/tasks-%i.jar --spring.config.location=file:%h/tasks/tasks.properties --server.port=%i
 # A JVM stopped with SIGTERM exits with 143; that is a normal stop, not a failure.
 SuccessExitStatus=143
 Restart=on-failure

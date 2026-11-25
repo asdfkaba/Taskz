@@ -27,30 +27,28 @@ For a few seconds the old and the new release run side by side, both on the new 
 
 As the user that runs the app today (`tasks.service`). Needs `curl` on the server. Do it before
 merging this into `main`; a deploy before that fails without harm (no `tasks@` unit yet, the old
-`tasks` keeps running). Between steps 3 and 5 old and new run side by side, both with their
+`tasks` keeps running). Between steps 2 and 4 old and new run side by side, both with their
 scheduled jobs; keep that to a few minutes, or an hourly mail summary may go out twice.
 
 ```bash
-# 1. Settings for both ports: the Environment= lines of the old unit as KEY=value lines
-systemctl --user cat tasks          # shows them, and how java is started
-nano ~/tasks/tasks.env && chmod 600 ~/tasks/tasks.env
-
-# 2. The template unit; adjust ExecStart if the old unit used another java or JVM options
+# 1. The template unit (from a checkout, or with scp from your machine). It starts the app like the
+#    old tasks.service: settings from ~/tasks/tasks.properties, listening on 127.0.0.1 only.
+#    Compare with `systemctl --user cat tasks` if that one was changed since.
 cp deploy/tasks@.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 
-# 3. The current release on 8081, next to the old unit on 8080
+# 2. The current release on 8081, next to the old unit on 8080
 cp ~/tasks/tasks.jar ~/tasks/tasks-8081.jar
 systemctl --user enable --now tasks@8081
 curl http://127.0.0.1:8081/health   # "ok"
 ```
 
-4. nginx: add the `upstream` block from `deploy/nginx-upstream.conf` (outside the `server` block)
+3. nginx: add the `upstream` block from `deploy/nginx-upstream.conf` (outside the `server` block)
    and change every `proxy_pass` to the app into `proxy_pass http://taskz;`. Then
    `sudo nginx -t && sudo systemctl reload nginx`. The site now runs on 8081.
 
 ```bash
-# 5. The old unit off for good
+# 4. The old unit off for good
 systemctl --user disable --now tasks
 ```
 
