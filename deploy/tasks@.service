@@ -1,0 +1,17 @@
+# Taskz on one port; %i is the port (8081 or 8082). deploy/release.sh starts the new release on
+# the free one and then stops the other. Setup: deploy/README.md.
+[Unit]
+Description=Taskz on port %i
+
+[Service]
+# Database, OAuth, mail: the Environment= lines of the old tasks.service, as KEY=value lines.
+EnvironmentFile=%h/tasks/tasks.env
+# Java and JVM options as in the old tasks.service.
+ExecStart=java -jar %h/tasks/tasks-%i.jar --server.port=%i
+# A JVM stopped with SIGTERM exits with 143; that is a normal stop, not a failure.
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

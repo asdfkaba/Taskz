@@ -23,23 +23,6 @@ jobs:
           npm ci
           npm run build
 
-      - name: Set up SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Copy Vue build to server
-        run: |
-          scp -O -i ~/.ssh/deploy_key -r task-frontend/dist/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/spring/
-
-      # Every deploy copies all current assets anew (fresh mtime), so files older than a week belong
-      # to builds no open tab still loads chunks from.
-      - name: Remove old frontend assets
-        run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "find /var/www/spring/assets -type f -mtime +7 -delete"
-
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
@@ -48,12 +31,24 @@ jobs:
 
       # The tests ran in the "tests" job above.
       - name: Build with Maven
-        run: ./mvnw clean package -DskipTests
-
-      - name: Copy JAR to server
         run: |
-          scp -O -i ~/.ssh/deploy_key target/*.jar ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/moritz/tasks/
+          ./mvnw clean package -DskipTests
+          cp target/taskz-*.jar taskz.jar
 
-      - name: Restart service
+      - name: Set up SSH key
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mv /home/moritz/tasks/taskz-*.jar /home/moritz/tasks/tasks.jar && export XDG_RUNTIME_DIR=/run/user/1000 && systemctl --user restart tasks"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy release to server
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "rm -rf ~/tasks/incoming && mkdir -p ~/tasks/incoming"
+          scp -O -i ~/.ssh/deploy_key -r taskz.jar task-frontend/dist deploy/release.sh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:tasks/incoming/
+
+      # Starts the new release next to the old one and switches over without downtime; the
+      # frontend follows once the backend is live (deploy/README.md).
+      - name: Release
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "bash ~/tasks/incoming/release.sh ~/tasks/incoming"
